@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Search
@@ -68,6 +69,7 @@ fun CoursesScreen(
     viewModel: CoursesViewModel,
     contentPadding: PaddingValues,
     onShowPlanning: () -> Unit,
+    onOpenNotebook: () -> Unit,
 ) {
     LazyColumn(
         contentPadding = screenPadding(contentPadding, 96.dp),
@@ -83,6 +85,7 @@ fun CoursesScreen(
                 )
             }
         }
+        item(key = "notebook") { NotebookEntry(onOpenNotebook) }
         if (!state.hasCourses) {
             item(key = "first") { FirstCourse(onCreate = { viewModel.openCreate() }, onShowPlanning = onShowPlanning) }
             return@LazyColumn
@@ -103,6 +106,28 @@ fun CoursesScreen(
             }
         }
         items(state.list.groups, key = { "subject-" + it.subject.id }) { group -> SubjectGroup(group, viewModel::openDetail) }
+    }
+}
+
+/** Entrée du cahier de textes Pronote (lecture seule). */
+@Composable
+private fun NotebookEntry(onOpen: () -> Unit) {
+    val shape = RoundedCornerShape(16.dp)
+    Row(
+        Modifier.fillMaxWidth().clip(shape).background(JColors.Violet50).border(1.dp, JColors.Violet200, shape)
+            .clickable(role = Role.Button, onClickLabel = "Ouvrir le cahier de textes") { onOpen() }
+            .semantics(mergeDescendants = true) {}
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("Cahier de textes", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = JColors.Violet900)
+            Text(
+                "Contenus de séance, devoirs et pièces jointes publiés dans Pronote.",
+                style = MaterialTheme.typography.bodySmall, color = JColors.Slate700,
+            )
+        }
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = JColors.Violet800)
     }
 }
 

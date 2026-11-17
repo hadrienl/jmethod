@@ -1,0 +1,417 @@
+package fr.jmethod.app.ui.settings
+
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
+import fr.jmethod.app.domain.SettingsLogic
+import fr.jmethod.app.model.DEFAULT_SUBJECTS
+import fr.jmethod.app.model.Subject
+import fr.jmethod.app.pronote.PronoteUiState
+import fr.jmethod.app.ui.pronote.PronoteAccountSection
+import fr.jmethod.app.ui.pronote.PronoteSyncInfo
+import fr.jmethod.app.ui.pronote.PronoteViewModel
+import fr.jmethod.app.ui.theme.JColors
+import fr.jmethod.app.ui.today.subjectColor
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
+
+/** Taille maximale d’une sauvegarde lue (protection contre un fichier démesuré). */
+private const val MAX_IMPORT_BYTES = 20 * 1024 * 1024
+
+@Composable
+private fun Section(title: String, subtitle: String? = null, content: @Composable () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        border = BorderStroke(1.dp, JColors.Slate200),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column {
+                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() })
+                if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
+            }
+            content()
+        }
+    }
+}
+
+@Composable
+fun SettingsScreen(
+    ui: SettingsUiState,
+    viewModel: SettingsViewModel,
+    pronoteViewModel: PronoteViewModel,
+    pronote: PronoteUiState,
+    syncInfo: PronoteSyncInfo?,
+    contentPadding: PaddingValues,
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var colorFor by rememberSaveable { mutableStateOf<String?>(null) }
+
+    val exporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val ok = runCatching {
+                val text = viewModel.exportText()
+                withContext(Dispatchers.IO) {
+                    context.contentResolver.openOutputStream(uri, "wt")!!.use { it.write(text.toByteArray(Charsets.UTF_8)) }
+                }
+            }.isSuccess
+            viewModel.exported(ok)
+        }
+    }
+    val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val text = withContext(Dispatchers.IO) {
+                runCatching {
+                    context.contentResolver.openInputStream(uri)!!.use { input ->
+                        val out = java.io.ByteArrayOutputStream()
+                        val buffer = ByteArray(64 * 1024)
+                        while (out.size() <= MAX_IMPORT_BYTES) {
+                            val read = input.read(buffer)
+                            if (read < 0) break
+                            out.write(buffer, 0, read)
+                        }
+                        if (out.size() > MAX_IMPORT_BYTES) null else out.toString("UTF-8")
+                    }
+                }.getOrNull()
+            }
+            viewModel.importText(text)
+        }
+    }
+    LaunchedEffect(viewModel) {
+        viewModel.exportFlow.collect { event -> exporter.launch(event.fileName) }
+    }
+
+    val direction = LocalLayoutDirection.current
+    val draft = ui.draft
+    Box(Modifier.fillMaxSize()) {
+        Column(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(
+                start = contentPadding.calculateStartPadding(direction) + 16.dp,
+                end = contentPadding.calculateEndPadding(direction) + 16.dp,
+                top = contentPadding.calculateTopPadding() + 16.dp,
+                bottom = contentPadding.calculateBottomPadding() + if (draft.dirty) 120.dp else 24.dp,
+            ),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Text("Réglages", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, modifier = Modifier.semantics { heading() })
+            PronoteAccountSection(pronoteViewModel, pronote, syncInfo)
+            Algorithm(draft, viewModel)
+            Intervals(draft, viewModel)
+            Colors(ui.subjects) { colorFor = it }
+            Backup(ui, onExport = viewModel::requestExport, onImport = { importer.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) })
+            About()
+        }
+        if (draft.dirty) {
+            Surface(
+                color = Color.White,
+                shadowElevation = 8.dp,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                    .padding(start = 12.dp, end = 12.dp, bottom = contentPadding.calculateBottomPadding() + 12.dp),
+            ) {
+                Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Modifications non enregistrées", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    TextButton(onClick = viewModel::discard, modifier = Modifier.heightIn(min = 48.dp)) { Text("Annuler") }
+                    Button(onClick = viewModel::save, shape = RoundedCornerShape(12.dp), modifier = Modifier.heightIn(min = 48.dp)) { Text("Enregistrer") }
+                }
+            }
+        }
+    }
+
+    colorFor?.let { id ->
+        val subject = ui.subjects.firstOrNull { it.id == id }
+        if (subject == null) colorFor = null else ColorDialog(subject, onDismiss = { colorFor = null }) { color ->
+            colorFor = null
+            viewModel.setSubjectColor(id, color)
+        }
+    }
+    ui.pendingImport?.let { pending ->
+        AlertDialog(
+            onDismissRequest = viewModel::cancelImport,
+            title = { Text("Remplacer tes données ?") },
+            text = {
+                Text(
+                    "Tes ${ui.courseCount} cours et ${ui.revisionCount} séances seront remplacés par ceux de la sauvegarde " +
+                        "(${pending.courses.size} cours, ${pending.revisions.size} séances)." +
+                        (if (pending.subjects != null) " Les matières seront aussi remplacées." else "") +
+                        (if (pending.settings != null) " Les réglages seront remplacés." else "") +
+                        " Ton emploi du temps Pronote est conservé. Cette action est définitive.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = viewModel::confirmImport, modifier = Modifier.heightIn(min = 48.dp)) {
+                    Text("Remplacer mes données", color = JColors.Rose700, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = { TextButton(onClick = viewModel::cancelImport, modifier = Modifier.heightIn(min = 48.dp)) { Text("Annuler") } },
+            containerColor = Color.White,
+        )
+    }
+}
+
+@Composable
+private fun Algorithm(draft: SettingsDraft, viewModel: SettingsViewModel) {
+    Section("Algorithme adaptatif", "Point pivot à 50 : règle l’espacement des séances et le seuil de rattrapage.") {
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(JColors.Slate50).padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Sensibilité de l’espacement : ${SettingsLogic.jsNumber(draft.sensitivity)}",
+                    style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f),
+                )
+                Text(SettingsLogic.sensitivityLabel(draft.sensitivity), style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace, color = JColors.Slate600)
+            }
+            val steps = ((SettingsLogic.SENSITIVITY_MAX - SettingsLogic.SENSITIVITY_MIN) / SettingsLogic.SENSITIVITY_STEP).roundToInt() - 1
+            Slider(
+                value = draft.sensitivity.toFloat(),
+                onValueChange = { viewModel.setSensitivity(it.toDouble()) },
+                valueRange = SettingsLogic.SENSITIVITY_MIN.toFloat()..SettingsLogic.SENSITIVITY_MAX.toFloat(),
+                steps = steps,
+                colors = SliderDefaults.colors(thumbColor = JColors.Violet700, activeTrackColor = JColors.Violet700, inactiveTrackColor = JColors.Violet100),
+                modifier = Modifier.semantics {
+                    contentDescription = "Sensibilité de l’espacement"
+                    stateDescription = "${SettingsLogic.jsNumber(draft.sensitivity).replace('.', ',')}, ${SettingsLogic.sensitivityLabel(draft.sensitivity)}"
+                },
+            )
+            Row(Modifier.fillMaxWidth().clearAndSetSemantics {}, horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Doux ±10%", style = MaterialTheme.typography.labelSmall, color = JColors.Slate600)
+                Text("Équilibré ±40%", style = MaterialTheme.typography.labelSmall, color = JColors.Violet800)
+                Text("Agressif ±80%", style = MaterialTheme.typography.labelSmall, color = JColors.Slate600)
+            }
+        }
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(JColors.Slate50).padding(12.dp)) {
+            Text(SettingsLogic.thresholdLabel(draft.emergencyThreshold), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+            Slider(
+                value = draft.emergencyThreshold.toFloat(),
+                onValueChange = { viewModel.setThreshold((it / SettingsLogic.THRESHOLD_STEP).roundToInt() * SettingsLogic.THRESHOLD_STEP) },
+                valueRange = SettingsLogic.THRESHOLD_MIN.toFloat()..SettingsLogic.THRESHOLD_MAX.toFloat(),
+                steps = (SettingsLogic.THRESHOLD_MAX - SettingsLogic.THRESHOLD_MIN) / SettingsLogic.THRESHOLD_STEP - 1,
+                colors = SliderDefaults.colors(thumbColor = JColors.Rose700, activeTrackColor = JColors.Rose700, inactiveTrackColor = JColors.Rose50),
+                modifier = Modifier.semantics {
+                    contentDescription = "Seuil de rattrapage"
+                    stateDescription = "moins de ${draft.emergencyThreshold} sur 100"
+                },
+            )
+            Text(
+                "Toute note inférieure à ce seuil programme une séance de rattrapage le lendemain (J+1).",
+                style = MaterialTheme.typography.bodySmall, color = JColors.Slate600,
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun Intervals(draft: SettingsDraft, viewModel: SettingsViewModel) {
+    val focus = LocalFocusManager.current
+    Section("Intervalles des J", "Paliers de révision appliqués à chaque nouveau cours. Les cours existants gardent leur calendrier.") {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            draft.intervals.forEach { value ->
+                Row(
+                    Modifier.clip(RoundedCornerShape(12.dp)).background(JColors.Slate50).border(1.dp, JColors.Slate200, RoundedCornerShape(12.dp))
+                        .padding(start = 12.dp, end = if (SettingsLogic.removeButtonShown(value)) 0.dp else 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("J$value", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 12.dp))
+                    if (SettingsLogic.removeButtonShown(value)) {
+                        IconButton(onClick = { viewModel.removeInterval(value) }, enabled = draft.intervals.size > 2, modifier = Modifier.size(48.dp)) {
+                            Icon(Icons.Filled.Close, contentDescription = "Retirer le palier J$value", modifier = Modifier.size(18.dp))
+                        }
+                    }
+                }
+            }
+        }
+        if (draft.intervals.size <= 2) {
+            Text("Il faut garder au moins deux paliers.", style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = draft.newInterval,
+                onValueChange = viewModel::setNewInterval,
+                label = { Text("Nouveau J") },
+                placeholder = { Text("ex. : 120") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { viewModel.addInterval(); focus.clearFocus() }),
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(Modifier.width(8.dp))
+            OutlinedButton(onClick = viewModel::addInterval, modifier = Modifier.heightIn(min = 48.dp)) { Text("Ajouter") }
+        }
+        TextButton(onClick = viewModel::resetIntervals, modifier = Modifier.heightIn(min = 48.dp)) { Text("Rétablir les valeurs initiales") }
+    }
+}
+
+@Composable
+private fun Colors(subjects: List<Subject>, onPick: (String) -> Unit) {
+    Section("Les couleurs de tes matières", "Choisis les couleurs qui t’aident à te repérer. Elles sont enregistrées tout de suite.") {
+        if (subjects.isEmpty()) Text("Aucune matière.", style = MaterialTheme.typography.bodyMedium, color = JColors.Slate600)
+        subjects.forEach { subject ->
+            Row(
+                Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(12.dp))
+                    .clickable(onClickLabel = "Changer la couleur", role = Role.Button) { onPick(subject.id) }
+                    .padding(horizontal = 4.dp, vertical = 6.dp)
+                    .semantics(mergeDescendants = true) {},
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(Modifier.size(28.dp).clip(RoundedCornerShape(8.dp)).background(subjectColor(subject.color)))
+                Spacer(Modifier.width(12.dp))
+                Text(subject.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                Text(subject.color.uppercase(), style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace, color = JColors.Slate600)
+            }
+        }
+    }
+}
+
+/** Palette : couleurs par défaut des matières et quelques teintes lisibles. */
+private val PALETTE = (DEFAULT_SUBJECTS.map { it.color } + listOf("#0EA5E9", "#F59E0B", "#10B981", "#F97316", "#7C3AED", "#DC2626", "#0F766E", "#64748B")).distinct()
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ColorDialog(subject: Subject, onDismiss: () -> Unit, onPick: (String) -> Unit) {
+    var hex by rememberSaveable(subject.id) { mutableStateOf(subject.color) }
+    val valid = Regex("^#[0-9A-Fa-f]{6}$").matches(hex)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Couleur : ${subject.name}") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    PALETTE.forEach { color ->
+                        val selected = color.equals(hex, ignoreCase = true)
+                        Box(
+                            Modifier.size(48.dp).clip(CircleShape)
+                                .clickable(role = Role.RadioButton) { hex = color }
+                                .semantics { this.selected = selected; contentDescription = "Couleur $color" }
+                                .padding(6.dp).clip(CircleShape).background(subjectColor(color))
+                                .border(if (selected) 3.dp else 0.dp, JColors.Slate900, CircleShape),
+                        )
+                    }
+                }
+                OutlinedTextField(
+                    value = hex,
+                    onValueChange = { hex = it.trim().take(7) },
+                    label = { Text("Code couleur") },
+                    singleLine = true,
+                    isError = !valid,
+                    supportingText = if (!valid) ({ Text("Format attendu : #RRGGBB") }) else null,
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = { onPick(hex) }, enabled = valid, modifier = Modifier.heightIn(min = 48.dp)) { Text("Appliquer") } },
+        dismissButton = { TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text("Annuler") } },
+        containerColor = Color.White,
+    )
+}
+
+@Composable
+private fun Backup(ui: SettingsUiState, onExport: () -> Unit, onImport: () -> Unit) {
+    Section(
+        "Sauvegarde et export",
+        "Tes données sont enregistrées uniquement sur ce téléphone. Exporte une copie pour les garder ou les ouvrir dans J-Method sur le web.",
+    ) {
+        Text("${ui.courseCount} cours et ${ui.revisionCount} séances enregistrés.", style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
+        Button(onClick = onExport, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+            Text("Exporter mes données (JSON)")
+        }
+        OutlinedButton(onClick = onImport, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+            Text("Restaurer une sauvegarde")
+        }
+        Text(
+            "Une restauration remplace tes cours et tes séances ; une confirmation est demandée avant.",
+            style = MaterialTheme.typography.bodySmall, color = JColors.Slate600,
+        )
+    }
+}
+
+@Composable
+private fun About() {
+    val context = LocalContext.current
+    val version = runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "—"
+    Section("À propos") {
+        Text("J-Method, version $version", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+        Text(
+            "J-Method lit Pronote en lecture seule : emploi du temps et cahier de textes. Rien n’est jamais modifié ni envoyé dans Pronote.",
+            style = MaterialTheme.typography.bodyMedium, color = JColors.Slate700,
+        )
+        Text(
+            "Tes cours, tes séances et tes réglages restent sur ce téléphone, sans compte ni serveur J-Method. Les sauvegardes Android sont désactivées.",
+            style = MaterialTheme.typography.bodyMedium, color = JColors.Slate700,
+        )
+    }
+}

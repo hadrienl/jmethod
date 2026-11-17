@@ -1,6 +1,10 @@
 package fr.jmethod.app.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.windowInsetsTopHeight
+import androidx.compose.foundation.layout.statusBars
 import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
@@ -61,7 +65,14 @@ import fr.jmethod.app.ui.pronote.LoginScreen
 import fr.jmethod.app.ui.pronote.OfficialPageLayer
 import fr.jmethod.app.ui.pronote.OfflineBanner
 import fr.jmethod.app.ui.pronote.PronoteViewModel
-import fr.jmethod.app.ui.pronote.SettingsScreen
+import fr.jmethod.app.ui.notebook.NotebookScreen
+import fr.jmethod.app.ui.notebook.NotebookViewModel
+import fr.jmethod.app.ui.settings.SettingsEvent
+import fr.jmethod.app.ui.settings.SettingsScreen
+import fr.jmethod.app.ui.settings.SettingsViewModel
+import fr.jmethod.app.ui.stats.StatsScreen
+import fr.jmethod.app.ui.stats.StatsViewModel
+import androidx.compose.ui.unit.dp
 import fr.jmethod.app.ui.theme.JColors
 import fr.jmethod.app.ui.today.RevisionDetailSheet
 import fr.jmethod.app.ui.today.ScoreSheet
@@ -69,8 +80,13 @@ import fr.jmethod.app.ui.today.TodayEvent
 import fr.jmethod.app.ui.today.TodayScreen
 import fr.jmethod.app.ui.today.TodayViewModel
 
-/** Onglets des jalons livrés (1 à 3). */
-private enum class Tab { TODAY, PLANNING, COURSES, SETTINGS }
+/** Onglets des jalons livrés (1 à 5). */
+/** Icône « progrès » : trois barres (pas d’icône de graphique dans le jeu d’icônes de base). */
+private val StatsIcon = androidx.compose.ui.graphics.vector.ImageVector.Builder("Stats", 24.dp, 24.dp, 24f, 24f)
+    .addPath(androidx.compose.ui.graphics.vector.addPathNodes("M4 13h4v7H4zM10 8h4v12h-4zM16 4h4v16h-4z"), fill = androidx.compose.ui.graphics.SolidColor(androidx.compose.ui.graphics.Color.Black))
+    .build()
+
+private enum class Tab { TODAY, PLANNING, COURSES, STATS, SETTINGS }
 
 private enum class ToastTone { SUCCESS, WARNING, INFO }
 
@@ -93,12 +109,20 @@ fun JMethodApp() {
     val pronoteViewModel: PronoteViewModel = viewModel(factory = viewModelFactory { initializer { PronoteViewModel(application, container) } })
     val planningViewModel: PlanningViewModel = viewModel(factory = viewModelFactory { initializer { PlanningViewModel(container.repository, container.clock) } })
     val coursesViewModel: CoursesViewModel = viewModel(factory = viewModelFactory { initializer { CoursesViewModel(container.repository, container.clock) } })
+    val statsViewModel: StatsViewModel = viewModel(factory = viewModelFactory { initializer { StatsViewModel(container.repository, container.clock) } })
+    val settingsViewModel: SettingsViewModel = viewModel(factory = viewModelFactory { initializer { SettingsViewModel(container.repository, container.clock) } })
+    val notebookViewModel: NotebookViewModel = viewModel(
+        factory = viewModelFactory { initializer { NotebookViewModel(pronoteViewModel.controller, container.repository, application.cacheDir) } },
+    )
 
     val today by todayViewModel.uiState.collectAsStateWithLifecycle()
     val pronote by pronoteViewModel.controller.uiState.collectAsStateWithLifecycle()
     val syncInfo by pronoteViewModel.syncInfo.collectAsStateWithLifecycle()
     val planning by planningViewModel.uiState.collectAsStateWithLifecycle()
     val courses by coursesViewModel.uiState.collectAsStateWithLifecycle()
+    val stats by statsViewModel.uiState.collectAsStateWithLifecycle()
+    val settings by settingsViewModel.uiState.collectAsStateWithLifecycle()
+    val notebook by notebookViewModel.uiState.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableStateOf(Tab.TODAY) }
     val snackbar = remember { SnackbarHostState() }
     val celebration = remember { CelebrationState() }
@@ -112,6 +136,14 @@ fun JMethodApp() {
                     snackbar.currentSnackbarData?.dismiss()
                     snackbar.showSnackbar(ToastVisuals(event.title, event.message, if (event.warning) ToastTone.WARNING else ToastTone.SUCCESS))
                 }
+            }
+        }
+    }
+    LaunchedEffect(settingsViewModel) {
+        settingsViewModel.eventFlow.collect { event ->
+            if (event is SettingsEvent.Toast) {
+                snackbar.currentSnackbarData?.dismiss()
+                snackbar.showSnackbar(ToastVisuals(event.title, event.message, if (event.warning) ToastTone.WARNING else ToastTone.SUCCESS))
             }
         }
     }
@@ -211,8 +243,17 @@ fun JMethodApp() {
                                 selected = tab == Tab.COURSES,
                                 onClick = { tab = Tab.COURSES },
                                 icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) },
-                                label = { Text("Mes cours") },
+                                label = { Text("Cours") },
+                                modifier = Modifier.semantics { contentDescription = "Mes cours" },
                                 colors = colors,
+                            )
+                            NavigationBarItem(
+                                selected = tab == Tab.STATS,
+                                onClick = { tab = Tab.STATS },
+                                icon = { Icon(StatsIcon, contentDescription = null) },
+                                label = { Text("Progrès") },
+                                colors = colors,
+                                modifier = Modifier.semantics { contentDescription = "Mes progrès" },
                             )
                             NavigationBarItem(
                                 selected = tab == Tab.SETTINGS,
@@ -276,7 +317,11 @@ fun JMethodApp() {
                             if (state == null) {
                                 Loading()
                             } else {
-                                CoursesScreen(state, coursesViewModel, padding, onShowPlanning = { tab = Tab.PLANNING })
+                                CoursesScreen(
+                                    state, coursesViewModel, padding,
+                                    onShowPlanning = { tab = Tab.PLANNING },
+                                    onOpenNotebook = { notebookViewModel.open() },
+                                )
                                 state.detail?.let { detail ->
                                     CourseDetailSheet(
                                         detail,
@@ -287,12 +332,25 @@ fun JMethodApp() {
                                             todayViewModel.openScore(revisionId)
                                         },
                                         onDelete = { coursesViewModel.delete(detail.course.id) },
+                                        onOpenNotebook = detail.subject?.let { subject ->
+                                            {
+                                                coursesViewModel.closeDetail()
+                                                notebookViewModel.open(subject.id)
+                                            }
+                                        },
                                     )
                                 }
                             }
                         }
-                        Tab.SETTINGS -> SettingsScreen(pronoteViewModel, pronote, syncInfo, padding)
+                        Tab.STATS -> stats?.let { StatsScreen(it, padding) } ?: Loading()
+                        Tab.SETTINGS -> settings?.let { SettingsScreen(it, settingsViewModel, pronoteViewModel, pronote, syncInfo, padding) } ?: Loading()
                     }
+
+                    // Fond de la barre d’état : le contenu qui défile ne passe plus sous l’heure (edge-to-edge).
+                    Box(
+                        Modifier.fillMaxWidth().windowInsetsTopHeight(androidx.compose.foundation.layout.WindowInsets.Companion.statusBars)
+                            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.96f)),
+                    )
 
                     // Feuilles d’Aujourd’hui ouvertes depuis n’importe quel onglet (validation depuis la fiche d’un cours).
                     today?.let { state ->
@@ -323,8 +381,14 @@ fun JMethodApp() {
         }
         // Création d’un cours : plein écran au-dessus de l’app, sous la page officielle Pronote.
         val form = courses
-        if (form != null && form.form.open && pronote.access != AccessPhase.SIGNED_OUT && pronote.access != AccessPhase.CHECKING) {
+        val signedIn = pronote.access != AccessPhase.SIGNED_OUT && pronote.access != AccessPhase.CHECKING
+        if (form != null && form.form.open && signedIn) {
             CourseFormScreen(form, coursesViewModel, Modifier.zIndex(1f))
+        }
+        // Cahier de textes : plein écran, lecture seule.
+        val reader = notebook
+        if (reader != null && reader.state.open && signedIn && !(form?.form?.open ?: false)) {
+            NotebookScreen(reader, notebookViewModel, Modifier.zIndex(1f))
         }
         CelebrationOverlay(celebration, Modifier.zIndex(3f))
     }

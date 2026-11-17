@@ -41,6 +41,61 @@ class NativeTransport : PronoteTransport {
 }
 
 /**
+ * Téléchargement d’une pièce jointe vers un fichier privé. L’URL n’est connue que de l’appel :
+ * elle n’apparaît ni dans les exceptions ni dans les journaux.
+ * @return le statut HTTP, ou 413 si la limite de taille est dépassée.
+ */
+fun interface FileTransport {
+    fun download(url: String, headers: Map<String, String>, maxBytes: Long, target: java.io.File): Int
+}
+
+/** GET HTTPS natif, sans redirection, lecture en flux bornée. */
+class NativeFileTransport : FileTransport {
+    override fun download(url: String, headers: Map<String, String>, maxBytes: Long, target: java.io.File): Int {
+        val connection = try {
+            URL(url).openConnection() as HttpURLConnection
+        } catch (_: Exception) {
+            throw java.io.IOException("download")
+        }
+        try {
+            connection.instanceFollowRedirects = false
+            connection.requestMethod = "GET"
+            connection.connectTimeout = 15_000
+            connection.readTimeout = 30_000
+            headers.forEach { (name, value) -> connection.setRequestProperty(name, value) }
+            val status = connection.responseCode
+            if (status != 200) return status
+            val length = connection.contentLengthLong
+            if (length > maxBytes) return 413
+            var total = 0L
+            connection.inputStream.use { input ->
+                target.outputStream().use { output ->
+                    val buffer = ByteArray(64 * 1024)
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        total += read
+                        if (total > maxBytes) {
+                            output.close()
+                            target.delete()
+                            return 413
+                        }
+                        output.write(buffer, 0, read)
+                    }
+                }
+            }
+            return 200
+        } catch (_: Exception) {
+            target.delete()
+            // Aucun détail : le message d’une exception réseau peut contenir l’URL.
+            throw java.io.IOException("download")
+        } finally {
+            connection.disconnect()
+        }
+    }
+}
+
+/**
  * Client du protocole mobile Pronote, en lecture seule. Non thread-safe : les appels
  * doivent être sérialisés (le numéro d’ordre avance de deux à chaque requête).
  *
@@ -73,17 +128,24 @@ class PronoteClient(
         private set
     var selectedChildId: String? = null
         private set
+    /** Onglets autorisés (`listeOnglets` aplati) ; `null` si Pronote ne les fournit pas. */
+    var authorizedTabs: Set<Int>? = null
+        private set
+    /** Matière des cours de l’emploi du temps lu, par identifiant `N` (secours du cahier de textes). */
+    private var lessonSubjects: Map<String, String> = emptyMap()
 
     /** Remplace les identifiants mobiles par les plus récents du coffre (jeton renouvelé ailleurs). */
     fun useCredentials(latest: Credentials) {
         credentials = latest
     }
 
+    private fun cookieHeader() = cookies.entries.joinToString("; ") { it.key + "=" + it.value }
+
     private fun request(method: String, url: String, body: String? = null): HttpResult {
         if (!url.startsWith("$origin/")) throw PronoteException("origin", "Requête hors établissement refusée.")
-        val headers = linkedMapOf("User-Agent" to "iPhone", "Accept" to if (method == "GET") "text/html" else "application/json")
+        val headers = linkedMapOf("User-Agent" to USER_AGENT, "Accept" to if (method == "GET") "text/html" else "application/json")
         if (method == "POST") headers["Content-Type"] = "application/json"
-        if (cookies.isNotEmpty()) headers["Cookie"] = cookies.entries.joinToString("; ") { it.key + "=" + it.value }
+        if (cookies.isNotEmpty()) headers["Cookie"] = cookieHeader()
         val response = transport.request(method, url, body, headers)
         response.headers.filterKeys { it.equals("Set-Cookie", true) }.values.flatten().forEach { cookie ->
             val pair = cookie.substringBefore(';')
@@ -97,8 +159,9 @@ class PronoteClient(
     }
 
     fun call(function: String, data: JSONObject? = null, tab: Int? = null, nextIv: ByteArray? = null): JSONObject {
-        if (function !in PronotePolicy.allowedFunctions) {
-            throw PronoteException("readonly", "Cette opération n’est pas autorisée en lecture seule.")
+        PronotePolicy.checkCall(function, tab, data)
+        if (tab != null && function == "PageCahierDeTexte" && authorizedTabs?.contains(tab) == false) {
+            throw PronoteException("notebook-unavailable", "Le cahier de textes n’est pas disponible pour ce compte.")
         }
         val payload = JSONObject()
         if (tab != null) {
@@ -136,7 +199,13 @@ class PronoteClient(
         return section.optJSONObject("data") ?: section
     }
 
+    /** Change à chaque connexion : les identifiants de pièces jointes ne valent que pour la session qui les a lus. */
+    @Volatile
+    var sessionStamp: Any = Any()
+        private set
+
     fun login(mode: Mode = Mode.TOKEN) {
+        sessionStamp = Any()
         order = 1
         key = PronoteCrypto.md5(byteArrayOf())
         iv = PronoteCrypto.zeroIv
@@ -180,6 +249,7 @@ class PronoteClient(
 
         val personal = call("ParametresUtilisateur")
         user = personal.getJSONObject("ressource")
+        authorizedTabs = personal.opt("listeOnglets")?.let { PronotePolicy.flattenTabs(it) }
         accountName = user.optString("L", "Compte connecté")
         val childResources = resourcesOf(user)
         children = if (childResources == null) emptyList() else (0 until childResources.length()).map {
@@ -238,6 +308,7 @@ class PronoteClient(
                 fun labels(kind: Int) = content.filter { it.optInt("G") == kind }.joinToString(", ") { it.optString("L") }
                 val end = PronotePolicy.date(lesson.opt("DateDuCoursFin"))
                     .ifEmpty { PronotePolicy.endFromGrid(start, lesson.optInt("place"), lesson.optInt("duree"), general) }
+                lessonSubjects = lessonSubjects + (lesson.optString("N") to labels(16).ifBlank { "Cours" })
                 results += Lesson(
                     id = "${lesson.optString("N")}-$start-${lesson.optInt("P")}",
                     subject = labels(16).ifBlank { "Cours" },
@@ -250,5 +321,44 @@ class PronoteClient(
             }
         }
         return results.sortedBy { it.start }
+    }
+
+    /**
+     * Cahier de textes en lecture seule sur 28 jours : contenus (onglet 89) puis, s’il est autorisé,
+     * travail à faire (onglet 88). Ne crée rien et n’écrit rien dans Pronote.
+     */
+    fun notebook(today: LocalDate): NotebookSnapshot {
+        val monday = LocalDate.parse(PronotePolicy.date(parameters.getJSONObject("General").get("PremierLundi")).take(10))
+        val window = NotebookRules.window(today, monday)
+        fun page(tab: Int) = call("PageCahierDeTexte", JSONObject().put("domaine", JSONObject().put("_T", 8).put("V", window.domaine)), tab)
+        val tabs = authorizedTabs
+        if (tabs != null && NotebookRules.CONTENTS_TAB !in tabs) {
+            throw PronoteException("notebook-unavailable", "Le cahier de textes n’est pas disponible pour ce compte.")
+        }
+        val contents = page(NotebookRules.CONTENTS_TAB)
+        val homework = if (tabs == null || NotebookRules.HOMEWORK_TAB in tabs) page(NotebookRules.HOMEWORK_TAB) else null
+        return NotebookRules.parse(window, contents, homework, lessonSubjects)
+    }
+
+    /**
+     * Télécharge une pièce jointe (`FichiersExternes`) avec la session et les cookies courants. L’URL
+     * est construite ici puis oubliée ; elle n’est jamais renvoyée.
+     */
+    fun download(id: String, name: String, files: FileTransport, target: java.io.File, doublePadding: Boolean = true) {
+        if (!NotebookRules.isDownloadableId(id)) throw PronoteException("download", DOWNLOAD_UNAVAILABLE)
+        val url = NotebookRules.downloadUrl(root, NotebookRules.encryptedId(id, key, iv, doublePadding), name, attributes.getLong("h"))
+        if (!url.startsWith("$origin/")) throw PronoteException("origin", "Requête hors établissement refusée.")
+        val headers = linkedMapOf("User-Agent" to USER_AGENT)
+        if (cookies.isNotEmpty()) headers["Cookie"] = cookieHeader()
+        when (files.download(url, headers, NotebookRules.MAX_DOWNLOAD_BYTES, target)) {
+            200 -> {}
+            413 -> throw PronoteException("download-size", "Ce document dépasse la limite de 20 Mo.")
+            else -> throw PronoteException("download", DOWNLOAD_UNAVAILABLE)
+        }
+    }
+
+    companion object {
+        const val USER_AGENT = "iPhone"
+        const val DOWNLOAD_UNAVAILABLE = "Document indisponible. Actualise le cahier de textes puis réessaie."
     }
 }

@@ -69,6 +69,8 @@ fun CourseDetailSheet(
     onDismiss: () -> Unit,
     onValidate: (String) -> Unit,
     onDelete: () -> Unit,
+    /** `null` si la matière du cours a disparu. */
+    onOpenNotebook: (() -> Unit)? = null,
 ) {
     var confirmDelete by rememberSaveable(model.course.id) { mutableStateOf(false) }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = Color.White) {
@@ -104,6 +106,11 @@ fun CourseDetailSheet(
                     drawStopIndicator = {},
                     modifier = Modifier.fillMaxWidth().height(10.dp),
                 )
+            }
+            if (onOpenNotebook != null) {
+                OutlinedButton(onClick = onOpenNotebook, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                    Text("Voir le cahier de textes de ${model.subjectLabel}")
+                }
             }
             Text(
                 "Calendrier personnalisé des J",

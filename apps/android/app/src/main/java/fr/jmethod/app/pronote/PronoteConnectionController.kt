@@ -109,6 +109,8 @@ class PronoteConnectionController(
     private val lastSync: () -> Instant? = { null },
     private val webMessagesSupported: Boolean = true,
     private val random: SecureRandom = SecureRandom(),
+    /** Téléchargement des pièces jointes du cahier de textes (même hôte, cookies de la session). */
+    private val files: FileTransport = NativeFileTransport(),
 ) {
     private val state = MutableStateFlow(PronoteUiState())
     val uiState: StateFlow<PronoteUiState> = state.asStateFlow()
@@ -629,6 +631,50 @@ class PronoteConnectionController(
         return connection.timetable(today(), 14)
     }
 
+    /** Lecture du cahier de textes : instantané et marque de la session qui l’a lu. */
+    class NotebookRead(val snapshot: NotebookSnapshot, val stamp: Any)
+
+    /**
+     * Cahier de textes en lecture seule (28 jours) avec la session courante, sous le verrou partagé.
+     * Une session expirée est reconnectée une fois par jeton, comme la synchronisation.
+     */
+    suspend fun readNotebook(): NotebookRead {
+        val current = session ?: throw PronoteException("offline", NOTEBOOK_OFFLINE)
+        return guard.mutex.withLock {
+            withContext(io) {
+                val connection = current.client
+                val wanted = synchronized(guard.vaultLock) { vault.selectedChildId() }
+                fun read(): NotebookSnapshot {
+                    if (wanted != null && connection.children.any { it.id == wanted }) connection.selectChild(wanted)
+                    return connection.notebook(today())
+                }
+                val snapshot = try {
+                    read()
+                } catch (error: PronoteException) {
+                    if (error.code !in setOf("pronote-10", "pronote-22", "http")) throw error
+                    vault.load()?.let { connection.useCredentials(it) }
+                    connection.login(PronoteClient.Mode.TOKEN)
+                    read()
+                }
+                NotebookRead(snapshot, connection.sessionStamp)
+            }
+        }
+    }
+
+    /**
+     * Télécharge une pièce jointe lue avec la session [stamp] vers [target] (cache privé). Après une
+     * reconnexion, les identifiants sont périmés : il faut relire le cahier de textes.
+     */
+    suspend fun downloadAttachment(stamp: Any, id: String, name: String, target: java.io.File) {
+        val current = session ?: throw PronoteException("offline", NOTEBOOK_OFFLINE)
+        guard.mutex.withLock {
+            withContext(io) {
+                if (current.client.sessionStamp !== stamp) throw PronoteException("download", PronoteClient.DOWNLOAD_UNAVAILABLE)
+                current.client.download(id, name, files, target)
+            }
+        }
+    }
+
     /** Messages sans détail technique ; les codes internes ne sont jamais affichés. */
     private fun messageFor(error: Exception, fallback: String): String = when {
         error is PronoteException && error.code == "mfa" ->
@@ -714,6 +760,7 @@ class PronoteConnectionController(
     }
 
     private companion object {
+        const val NOTEBOOK_OFFLINE = "Le cahier de textes se lit avec ta connexion Pronote. Actualise depuis les Réglages ou réessaie quand tu es en ligne."
         const val REJECTED = "Pronote a refusé l’identifiant ou le mot de passe. Vérifie-les puis réessaie."
         val FOREGROUND_SYNC_AFTER: Duration = Duration.ofHours(6)
     }

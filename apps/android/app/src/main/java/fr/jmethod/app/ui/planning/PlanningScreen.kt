@@ -91,32 +91,42 @@ fun PlanningScreen(
     val selection = state.selection
     val mode = selection.mode
     val days = state.model.days
+    val wide = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= 600
     LazyColumn(
         contentPadding = screenPadding(contentPadding, 24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        item(key = "header") {
-            Column {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Planning", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold,
-                        modifier = Modifier.weight(1f).semantics { heading() })
-                    OutlinedButton(
-                        onClick = viewModel::goToToday,
-                        modifier = Modifier.heightIn(min = 48.dp),
-                        contentPadding = PaddingValues(horizontal = 14.dp),
-                    ) {
-                        Icon(Icons.Filled.DateRange, contentDescription = null, modifier = Modifier.size(18.dp), tint = JColors.Violet800)
-                        Spacer(Modifier.width(6.dp))
-                        Text("Aujourd’hui", color = JColors.Violet800, fontWeight = FontWeight.SemiBold)
-                    }
+        if (wide) {
+            // Paysage ou grand écran : en-tête compact sur deux lignes, qui défile avec le contenu.
+            item(key = "header") {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Planning", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold, modifier = Modifier.semantics { heading() })
+                    ModeSelector(mode, viewModel::setMode, Modifier.weight(1f))
+                    TodayButton(viewModel)
                 }
-                Spacer(Modifier.height(4.dp))
-                Text("Les matières, les étapes et les séances à revoir.", style = MaterialTheme.typography.bodyMedium, color = JColors.Slate600)
             }
+            item(key = "navigation") {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    PeriodNavigation(state.model.period, viewModel, Modifier.weight(1f))
+                    Filters(state, viewModel, Modifier.weight(1f))
+                }
+            }
+        } else {
+            item(key = "header") {
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Planning", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold,
+                            modifier = Modifier.weight(1f).semantics { heading() })
+                        TodayButton(viewModel)
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text("Les matières, les étapes et les séances à revoir.", style = MaterialTheme.typography.bodyMedium, color = JColors.Slate600)
+                }
+            }
+            item(key = "mode") { ModeSelector(mode, viewModel::setMode) }
+            item(key = "navigation") { PeriodNavigation(state.model.period, viewModel) }
+            item(key = "filters") { Filters(state, viewModel) }
         }
-        item(key = "mode") { ModeSelector(mode, viewModel::setMode) }
-        item(key = "navigation") { PeriodNavigation(state.model.period, viewModel) }
-        item(key = "filters") { Filters(state, viewModel) }
         if (!state.hasCourses) {
             item(key = "no-course") { NoCourseCard(onCreateCourse) }
         }
@@ -138,9 +148,22 @@ fun PlanningScreen(
 }
 
 @Composable
-private fun ModeSelector(mode: PlanningMode, onSelect: (PlanningMode) -> Unit) {
+private fun TodayButton(viewModel: PlanningViewModel) {
+    OutlinedButton(
+        onClick = viewModel::goToToday,
+        modifier = Modifier.heightIn(min = 48.dp),
+        contentPadding = PaddingValues(horizontal = 14.dp),
+    ) {
+        Icon(Icons.Filled.DateRange, contentDescription = null, modifier = Modifier.size(18.dp), tint = JColors.Violet800)
+        Spacer(Modifier.width(6.dp))
+        Text("Aujourd’hui", color = JColors.Violet800, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
+private fun ModeSelector(mode: PlanningMode, onSelect: (PlanningMode) -> Unit, modifier: Modifier = Modifier) {
     val options = listOf(PlanningMode.DAY to "Jour", PlanningMode.WEEK to "Semaine", PlanningMode.MONTH to "Mois")
-    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().semantics { contentDescription = "Période affichée" }) {
+    SingleChoiceSegmentedButtonRow(modifier.fillMaxWidth().semantics { contentDescription = "Période affichée" }) {
         options.forEachIndexed { index, (value, label) ->
             SegmentedButton(
                 selected = mode == value,
@@ -159,8 +182,8 @@ private fun ModeSelector(mode: PlanningMode, onSelect: (PlanningMode) -> Unit) {
 }
 
 @Composable
-private fun PeriodNavigation(period: String, viewModel: PlanningViewModel) {
-    Column {
+private fun PeriodNavigation(period: String, viewModel: PlanningViewModel, modifier: Modifier = Modifier) {
+    Column(modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { viewModel.move(-1) }, modifier = Modifier.size(48.dp)) {
                 Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Période précédente")
@@ -180,9 +203,9 @@ private fun PeriodNavigation(period: String, viewModel: PlanningViewModel) {
 }
 
 @Composable
-private fun Filters(state: PlanningUiState, viewModel: PlanningViewModel) {
+private fun Filters(state: PlanningUiState, viewModel: PlanningViewModel, modifier: Modifier = Modifier) {
     val selection = state.selection
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically, modifier = modifier.fillMaxWidth()) {
         val subject = state.subjects.firstOrNull { it.id == selection.subjectId }
         DropdownFilter(
             label = subject?.name ?: "Matière",

@@ -56,8 +56,45 @@ object PronotePolicy {
     /** Liste blanche stricte des fonctions de lecture ; toute écriture (Saisie…) est refusée. */
     val allowedFunctions = setOf(
         "FonctionParametres", "Identification", "Authentification", "ParametresUtilisateur",
-        "PageInfosPerso", "Navigation", "PageEmploiDuTemps",
+        "PageInfosPerso", "Navigation", "PageEmploiDuTemps", "PageCahierDeTexte",
     )
+
+    private val domaineRange = Regex("^\\[(\\d{1,3})\\.\\.(\\d{1,3})\\]$")
+
+    /**
+     * Contrôle local avant tout envoi : liste blanche, aucune fonction `Saisie…`, et pour
+     * `PageCahierDeTexte` onglet 88 ou 89, `data` réduit à `domaine` de type 8 sur six semaines au plus.
+     */
+    fun checkCall(function: String, tab: Int?, data: JSONObject?) {
+        if (function !in allowedFunctions || function.startsWith("Saisie")) {
+            throw PronoteException("readonly", "Cette opération n’est pas autorisée en lecture seule.")
+        }
+        if (function != "PageCahierDeTexte") return
+        val refused = PronoteException("readonly", "Cette lecture du cahier de textes n’est pas autorisée.")
+        if (tab != 88 && tab != 89) throw refused
+        if (data == null || data.length() != 1 || !data.has("domaine")) throw refused
+        val domaine = data.optJSONObject("domaine") ?: throw refused
+        if (domaine.length() != 2 || domaine.opt("_T") !is Number || domaine.optInt("_T") != 8) throw refused
+        val match = domaineRange.matchEntire(domaine.optString("V")) ?: throw refused
+        val first = match.groupValues[1].toInt()
+        val last = match.groupValues[2].toInt()
+        if (first < 1 || last < first || last - first > NotebookRules.MAX_WEEK_SPAN) throw refused
+    }
+
+    /** `listeOnglets` aplati comme `_prepare_onglets` de pronotepy (toutes les valeurs, récursivement). */
+    fun flattenTabs(raw: Any?): Set<Int> {
+        val out = mutableSetOf<Int>()
+        fun walk(value: Any?) {
+            when (value) {
+                is JSONArray -> for (i in 0 until value.length()) walk(value.opt(i))
+                is JSONObject -> value.keys().forEach { walk(value.opt(it)) }
+                is Number -> out += value.toInt()
+                is String -> value.toIntOrNull()?.let { out += it }
+            }
+        }
+        walk(raw)
+        return out
+    }
 
     fun validatedUrl(value: String): URI {
         val uri = try {

@@ -153,7 +153,8 @@ class ProtocolVectorsTest {
     fun readOnlyAllowlistMatchesSharedSafety() {
         val safety = vectors.getJSONObject("safety")
         val allowed = safety.getJSONArray("readOnlyFunctionIds").let { a -> (0 until a.length()).map { a.getString(it) }.toSet() }
-        assertEquals(allowed, PronotePolicy.allowedFunctions)
+        // Jalon 5 : `PageCahierDeTexte` ajouté à la liste blanche (notebook-reference.md, section 1).
+        assertEquals(allowed + "PageCahierDeTexte", PronotePolicy.allowedFunctions)
         val rejected = safety.getJSONArray("rejectedFunctionExamples")
         for (i in 0 until rejected.length()) assertFalse(rejected.getString(i) in PronotePolicy.allowedFunctions)
     }

@@ -27,6 +27,15 @@ class FakePronoteServer(
     val calls = mutableListOf<String>()
     val timetableMembers = mutableListOf<String?>()
     val timetableResources = mutableListOf<String?>()
+    /** Charges utiles `PageCahierDeTexte` reçues (avant compression et chiffrement). */
+    val notebookPayloads = mutableListOf<JSONObject>()
+    /** Réponses `data` du cahier de textes par onglet. */
+    val notebookResponses = mutableMapOf<Int, JSONObject>()
+    /** `listeOnglets` renvoyé par ParametresUtilisateur (absent si `null`). */
+    var tabs: JSONArray? = null
+    /** Clé et IV de session côté serveur (contrôle de l’identifiant de pièce jointe). */
+    val sessionKey get() = key
+    val sessionIv get() = iv
     var issued = 0
     /** Code `Erreur.G` renvoyé à la prochaine requête de cette fonction. */
     val failures = mutableMapOf<String, Int>()
@@ -112,7 +121,11 @@ class FakePronoteServer(
                 } else {
                     JSONObject().put("N", "eleve-1").put("L", "Élève Test")
                 }
-                JSONObject().put("ressource", resource)
+                JSONObject().put("ressource", resource).also { result -> tabs?.let { result.put("listeOnglets", it) } }
+            }
+            "PageCahierDeTexte" -> {
+                notebookPayloads += payload
+                notebookResponses[payload.getJSONObject("Signature").getInt("onglet")] ?: JSONObject()
             }
             "PageInfosPerso" -> JSONObject().put("securisation", JSONObject().put("mode", secureMode))
             "PageEmploiDuTemps" -> {

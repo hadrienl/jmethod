@@ -301,15 +301,11 @@ private fun formatSync(value: String?): String? = value?.let { runCatching { syn
 /** Onglet Réglages du jalon 1 : uniquement le compte Pronote. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun SettingsScreen(viewModel: PronoteViewModel, state: PronoteUiState, syncInfo: PronoteSyncInfo?, contentPadding: PaddingValues) {
+/** Compte Pronote en tête des Réglages : synchronisation, enfant suivi, déconnexion. */
+fun PronoteAccountSection(viewModel: PronoteViewModel, state: PronoteUiState, syncInfo: PronoteSyncInfo?) {
     val controller = viewModel.controller
     var confirmDisconnect by rememberSaveable { mutableStateOf(false) }
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-            .padding(start = 16.dp, end = 16.dp, top = contentPadding.calculateTopPadding() + 16.dp, bottom = contentPadding.calculateBottomPadding() + 24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Text("Réglages", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, modifier = Modifier.semantics { heading() })
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("Compte Pronote", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() })
 
         if ((state.busy || state.isError) && state.access == AccessPhase.CONNECTED) {
@@ -359,7 +355,7 @@ fun SettingsScreen(viewModel: PronoteViewModel, state: PronoteUiState, syncInfo:
         }
 
         Text(
-            "J-Method lit ton emploi du temps sans rien modifier dans Pronote. " + if (state.hasStoredPassword) {
+            "J-Method lit ton emploi du temps et ton cahier de textes sans rien modifier dans Pronote. " + if (state.hasStoredPassword) {
                 "Ton identifiant et ton mot de passe sont enregistrés de façon chiffrée, uniquement sur ce téléphone."
             } else {
                 "Ton mot de passe n’est pas enregistré : seule ta connexion à Pronote est gardée, de façon chiffrée, sur ce téléphone."
