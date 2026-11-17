@@ -14,7 +14,10 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.Instant
 import java.time.LocalDate
+import fr.jmethod.app.pronote.MemoryThrottle
+import fr.jmethod.app.pronote.PronoteThrottle
 
 /** Synchronisation d’arrière-plan (logique du worker) : jeton par HTTPS natif uniquement. */
 class BackgroundSyncTest {
@@ -22,8 +25,20 @@ class BackgroundSyncTest {
         credentials = Credentials("${server.origin}/pronote/mobile.eleve.html?fd=1", server.username, token, "uuid")
     }
 
-    private fun sync(server: FakePronoteServer, vault: ConnectionControllerTest.FakeVault, guard: PronoteSessionGuard, stored: MutableList<List<Lesson>>) =
-        BackgroundSync(vault, guard, server.transport, Dispatchers.Unconfined, { LocalDate.of(2026, 11, 17) }, { stored += it })
+    private val now = Instant.parse("2026-11-17T19:00:00Z")
+
+    private fun sync(
+        server: FakePronoteServer,
+        vault: ConnectionControllerTest.FakeVault,
+        guard: PronoteSessionGuard,
+        stored: MutableList<List<Lesson>>,
+        throttle: PronoteThrottle = MemoryThrottle(),
+        beforeStore: () -> Unit = {},
+    ) = BackgroundSync(
+        vault, guard, server.transport, Dispatchers.Unconfined, { LocalDate.of(2026, 11, 17) },
+        { lessons, stillValid -> beforeStore(); if (stillValid()) stored += lessons },
+        throttle, { now },
+    )
 
     @Test
     fun renewsTokenAndStoresFourteenDays() = runBlocking {
@@ -97,5 +112,35 @@ class BackgroundSyncTest {
         assertEquals(BackgroundSync.Result.NO_SESSION, sync(server, vault, guard, stored).run())
         assertNull(vault.credentials)
         assertTrue(stored.isEmpty())
+    }
+
+    /** Point 8 : une déconnexion entre la lecture et l’écriture n’écrit plus les créneaux. */
+    @Test
+    fun disconnectJustBeforeStoringWritesNothing() = runBlocking {
+        val server = FakePronoteServer(token = "jeton-enregistre").lesson("c1", "18/11/2026 08:30:00", "MATHEMATIQUES")
+        val vault = vault(server, "jeton-enregistre")
+        val guard = PronoteSessionGuard()
+        val stored = mutableListOf<List<Lesson>>()
+        val result = sync(server, vault, guard, stored, beforeStore = { guard.epoch.incrementAndGet() }).run()
+        assertEquals(BackgroundSync.Result.NO_SESSION, result)
+        assertTrue(stored.isEmpty())
+    }
+
+    /** Point 2 : erreur 25, aucun nouvel essai pendant une heure ; les autres erreurs ne relancent pas. */
+    @Test
+    fun tooManyAttemptsBlocksForAnHour() = runBlocking {
+        val server = FakePronoteServer(token = "jeton-enregistre")
+        server.failures["Identification"] = 25
+        val vault = vault(server, "jeton-enregistre")
+        val throttle = MemoryThrottle()
+        assertEquals(BackgroundSync.Result.BLOCKED, sync(server, vault, PronoteSessionGuard(), mutableListOf(), throttle).run())
+        assertEquals(now.plusSeconds(3600), throttle.blockedUntil())
+        val calls = server.calls.size
+        assertEquals(BackgroundSync.Result.BLOCKED, sync(server, vault, PronoteSessionGuard(), mutableListOf(), throttle).run())
+        assertEquals(calls, server.calls.size)
+        assertFalse(vault.relogin)
+
+        val other = FakePronoteServer(token = "jeton-enregistre").apply { failures["Identification"] = 7 }
+        assertEquals(BackgroundSync.Result.FAILED, sync(other, vault(other, "jeton-enregistre"), PronoteSessionGuard(), mutableListOf()).run())
     }
 }

@@ -64,6 +64,9 @@ class NotebookViewModel(
     private val state = MutableStateFlow(NotebookState())
     private var stamp: Any? = null
     private var readJob: Job? = null
+    private var downloadJob: Job? = null
+    /** Incrémenté à chaque réinitialisation : un résultat tardif d’une session précédente est ignoré. */
+    private var resetCount = 0
     private val events = Channel<NotebookEvent>(Channel.BUFFERED)
     val eventFlow: Flow<NotebookEvent> = events.receiveAsFlow()
 
@@ -86,7 +89,10 @@ class NotebookViewModel(
     }
 
     private fun reset() {
+        resetCount++
         readJob?.cancel()
+        downloadJob?.cancel()
+        downloadJob = null
         stamp = null
         clearFiles()
         state.update { NotebookState(open = it.open, tab = it.tab, subjectId = it.subjectId) }
@@ -106,7 +112,9 @@ class NotebookViewModel(
         state.update { it.copy(loading = true, error = null) }
         readJob = viewModelScope.launch {
             try {
+                val generation = resetCount
                 val read = controller.readNotebook()
+                if (generation != resetCount) return@launch
                 stamp = read.stamp
                 // Nouvelle lecture : les fichiers d’une session précédente ne servent plus.
                 withContext(Dispatchers.IO) { clearFiles() }
@@ -122,19 +130,27 @@ class NotebookViewModel(
     fun download(attachment: NotebookAttachment) {
         if (attachment.kind != NotebookAttachment.Kind.FILE || state.value.downloadingId != null) return
         val session = stamp ?: return
+        val generation = resetCount
         state.update { it.copy(downloadingId = attachment.id) }
-        viewModelScope.launch {
+        downloadJob = viewModelScope.launch {
             try {
                 val target = withContext(Dispatchers.IO) {
-                    File(notebookDir(), UUID.randomUUID().toString()).apply { mkdirs() }.let { File(it, NotebookRules.saveAsName(attachment.name)) }
+                    File(notebookDir(), UUID.randomUUID().toString()).apply { mkdirs() }.let { File(it, NotebookRules.saveAsName(attachment.rawName)) }
                 }
-                controller.downloadAttachment(session, attachment.id, attachment.name, target)
+                // Nom brut `L` (même vide) pour l’adresse FichiersExternes, comme pronotepy.
+                controller.downloadAttachment(session, attachment.id, attachment.rawName, target)
+                if (generation != resetCount) {
+                    withContext(Dispatchers.IO) { target.parentFile?.deleteRecursively() }
+                    return@launch
+                }
                 events.send(NotebookEvent.Open(target))
             } catch (_: CancellationException) {
             } catch (error: Exception) {
-                events.send(NotebookEvent.Message(message(error, "Document indisponible. Actualise le cahier de textes puis réessaie.")))
+                if (generation == resetCount) {
+                    events.send(NotebookEvent.Message(message(error, "Document indisponible. Actualise le cahier de textes puis réessaie.")))
+                }
             } finally {
-                state.update { it.copy(downloadingId = null) }
+                if (generation == resetCount) state.update { it.copy(downloadingId = null) }
             }
         }
     }

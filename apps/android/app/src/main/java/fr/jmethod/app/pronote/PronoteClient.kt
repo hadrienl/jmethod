@@ -16,6 +16,22 @@ fun interface PronoteTransport {
     fun request(method: String, url: String, body: String?, headers: Map<String, String>): HttpResult
 }
 
+/** Taille maximale d’une réponse HTTP Pronote lue en mémoire. */
+const val MAX_HTTP_BODY = 16 * 1024 * 1024
+
+/** Lit au plus [max] octets en UTF-8 ; au-delà, la réponse est refusée sans être lue entièrement. */
+fun readBounded(input: java.io.InputStream, max: Int): String {
+    val out = java.io.ByteArrayOutputStream()
+    val buffer = ByteArray(64 * 1024)
+    while (true) {
+        val read = input.read(buffer)
+        if (read < 0) break
+        if (out.size() + read > max) throw PronoteException("size", "Réponse Pronote trop volumineuse.")
+        out.write(buffer, 0, read)
+    }
+    return out.toString("UTF-8")
+}
+
 /** HTTPS natif, sans redirection automatique ni relâchement TLS. */
 class NativeTransport : PronoteTransport {
     override fun request(method: String, url: String, body: String?, headers: Map<String, String>): HttpResult {
@@ -32,7 +48,7 @@ class NativeTransport : PronoteTransport {
             }
             val status = connection.responseCode
             val stream = if (status in 200..299) connection.inputStream else connection.errorStream
-            val text = stream?.bufferedReader(UTF_8)?.use { it.readText() }.orEmpty()
+            val text = stream?.use { readBounded(it, MAX_HTTP_BODY) }.orEmpty()
             HttpResult(status, connection.headerFields.filterKeys { it != null }, text)
         } finally {
             connection.disconnect()

@@ -4,6 +4,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -30,7 +31,7 @@ interface OfficialPage {
     fun evaluate(script: String)
     /** Libère la WebView (fin de tentative). Une prochaine tentative en recrée une. */
     fun release()
-    /** Supprime cookies et stockage web de la page officielle (déconnexion). */
+    /** Supprime cookies, stockage web et cache de la page officielle (connexion réussie, déconnexion). */
     fun clearBrowsingData()
 }
 
@@ -45,7 +46,22 @@ data class LoginForm(
     val password: String = "",
     /** « Rester connecté » : identifiant et mot de passe enregistrés chiffrés après une connexion réussie. */
     val stayConnected: Boolean = true,
-)
+    /**
+     * Le champ contient le mot de passe enregistré, prérempli et masqué : il ne peut jamais être
+     * affiché. Dès la première modification, il est remplacé par la seule saisie de l’utilisateur.
+     */
+    val passwordFromStore: Boolean = false,
+) {
+    override fun toString(): String =
+        "LoginForm(school=$school, accountType=$accountType, username=<masqué>, password=<masqué>, stayConnected=$stayConnected)"
+
+    /** Nouvelle valeur du champ mot de passe ; un mot de passe enregistré n’est jamais conservé partiellement. */
+    fun editPassword(value: String): LoginForm {
+        if (!passwordFromStore) return copy(password = value)
+        val typed = if (value.length > password.length && value.startsWith(password)) value.substring(password.length) else ""
+        return copy(password = typed, passwordFromStore = false)
+    }
+}
 
 data class PronoteAccount(val name: String, val children: List<Child>, val selectedChildId: String?)
 
@@ -111,6 +127,10 @@ class PronoteConnectionController(
     private val random: SecureRandom = SecureRandom(),
     /** Téléchargement des pièces jointes du cahier de textes (même hôte, cookies de la session). */
     private val files: FileTransport = NativeFileTransport(),
+    /** Erreur 25 et plafond des reconnexions silencieuses, partagés avec l’arrière-plan. */
+    private val throttle: PronoteThrottle = MemoryThrottle(),
+    /** UUID d’application stable, utilisé pour toutes les connexions par QR. */
+    private val appUuid: () -> String = { UUID.randomUUID().toString() },
 ) {
     private val state = MutableStateFlow(PronoteUiState())
     val uiState: StateFlow<PronoteUiState> = state.asStateFlow()
@@ -161,12 +181,36 @@ class PronoteConnectionController(
     private fun prefilled(form: LoginForm, stored: SavedLogin) = form.copy(
         school = stored.school, accountType = stored.accountType,
         username = stored.username.orEmpty(), password = stored.password.orEmpty(),
+        passwordFromStore = stored.password != null,
     )
 
     /** Lancement : reprise par jeton, ou reconnexion silencieuse si seuls les identifiants sont enregistrés. */
     fun start() {
         if (state.value.access != AccessPhase.CHECKING) return
-        if (vault.load() != null) restoreSaved() else startSilent()
+        if (throttle.isBlocked(now())) {
+            showBlocked()
+            return
+        }
+        if (vault.load() != null) restoreSaved() else startSilent(automatic = true)
+    }
+
+    /** Erreur 25 mémorisée : aucun essai, l’app s’ouvre sur les données locales avec un message clair. */
+    private fun showBlocked() {
+        val hasSession = vault.load() != null || state.value.hasStoredPassword
+        state.update {
+            if (it.access == AccessPhase.SIGNED_OUT && !hasSession) {
+                it.copy(busy = false, reconnecting = false, isError = true, formError = PronoteThrottle.BLOCKED_MESSAGE, message = PronoteThrottle.BLOCKED_MESSAGE)
+            } else {
+                it.copy(busy = false, reconnecting = false, isError = true,
+                    access = if (it.access == AccessPhase.CONNECTED) AccessPhase.CONNECTED else AccessPhase.OFFLINE,
+                    title = "Pronote indisponible", message = PronoteThrottle.BLOCKED_MESSAGE)
+            }
+        }
+    }
+
+    /** Erreur 25 : plus aucun essai automatique pendant au moins une heure. */
+    private fun noteThrottle(error: Throwable?) {
+        if (PronoteThrottle.isBlockedError(error)) throttle.block(now().plus(PronoteThrottle.BLOCK_DURATION))
     }
 
     // region Formulaire
@@ -174,7 +218,7 @@ class PronoteConnectionController(
     fun onSchoolChange(value: String) = state.update { it.copy(form = it.form.copy(school = value), formError = null) }
     fun onAccountTypeChange(value: AccountType) = state.update { it.copy(form = it.form.copy(accountType = value), formError = null) }
     fun onUsernameChange(value: String) = state.update { it.copy(form = it.form.copy(username = value), formError = null) }
-    fun onPasswordChange(value: String) = state.update { it.copy(form = it.form.copy(password = value), formError = null) }
+    fun onPasswordChange(value: String) = state.update { it.copy(form = it.form.editPassword(value), formError = null) }
     fun onStayConnectedChange(value: Boolean) = state.update { it.copy(form = it.form.copy(stayConnected = value)) }
 
     fun submitCredentials() {
@@ -187,7 +231,7 @@ class PronoteConnectionController(
             return
         }
         val (url, uri, type) = target
-        state.update { it.copy(form = it.form.copy(password = "", accountType = type), formError = null) }
+        state.update { it.copy(form = it.form.copy(password = "", passwordFromStore = false, accountType = type), formError = null) }
         open(url, uri, login to secret, silentAttempt = false, login = SavedLogin(form.school.trim(), type, login, secret), stayConnected = form.stayConnected)
     }
 
@@ -240,7 +284,15 @@ class PronoteConnectionController(
      * Reconnexion silencieuse : même parcours que le formulaire (page masquée, identifiants, QR) avec
      * les identifiants enregistrés, sans écran de connexion. ENT et vérifications affichent la page.
      */
-    private fun startSilent() {
+    private fun startSilent(automatic: Boolean = false) {
+        if (throttle.isBlocked(now())) {
+            showBlocked()
+            return
+        }
+        if (automatic && !throttle.silentAllowed(now())) {
+            signedOut("Ta connexion à Pronote a expiré. Reconnecte-toi pour continuer.")
+            return
+        }
         val stored = loginStore?.load()
         val username = stored?.username
         val password = stored?.password
@@ -250,6 +302,7 @@ class PronoteConnectionController(
             return
         }
         silentUsed = true
+        throttle.recordSilentAttempt(now())
         state.update { it.copy(reconnecting = true) }
         open(target.first, target.second, username to password, silentAttempt = true)
     }
@@ -276,7 +329,9 @@ class PronoteConnectionController(
         val config = JSONObject().put("nonce", nonce).put("pin", pin).put("allowedOrigin", origin).put("demo", false)
         pendingCredentials?.let { (login, secret) -> config.put("credentials", JSONObject().put("username", login).put("password", secret)) }
         pendingCredentials = null
-        page.evaluate("window.__JM_CONFIG=$config;\n${automationScript()}")
+        // Configuration (identifiants compris) posée seulement sur l’origine attendue et dans le cadre principal.
+        val expected = JSONObject.quote(origin)
+        page.evaluate("if (location.origin === $expected && window.top === window) { window.__JM_CONFIG=$config;\n}\n${automationScript()}")
     }
 
     /**
@@ -375,7 +430,7 @@ class PronoteConnectionController(
             it.copy(browserStarted = false, showBrowser = false, busy = false, isError = true, title = "Connexion impossible",
                 message = text, formError = text,
                 // Le mot de passe enregistré (s’il existe encore) reste prérempli.
-                form = it.form.copy(password = loginStore?.load()?.password.orEmpty()))
+                form = loginStore?.load()?.password.let { stored -> it.form.copy(password = stored.orEmpty(), passwordFromStore = stored != null) })
         }
     }
 
@@ -383,7 +438,7 @@ class PronoteConnectionController(
     private fun rejected() {
         // Mot de passe refusé : celui qui est enregistré est supprimé, établissement et identifiant restent.
         loginStore?.forgetPassword()
-        state.update { it.copy(hasStoredPassword = false, form = it.form.copy(password = "")) }
+        state.update { it.copy(hasStoredPassword = false, form = it.form.copy(password = "", passwordFromStore = false)) }
         if (silent) {
             failure("Pronote a refusé le mot de passe enregistré. Saisis-le à nouveau pour te reconnecter.")
         } else {
@@ -412,8 +467,16 @@ class PronoteConnectionController(
     private inner class Binding(@Volatile var attempt: Int) {
         private val epoch = guard.epoch.get()
         @Volatile var adopted = false
+        /**
+         * Connexion par jeton en cours : elle va jusqu’à l’enregistrement du jeton renouvelé, même si la
+         * tentative est annulée entre-temps (seule une déconnexion l’arrête). La génération est contrôlée
+         * avant l’envoi et à l’adoption du résultat.
+         */
+        @Volatile var tokenLogin = false
 
-        private fun current() = attempt == generation.get() && epoch == guard.epoch.get()
+        fun disconnected() = epoch != guard.epoch.get()
+
+        private fun current() = !disconnected() && (tokenLogin || attempt == generation.get())
 
         val transport = PronoteTransport { method, url, body, headers ->
             if (!current()) throw CancellationException()
@@ -422,12 +485,22 @@ class PronoteConnectionController(
 
         val save: (Credentials) -> Unit = { credentials ->
             synchronized(guard.vaultLock) {
-                if (epoch == guard.epoch.get() && (adopted || attempt == generation.get())) vault.save(credentials)
+                if (epoch == guard.epoch.get() && (tokenLogin || adopted || attempt == generation.get())) vault.save(credentials)
             }
         }
     }
 
-    private class Session(val client: PronoteClient, val binding: Binding)
+    private inner class Session(val client: PronoteClient, val binding: Binding)
+
+    /** Connexion par jeton non interruptible jusqu’à l’enregistrement du jeton renouvelé. */
+    private fun loginByToken(binding: Binding, client: PronoteClient) {
+        binding.tokenLogin = true
+        try {
+            client.login(PronoteClient.Mode.TOKEN)
+        } finally {
+            binding.tokenLogin = false
+        }
+    }
 
     private fun connectQr(image: String, code: String) {
         val attempt = generation.get()
@@ -437,7 +510,7 @@ class PronoteConnectionController(
                 val binding = Binding(attempt)
                 val connection = guard.mutex.withLock {
                     withContext(io) {
-                        val credentials = PronotePolicy.credentialsFromQr(decodeQr(image), code)
+                        val credentials = PronotePolicy.credentialsFromQr(decodeQr(image), code, appUuid(), origin)
                         PronoteClient(binding.transport, credentials, binding.save).also { it.login(PronoteClient.Mode.QR) }
                     }
                 }
@@ -448,15 +521,27 @@ class PronoteConnectionController(
                 val adopted = Session(connection, binding)
                 session = adopted
                 silent = false
-                silentUsed = false
-                state.update { it.copy(browserStarted = false, showBrowser = false, hasSavedSession = true, form = it.form.copy(password = "")) }
+                state.update { it.copy(browserStarted = false, showBrowser = false, hasSavedSession = true, form = it.form.copy(password = "", passwordFromStore = false)) }
+                // Le jeton suffit désormais : cookies, stockage et cache de la page officielle sont effacés.
+                page.clearBrowsingData()
                 page.release()
                 sync(attempt, adopted)
             } catch (_: CancellationException) {
             } catch (error: Exception) {
-                if (attempt == generation.get()) {
-                    failure(messageFor(error, "La connexion à Pronote n’a pas abouti. Réessaie dans quelques instants."), offline = error is IOException)
+                noteThrottle(error)
+                if (attempt != generation.get()) return@launch
+                if (error is PronoteException && error.code == "mfa") {
+                    // Vérification exigée par l’API après l’enregistrement du jeton : ce jeton ne servira pas,
+                    // il est effacé (sinon chaque lancement recommencerait) et la page officielle est affichée.
+                    synchronized(guard.vaultLock) { vault.clear() }
+                    claimed = false
+                    rearmOnVisiblePage(
+                        "Vérification de sécurité",
+                        "Pronote demande une vérification : termine-la dans cette page, la connexion continuera ensuite.",
+                    )
+                    return@launch
                 }
+                failure(messageFor(error, "La connexion à Pronote n’a pas abouti. Réessaie dans quelques instants."), offline = error is IOException)
             }
         }
     }
@@ -474,6 +559,10 @@ class PronoteConnectionController(
     /** Reprise par jeton enregistré (au lancement ou à la demande). */
     fun restoreSaved() {
         if (state.value.browserStarted || activeJob?.isActive == true) return
+        if (throttle.isBlocked(now())) {
+            showBlocked()
+            return
+        }
         if (vault.load() == null) {
             handleRefusedToken(null)
             return
@@ -485,9 +574,15 @@ class PronoteConnectionController(
                 val binding = Binding(attempt)
                 val connection = guard.mutex.withLock {
                     // Lu sous le verrou : la synchronisation d’arrière-plan a pu renouveler le jeton.
+                    // Génération contrôlée avant l’envoi : une reprise annulée ne part pas.
+                    if (attempt != generation.get()) throw CancellationException()
                     val credentials = vault.load() ?: throw PronoteException("login", "")
                     if (vault.needsRelogin()) throw PronoteException("login", "")
-                    withContext(io) { PronoteClient(binding.transport, credentials, binding.save).also { it.login(PronoteClient.Mode.TOKEN) } }
+                    // Une fois partie, la connexion par jeton va jusqu’à l’enregistrement du jeton renouvelé
+                    // (« Ouvrir sans attendre », retour ou fin du ViewModel ne la coupent pas).
+                    withContext(io + NonCancellable) {
+                        PronoteClient(binding.transport, credentials, binding.save).also { loginByToken(binding, it) }
+                    }
                 }
                 if (attempt != generation.get()) return@launch
                 binding.adopted = true
@@ -496,6 +591,7 @@ class PronoteConnectionController(
                 sync(attempt, adopted)
             } catch (_: CancellationException) {
             } catch (error: Exception) {
+                noteThrottle(error)
                 if (attempt != generation.get()) return@launch
                 if (!handleRefusedToken(error)) {
                     // Problème réseau ou serveur : le jeton est conservé et l’app s’ouvre hors ligne.
@@ -518,9 +614,11 @@ class PronoteConnectionController(
         session = null
         synchronized(guard.vaultLock) { vault.clear() }
         state.update { it.copy(hasSavedSession = false, account = null) }
-        if (!silentUsed && state.value.hasStoredPassword && loginStore?.load()?.autoReconnect == true) {
+        if (!silentUsed && state.value.hasStoredPassword && loginStore?.load()?.autoReconnect == true &&
+            !throttle.isBlocked(now()) && throttle.silentAllowed(now())
+        ) {
             // Lancé hors du traitement en cours, qui est invalidé par la nouvelle tentative.
-            scope.launch { startSilent() }
+            scope.launch { startSilent(automatic = true) }
         } else {
             val mfa = error is PronoteException && error.code == "mfa"
             signedOut(if (mfa) messageFor(error, "") else "Ta connexion à Pronote a expiré. Reconnecte-toi pour continuer.")
@@ -532,6 +630,10 @@ class PronoteConnectionController(
 
     /** Bandeau hors ligne ou bouton Actualiser : nouvel essai, sans déconnecter (action de l’utilisateur). */
     fun retry() {
+        if (throttle.isBlocked(now())) {
+            showBlocked()
+            return
+        }
         when {
             session != null -> refresh()
             vault.load() != null -> restoreSaved()
@@ -548,6 +650,8 @@ class PronoteConnectionController(
         val current = state.value
         if (current.access !in setOf(AccessPhase.CONNECTED, AccessPhase.OFFLINE) || current.busy || current.browserStarted) return
         if (activeJob?.isActive == true) return
+        // Erreur 25 récente : aucun essai automatique.
+        if (throttle.isBlocked(now())) return
         // Sans session ni jeton (reconnexion silencieuse déjà tentée) : seul l’utilisateur relance.
         if (session == null && vault.load() == null) return
         if (vault.load() != null && vault.needsRelogin()) {
@@ -598,7 +702,7 @@ class PronoteConnectionController(
                         // Session Pronote expirée : une seule reconnexion par jeton, avec le jeton le plus récent.
                         if (error.code !in setOf("pronote-10", "pronote-22", "http")) throw error
                         vault.load()?.let { connection.useCredentials(it) }
-                        connection.login(PronoteClient.Mode.TOKEN)
+                        loginByToken(current.binding, connection)
                         read(connection, wanted)
                     }
                 }
@@ -606,6 +710,8 @@ class PronoteConnectionController(
             if (attempt != generation.get()) return
             storeLessons(lessons)
             if (attempt != generation.get()) return
+            // Synchronisation réussie : une nouvelle reconnexion silencieuse redevient possible.
+            silentUsed = false
             scheduler?.schedule()
             state.update {
                 it.copy(busy = false, isError = false, reconnecting = false, hasSavedSession = true, access = AccessPhase.CONNECTED,
@@ -614,6 +720,7 @@ class PronoteConnectionController(
             }
         } catch (_: CancellationException) {
         } catch (error: Exception) {
+            noteThrottle(error)
             if (attempt == generation.get() && !handleRefusedToken(error)) {
                 state.update {
                     it.copy(busy = false, isError = true, reconnecting = false,
@@ -640,7 +747,18 @@ class PronoteConnectionController(
      */
     suspend fun readNotebook(): NotebookRead {
         val current = session ?: throw PronoteException("offline", NOTEBOOK_OFFLINE)
+        if (throttle.isBlocked(now())) throw PronoteException(PronoteThrottle.BLOCKED_CODE, PronoteThrottle.BLOCKED_MESSAGE)
+        return try {
+            readNotebookLocked(current)
+        } catch (error: PronoteException) {
+            noteThrottle(error)
+            throw error
+        }
+    }
+
+    private suspend fun readNotebookLocked(current: Session): NotebookRead {
         return guard.mutex.withLock {
+            if (session !== current || current.binding.disconnected()) throw PronoteException("offline", NOTEBOOK_OFFLINE)
             withContext(io) {
                 val connection = current.client
                 val wanted = synchronized(guard.vaultLock) { vault.selectedChildId() }
@@ -653,7 +771,7 @@ class PronoteConnectionController(
                 } catch (error: PronoteException) {
                     if (error.code !in setOf("pronote-10", "pronote-22", "http")) throw error
                     vault.load()?.let { connection.useCredentials(it) }
-                    connection.login(PronoteClient.Mode.TOKEN)
+                    loginByToken(current.binding, connection)
                     read()
                 }
                 NotebookRead(snapshot, connection.sessionStamp)
@@ -668,6 +786,8 @@ class PronoteConnectionController(
     suspend fun downloadAttachment(stamp: Any, id: String, name: String, target: java.io.File) {
         val current = session ?: throw PronoteException("offline", NOTEBOOK_OFFLINE)
         guard.mutex.withLock {
+            // Contrôlé sous le verrou, juste avant le GET : rien ne part après une déconnexion.
+            if (session !== current || current.binding.disconnected()) throw PronoteException("offline", NOTEBOOK_OFFLINE)
             withContext(io) {
                 if (current.client.sessionStamp !== stamp) throw PronoteException("download", PronoteClient.DOWNLOAD_UNAVAILABLE)
                 current.client.download(id, name, files, target)
@@ -679,8 +799,7 @@ class PronoteConnectionController(
     private fun messageFor(error: Exception, fallback: String): String = when {
         error is PronoteException && error.code == "mfa" ->
             "Pronote demande une vérification de sécurité. Reconnecte-toi pour la terminer."
-        error is PronoteException && error.code == "pronote-25" ->
-            "Pronote a bloqué temporairement les connexions après trop d’essais. Réessaie plus tard."
+        error is PronoteException && error.code == PronoteThrottle.BLOCKED_CODE -> PronoteThrottle.BLOCKED_MESSAGE
         error is PronoteException && error.code == "url" -> error.message
         error is IOException -> "Pronote est injoignable. Vérifie ta connexion internet, puis réessaie."
         else -> fallback
@@ -747,7 +866,7 @@ class PronoteConnectionController(
             it.copy(browserStarted = false, showBrowser = false, account = null, hasSavedSession = false,
                 hasStoredPassword = kept?.password != null, reconnecting = false, isError = false, access = AccessPhase.SIGNED_OUT,
                 title = "Tu es déconnecté", formError = null,
-                form = if (kept != null) prefilled(it.form, kept) else it.form.copy(username = "", password = ""),
+                form = if (kept != null) prefilled(it.form, kept) else it.form.copy(username = "", password = "", passwordFromStore = false),
                 message = "Ton emploi du temps importé a été retiré de ce téléphone. Tes cours et tes révisions restent enregistrés.")
         }
         scope.launch { clearLessons() }

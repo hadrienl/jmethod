@@ -47,8 +47,9 @@ class KeystoreLoginStore(context: Context) : LoginStore {
                 autoReconnect = raw.optBoolean("autoReconnect", true),
             )
         }
-    } catch (_: Exception) {
-        prefs.edit().clear().commit()
+    } catch (error: Exception) {
+        // Seules des données illisibles sont effacées ; une erreur passagère du Keystore les garde.
+        if (SealedData.isCorrupted(error)) prefs.edit().clear().commit()
         null
     }
 

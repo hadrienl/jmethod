@@ -19,6 +19,8 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /** Modifications non enregistrées (rien n’est appliqué avant « Enregistrer », comme le web). */
 data class SettingsDraft(
@@ -125,7 +127,11 @@ class SettingsViewModel(private val repository: AppRepository, private val clock
     /** Fichier choisi : lu et validé (D13) ; s’il est accepté, une confirmation est demandée. */
     fun importText(text: String?) {
         viewModelScope.launch {
-            when (val result = if (text == null) ImportExport.Result.Rejected(ImportExport.ERROR_TITLE, ImportExport.INVALID_MESSAGE) else ImportExport.parse(text)) {
+            // Lecture et validation hors du thread principal (fichier potentiellement volumineux).
+            val result = withContext(Dispatchers.Default) {
+                if (text == null) ImportExport.Result.Rejected(ImportExport.ERROR_TITLE, ImportExport.INVALID_MESSAGE) else ImportExport.parse(text)
+            }
+            when (result) {
                 is ImportExport.Result.Accepted -> pending.value = result
                 is ImportExport.Result.Rejected -> events.send(SettingsEvent.Toast(result.title, result.message, warning = true))
             }

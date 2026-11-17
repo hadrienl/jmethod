@@ -10,6 +10,7 @@ import fr.jmethod.app.pronote.Lesson
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
 import org.junit.Assert.fail
 import org.junit.Test
 import java.time.LocalDate
@@ -123,5 +124,53 @@ class PronoteClientTest {
         assertNull(events[0].matchedSubjectId)
         assertEquals("physique-chimie", events[1].matchedSubjectId)
         assertEquals("", events[2].endTime)
+    }
+
+    /** Point 11 : un QR d’une autre origine que la tentative est refusé ; point 12 : UUID fourni réutilisé. */
+    @Test
+    fun qrCredentialsAreBoundToTheAttemptOriginAndStableUuid() {
+        val server = FakePronoteServer(token = "jeton-qr")
+        val credentials = PronotePolicy.credentialsFromQr(server.qr("4321"), "4321", "uuid-stable", server.origin)
+        assertEquals("uuid-stable", credentials.uuid)
+        assertEquals("uuid-stable", PronotePolicy.credentialsFromQr(server.qr("4321"), "4321", "uuid-stable", server.origin).uuid)
+        try {
+            PronotePolicy.credentialsFromQr(server.qr("4321"), "4321", "uuid-stable", "https://autre.index-education.net")
+            fail("origine différente")
+        } catch (error: PronoteException) {
+            assertEquals("qr-origin", error.code)
+        }
+    }
+
+    /** Point 13 : seules des données illisibles font effacer le coffre. */
+    @Test
+    fun onlyCorruptedSealedDataIsErased() {
+        assertTrue(fr.jmethod.app.pronote.SealedData.isCorrupted(javax.crypto.AEADBadTagException()))
+        assertTrue(fr.jmethod.app.pronote.SealedData.isCorrupted(org.json.JSONException("x")))
+        assertTrue(fr.jmethod.app.pronote.SealedData.isCorrupted(IllegalArgumentException("base64")))
+        assertFalse(fr.jmethod.app.pronote.SealedData.isCorrupted(java.security.KeyStoreException("occupé")))
+        assertFalse(fr.jmethod.app.pronote.SealedData.isCorrupted(java.security.ProviderException("passager")))
+        assertFalse(fr.jmethod.app.pronote.SealedData.isCorrupted(IllegalStateException("verrouillé")))
+    }
+
+    /** Point 14 : réponses HTTP et décompression bornées à 16 Mo. */
+    @Test
+    fun responsesAndInflationAreBounded() {
+        val small = fr.jmethod.app.pronote.readBounded(java.io.ByteArrayInputStream("{}".toByteArray()), 16)
+        assertEquals("{}", small)
+        try {
+            fr.jmethod.app.pronote.readBounded(java.io.ByteArrayInputStream(ByteArray(17)), 16)
+            fail("lecture non bornée")
+        } catch (error: PronoteException) {
+            assertEquals("size", error.code)
+        }
+        val bomb = fr.jmethod.app.pronote.PronoteCrypto.deflate(ByteArray(17 * 1024 * 1024))
+        assertTrue(bomb.size < 100_000)
+        try {
+            fr.jmethod.app.pronote.PronoteCrypto.inflate(bomb)
+            fail("décompression non bornée")
+        } catch (error: PronoteException) {
+            assertEquals("size", error.code)
+        }
+        assertEquals(16 * 1024 * 1024, fr.jmethod.app.pronote.MAX_HTTP_BODY)
     }
 }

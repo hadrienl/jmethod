@@ -218,13 +218,16 @@ fun LoginScreen(viewModel: PronoteViewModel, state: PronoteUiState) {
                     label = { Text("Mot de passe") },
                     singleLine = true,
                     enabled = !working,
-                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                    trailingIcon = {
-                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                            Icon(
-                                if (passwordVisible) EyeOffIcon else EyeIcon,
-                                contentDescription = if (passwordVisible) "Masquer le mot de passe" else "Afficher le mot de passe",
-                            )
+                    visualTransformation = if (passwordVisible && !form.passwordFromStore) VisualTransformation.None else PasswordVisualTransformation(),
+                    // Un mot de passe enregistré n’est jamais révélable : l’œil n’existe que pour une saisie.
+                    trailingIcon = if (form.passwordFromStore) null else {
+                        {
+                            IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                Icon(
+                                    if (passwordVisible) EyeOffIcon else EyeIcon,
+                                    contentDescription = if (passwordVisible) "Masquer le mot de passe" else "Afficher le mot de passe",
+                                )
+                            }
                         }
                     },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false, imeAction = ImeAction.Done),
@@ -428,6 +431,9 @@ fun OfficialPageLayer(viewModel: PronoteViewModel, state: PronoteUiState, modifi
                 view.isFocusableInTouchMode = visible
                 view.importantForAccessibility =
                     if (visible) View.IMPORTANT_FOR_ACCESSIBILITY_AUTO else View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+                // Masquée, la page officielle n’est pas proposée aux gestionnaires de mots de passe.
+                view.importantForAutofill =
+                    if (visible) View.IMPORTANT_FOR_AUTOFILL_AUTO else View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
                 view.setOnTouchListener { _, _: MotionEvent -> !visible }
             },
             modifier = Modifier.fillMaxWidth().weight(1f),

@@ -33,8 +33,9 @@ class TokenVault(context: Context) : SessionVault {
     @Synchronized
     override fun load(): Credentials? = try {
         prefs.getString(SESSION, null)?.let { Credentials.fromJson(JSONObject(sealer.open(it))) }
-    } catch (_: Exception) {
-        clear()
+    } catch (error: Exception) {
+        // Seules des données illisibles sont effacées ; une erreur passagère du Keystore garde la session.
+        if (SealedData.isCorrupted(error)) clear()
         null
     }
 

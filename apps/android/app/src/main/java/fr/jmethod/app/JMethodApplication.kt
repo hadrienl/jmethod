@@ -13,6 +13,9 @@ import fr.jmethod.app.pronote.LoginStore
 import fr.jmethod.app.pronote.NativeTransport
 import fr.jmethod.app.pronote.PronoteEventMapper
 import fr.jmethod.app.pronote.PronoteSessionGuard
+import fr.jmethod.app.pronote.PronoteThrottle
+import fr.jmethod.app.pronote.PrefsThrottle
+import fr.jmethod.app.pronote.KeystoreAppIdentity
 import fr.jmethod.app.pronote.SessionVault
 import fr.jmethod.app.pronote.TokenVault
 import fr.jmethod.app.work.WorkManagerScheduler
@@ -36,10 +39,17 @@ class AppContainer(application: Application) {
     val sessionGuard = PronoteSessionGuard()
     val scheduler: BackgroundScheduler = WorkManagerScheduler(application)
 
+    /** Erreur 25 et plafond des reconnexions silencieuses, communs au premier plan et à l’arrière-plan. */
+    val throttle: PronoteThrottle = PrefsThrottle(application)
+
+    /** UUID d’application stable (repris de la session enregistrée à la première utilisation). */
+    val appIdentity = KeystoreAppIdentity(application) { vault.load()?.uuid }
+
     /** Enregistre les créneaux lus (même dépôt et même verrou que le premier plan). */
-    suspend fun storeLessons(lessons: List<Lesson>) {
+    suspend fun storeLessons(lessons: List<Lesson>, stillValid: () -> Boolean = { true }) {
         val syncedAt = AppDocumentCodec.isoMillis(clock.now())
         repository.update { document ->
+            if (!stillValid()) return@update document
             document.copy(
                 pronoteEvents = PronoteEventMapper.toEvents(lessons, document.subjects),
                 settings = document.settings.copy(lastPronoteSync = syncedAt),
@@ -54,6 +64,8 @@ class AppContainer(application: Application) {
         io = Dispatchers.IO,
         today = { clock.today() },
         storeLessons = ::storeLessons,
+        throttle = throttle,
+        now = { clock.now() },
     )
 }
 

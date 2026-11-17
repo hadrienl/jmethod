@@ -42,7 +42,11 @@ data class HomeworkItem(
     val attachments: List<NotebookAttachment>,
 )
 
-data class NotebookAttachment(val kind: Kind, val id: String, val name: String, val url: String? = null) {
+/**
+ * Pièce jointe : [name] nettoyé pour l’affichage, [rawName] = `L` brut (éventuellement vide), seul
+ * utilisé pour construire l’adresse `FichiersExternes` et le nom d’enregistrement.
+ */
+data class NotebookAttachment(val kind: Kind, val id: String, val name: String, val url: String? = null, val rawName: String = name) {
     enum class Kind(val wire: String) { FILE("file"), LINK("link") }
 }
 
@@ -351,14 +355,15 @@ object NotebookRules {
 
     fun attachments(item: JSONObject): List<NotebookAttachment> = item.listV("ListePieceJointe").mapNotNull { raw ->
         val id = raw.opt("N")?.takeIf { it != JSONObject.NULL }?.toString()?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-        val name = plainText(raw.optString("L", ""))
+        val rawName = raw.optString("L", "")
+        val name = plainText(rawName)
         when (raw.opt("G")?.toString()) {
             "0" -> {
                 val url = validLinkUrl(raw.optString("url").takeIf { raw.has("url") && it.isNotEmpty() } ?: raw.optString("L", ""))
                     ?: return@mapNotNull null
-                NotebookAttachment(NotebookAttachment.Kind.LINK, id, name.ifEmpty { "Lien" }, url)
+                NotebookAttachment(NotebookAttachment.Kind.LINK, id, name.ifEmpty { "Lien" }, url, rawName)
             }
-            "1" -> NotebookAttachment(NotebookAttachment.Kind.FILE, id, name.ifEmpty { "Document" })
+            "1" -> NotebookAttachment(NotebookAttachment.Kind.FILE, id, name.ifEmpty { "Document" }, rawName = rawName)
             else -> null
         }
     }

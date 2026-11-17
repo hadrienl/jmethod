@@ -38,7 +38,7 @@ class PronoteViewModel(application: Application, private val container: AppConta
         decodeQr = QrImageDecoder::decode,
         automationScript = { script },
         today = { container.clock.today() },
-        storeLessons = container::storeLessons,
+        storeLessons = { container.storeLessons(it) },
         clearLessons = {
             container.repository.update { document ->
                 document.copy(pronoteEvents = emptyList(), settings = document.settings.copy(lastPronoteSync = null))
@@ -52,6 +52,8 @@ class PronoteViewModel(application: Application, private val container: AppConta
             container.repository.document.value?.settings?.lastPronoteSync?.let { runCatching { Instant.parse(it) }.getOrNull() }
         },
         webMessagesSupported = WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER),
+        throttle = container.throttle,
+        appUuid = container.appIdentity::uuid,
     )
 
     val syncInfo: StateFlow<PronoteSyncInfo?> = container.repository.document.filterNotNull()

@@ -10,6 +10,9 @@ import fr.jmethod.app.pronote.SavedLogin
 import fr.jmethod.app.pronote.OfficialPage
 import fr.jmethod.app.pronote.PronoteConnectionController
 import fr.jmethod.app.pronote.SessionVault
+import fr.jmethod.app.pronote.MemoryThrottle
+import fr.jmethod.app.pronote.PronoteThrottle
+import fr.jmethod.app.pronote.LoginForm
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -39,8 +42,8 @@ class ConnectionControllerTest {
         override fun evaluate(script: String) { scripts += script }
         override fun release() { released++ }
         override fun clearBrowsingData() { cleared++ }
-        fun configs() = scripts.filter { it.startsWith("window.__JM_CONFIG=") }
-            .map { JSONObject(it.removePrefix("window.__JM_CONFIG=").substringBefore(";\n")) }
+        fun configs() = scripts.filter { it.contains("window.__JM_CONFIG=") }
+            .map { JSONObject(it.substringAfter("window.__JM_CONFIG=").substringBefore(";\n")) }
         fun config(): JSONObject = configs().last()
     }
 
@@ -92,6 +95,8 @@ class ConnectionControllerTest {
         store: FakeLoginStore = FakeLoginStore(),
         scheduler: FakeScheduler = FakeScheduler(),
         lastSync: Instant? = null,
+        throttle: PronoteThrottle = MemoryThrottle(),
+        clock: () -> Instant = { now },
     ) = PronoteConnectionController(
         scope = scope,
         io = Dispatchers.Unconfined,
@@ -105,9 +110,11 @@ class ConnectionControllerTest {
         clearLessons = { cleared++ },
         loginStore = store,
         scheduler = scheduler,
-        now = { now },
+        now = clock,
         lastSync = { lastSync },
         random = fixedPin,
+        throttle = throttle,
+        appUuid = { APP_UUID },
     )
 
     private fun savedVault(server: FakePronoteServer, token: String = "jeton-enregistre") = FakeVault().apply {
@@ -125,7 +132,12 @@ class ConnectionControllerTest {
     private fun submit(controller: PronoteConnectionController, page: FakePage, password: String = "mot-de-passe"): String {
         controller.onSchoolChange(" ABCD1234 ")
         controller.onUsernameChange("eleve.test")
-        controller.onPasswordChange(password)
+        val form = controller.uiState.value.form
+        // Mot de passe enregistré : utilisé tel quel, ou effacé puis ressaisi (il n’est jamais modifiable en partie).
+        if (!(form.passwordFromStore && form.password == password)) {
+            if (form.passwordFromStore) controller.onPasswordChange("")
+            controller.onPasswordChange(password)
+        }
         controller.submitCredentials()
         assertEquals("", controller.uiState.value.form.password)
         assertEquals(pageUrl, page.loaded.last())
@@ -627,5 +639,185 @@ class ConnectionControllerTest {
         val controller = controller(server, FakePage(), vault, mutableListOf())
         assertEquals(AccessPhase.SIGNED_OUT, controller.uiState.value.access)
         assertNull(vault.credentials)
+    }
+
+    // region Revue : jeton, erreur 25, mot de passe enregistré, MFA, reconnexions silencieuses
+
+    /** Point 1 : « Ouvrir sans attendre » pendant la connexion par jeton garde le jeton renouvelé. */
+    @Test
+    fun skipResumeDuringTokenLoginKeepsRenewedToken() {
+        val server = FakePronoteServer(token = "jeton-enregistre")
+        val vault = savedVault(server)
+        val controller = controller(server, FakePage(), vault, mutableListOf())
+        server.beforeRequest = { if (it == "ParametresUtilisateur") controller.skipResume() }
+        controller.restoreSaved()
+        assertEquals("jeton-rotation-1", vault.credentials?.password)
+        assertEquals(AccessPhase.OFFLINE, controller.uiState.value.access)
+        // Le jeton enregistré est bien le dernier émis par Pronote : la reprise suivante réussit.
+        server.beforeRequest = {}
+        controller.retry()
+        assertEquals(AccessPhase.CONNECTED, controller.uiState.value.access)
+        assertEquals("jeton-rotation-2", vault.credentials?.password)
+    }
+
+    /** Point 1 : fin du ViewModel (dispose) pendant la reconnexion par jeton. */
+    @Test
+    fun disposeDuringTokenLoginKeepsRenewedToken() {
+        val server = FakePronoteServer(token = "jeton-enregistre")
+        val vault = savedVault(server)
+        val controller = controller(server, FakePage(), vault, mutableListOf())
+        server.beforeRequest = { if (it == "ParametresUtilisateur") controller.dispose() }
+        controller.restoreSaved()
+        assertEquals("jeton-rotation-1", vault.credentials?.password)
+    }
+
+    /** Point 2 : erreur 25, plus aucun essai automatique ni manuel pendant une heure, message clair. */
+    @Test
+    fun tooManyAttemptsStopsAutomaticRetriesForAnHour() {
+        val server = FakePronoteServer(token = "jeton-enregistre")
+        server.failures["Identification"] = 25
+        val vault = savedVault(server)
+        val throttle = MemoryThrottle()
+        var clock = now
+        val controller = controller(server, FakePage(), vault, mutableListOf(), throttle = throttle, clock = { clock })
+        controller.start()
+        assertEquals(now.plusSeconds(3600), throttle.blockedUntil())
+        val state = controller.uiState.value
+        assertEquals(AccessPhase.OFFLINE, state.access)
+        assertEquals(PronoteThrottle.BLOCKED_MESSAGE, state.message)
+        assertEquals("jeton-enregistre", vault.credentials?.password)
+        val calls = server.calls.size
+        controller.onForeground()
+        controller.retry()
+        assertEquals(calls, server.calls.size)
+        assertEquals(PronoteThrottle.BLOCKED_MESSAGE, controller.uiState.value.message)
+        // Une heure plus tard, la reprise redevient possible.
+        clock = now.plusSeconds(3601)
+        controller.retry()
+        assertEquals(AccessPhase.CONNECTED, controller.uiState.value.access)
+
+        // Au lancement suivant, le blocage mémorisé est respecté sans aucune requête.
+        val other = FakePronoteServer(token = "jeton-enregistre")
+        val blocked = MemoryThrottle().apply { block(now.plusSeconds(1800)) }
+        val next = controller(other, FakePage(), savedVault(other), mutableListOf(), throttle = blocked)
+        next.start()
+        assertTrue(other.calls.isEmpty())
+        assertEquals(AccessPhase.OFFLINE, next.uiState.value.access)
+    }
+
+    /** Point 3 : le mot de passe enregistré est prérempli mais jamais révélable, ni conservé partiellement. */
+    @Test
+    fun storedPasswordCanNeverBeRevealed() {
+        val controller = controller(FakePronoteServer(token = "t"), FakePage(), FakeVault(), mutableListOf(), storedLogin())
+        assertTrue(controller.uiState.value.form.passwordFromStore)
+        // Saisie à la suite du mot de passe enregistré : seule la saisie reste.
+        controller.onPasswordChange("mot-de-passe-enregistreX")
+        assertEquals("X", controller.uiState.value.form.password)
+        assertFalse(controller.uiState.value.form.passwordFromStore)
+
+        val other = controller(FakePronoteServer(token = "t"), FakePage(), FakeVault(), mutableListOf(), storedLogin())
+        // Effacement d’un caractère : rien du mot de passe enregistré n’est gardé.
+        other.onPasswordChange("mot-de-passe-enregistr")
+        assertEquals("", other.uiState.value.form.password)
+        // Saisie libre ensuite (œil autorisé).
+        other.onPasswordChange("nouveau")
+        assertEquals("nouveau", other.uiState.value.form.password)
+
+        assertEquals(LoginForm(password = "abc", passwordFromStore = true).editPassword("abcd").password, "d")
+        val text = LoginForm(username = "eleve.test", password = "secret").toString()
+        assertFalse(text.contains("secret"))
+        assertFalse(text.contains("eleve.test"))
+        assertFalse(controller.uiState.value.toString().contains("mot-de-passe"))
+    }
+
+    /** Point 4 : vérification exigée par l’API après le QR : coffre vidé et page officielle affichée. */
+    @Test
+    fun apiMfaAfterQrClearsVaultAndRevealsPage() {
+        val server = FakePronoteServer(token = "jeton-qr").apply { doubleAuth = 3 }
+        val page = FakePage()
+        val vault = FakeVault()
+        val controller = controller(server, page, vault, mutableListOf())
+        val nonce = submit(controller, page)
+        send(controller, message("authenticated", nonce))
+        send(controller, qr(nonce))
+        assertNull(vault.credentials)
+        val state = controller.uiState.value
+        assertTrue(state.showBrowser)
+        assertTrue(state.browserStarted)
+        // Automatisation réarmée (nouveau nonce) pour continuer après la vérification.
+        assertNotEquals(nonce, page.config().getString("nonce"))
+    }
+
+    /** Point 5 : au plus une reconnexion silencieuse automatique par heure. */
+    @Test
+    fun silentReconnectionIsLimitedToOnePerHour() {
+        val server = FakePronoteServer(token = "jeton-valide")
+        val page = FakePage()
+        val throttle = MemoryThrottle().apply { recordSilentAttempt(now.minusSeconds(1200)) }
+        val controller = controller(server, page, savedVault(server, token = "jeton-perime"), mutableListOf(), storedLogin(), throttle = throttle)
+        controller.start()
+        assertTrue(page.loaded.isEmpty())
+        assertEquals(AccessPhase.SIGNED_OUT, controller.uiState.value.access)
+
+        val later = FakePage()
+        val allowed = MemoryThrottle().apply { recordSilentAttempt(now.minusSeconds(3700)) }
+        val second = controller(server, later, savedVault(server, token = "jeton-perime"), mutableListOf(), storedLogin(), throttle = allowed)
+        second.start()
+        assertEquals(pageUrl, later.loaded.single())
+        assertEquals(now, allowed.lastSilentAttempt())
+    }
+
+    /** Point 6 : LOGIN_STALLED révèle la page sans effacer le mot de passe enregistré. */
+    @Test
+    fun loginStalledRevealsPageAndKeepsStoredPassword() {
+        val server = FakePronoteServer(token = "jeton-valide")
+        val page = FakePage()
+        val store = storedLogin()
+        val controller = controller(server, page, savedVault(server, token = "jeton-perime"), mutableListOf(), store)
+        controller.start()
+        controller.onPageFinished(pageUrl)
+        send(controller, message("error", page.config().getString("nonce")) { put("code", "LOGIN_STALLED") })
+        assertTrue(controller.uiState.value.showBrowser)
+        assertEquals("mot-de-passe-enregistre", store.value?.password)
+    }
+
+    /** Point 9 : la configuration n’est posée que sur l’origine attendue, dans le cadre principal. */
+    @Test
+    fun injectionIsGuardedByOriginAndTopFrame() {
+        val page = FakePage()
+        val controller = controller(FakePronoteServer(token = "t"), page, FakeVault(), mutableListOf())
+        submit(controller, page)
+        val script = page.scripts.first { it.contains("__JM_CONFIG=") }
+        assertTrue(script.startsWith("if (location.origin === \"$origin\" && window.top === window) { window.__JM_CONFIG="))
+    }
+
+    /** Points 11 et 12 : QR lié à l’origine de la tentative, UUID d’application stable. */
+    @Test
+    fun qrMustMatchAttemptOriginAndUsesStableUuid() {
+        val server = FakePronoteServer(token = "jeton-qr")
+        val page = FakePage()
+        val vault = FakeVault()
+        val controller = controller(server, page, vault, mutableListOf())
+        var nonce = submit(controller, page)
+        send(controller, message("authenticated", nonce))
+        send(controller, qr(nonce))
+        assertEquals(APP_UUID, vault.credentials?.uuid)
+
+        val foreign = FakePronoteServer(token = "jeton-qr").apply { qrOrigin = "https://autre.index-education.net" }
+        val otherPage = FakePage()
+        val otherVault = FakeVault()
+        val other = controller(foreign, otherPage, otherVault, mutableListOf())
+        nonce = submit(other, otherPage)
+        send(other, message("authenticated", nonce))
+        send(other, qr(nonce))
+        assertNull(otherVault.credentials)
+        assertTrue(foreign.calls.isEmpty())
+        assertTrue(other.uiState.value.isError)
+    }
+
+    // endregion
+
+    companion object {
+        const val APP_UUID = "uuid-application-stable"
     }
 }

@@ -294,4 +294,18 @@ class NotebookVectorsTest {
         }
         assertNull(NotebookRules.parseDate("18/11"))
     }
+
+    /** Point 17 : l’adresse est construite avec le `L` brut (même vide), le nom affiché reste nettoyé. */
+    @Test
+    fun attachmentKeepsRawNameForTheDownloadUrl() {
+        val item = JSONObject().put("ListePieceJointe", JSONObject().put("V", JSONArray()
+            .put(JSONObject().put("N", "pj-1").put("L", "  Fiche\u0007  1.pdf ").put("G", 1))
+            .put(JSONObject().put("N", "pj-2").put("L", "").put("G", 1))))
+        val (first, second) = NotebookRules.attachments(item)
+        assertEquals("Fiche 1.pdf", first.name)
+        assertEquals("  Fiche\u0007  1.pdf ", first.rawName)
+        assertEquals("Document", second.name)
+        assertEquals("", second.rawName)
+        assertTrue(NotebookRules.downloadUrl("https://school.index-education.net/pronote", "ab", second.rawName, 1).endsWith("/ab/?Session=1"))
+    }
 }

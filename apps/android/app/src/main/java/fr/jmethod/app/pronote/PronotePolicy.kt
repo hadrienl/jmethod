@@ -183,8 +183,15 @@ object PronotePolicy {
         return result
     }
 
-    fun credentialsFromQr(qr: JSONObject, pin: String): Credentials {
+    /**
+     * Identifiants mobiles d’un QR officiel. [uuid] est l’UUID d’application stable (généré une fois) ;
+     * [expectedOrigin], s’il est fourni, est l’origine de la tentative : un QR d’un autre établissement est refusé.
+     */
+    fun credentialsFromQr(qr: JSONObject, pin: String, uuid: String = UUID.randomUUID().toString(), expectedOrigin: String? = null): Credentials {
         val uri = validatedUrl(qr.getString("url"))
+        if (expectedOrigin != null && uri.scheme + "://" + uri.authority != expectedOrigin) {
+            throw PronoteException("qr-origin", "Ce QR code ne correspond pas à l’établissement de la connexion en cours.")
+        }
         if (!pin.matches(Regex("[0-9]{4}"))) throw PronoteException("qr", "Le code temporaire doit contenir quatre chiffres.")
         val key = PronoteCrypto.md5(pin.toByteArray(UTF_8))
         val login = String(PronoteCrypto.decrypt(PronoteCrypto.unhex(qr.getString("login")), key, PronoteCrypto.zeroIv), UTF_8)
@@ -192,7 +199,7 @@ object PronotePolicy {
         val last = uri.path.substringAfterLast('/').let { if (it.startsWith("mobile.")) it else "mobile.$it" }
         val path = uri.path.substringBeforeLast('/') + "/" + last
         val url = URI("https", uri.authority, path, "fd=1&bydlg=A6ABB224-12DD-4E31-AD3E-8A39A1C2C335&login=true", null).toString()
-        return Credentials(url, login, token, UUID.randomUUID().toString())
+        return Credentials(url, login, token, uuid)
     }
 
     /** Heure de fin déduite de la grille `General.ListeHeuresFin` quand `DateDuCoursFin` est absent (cf. `Util.place2time`). */

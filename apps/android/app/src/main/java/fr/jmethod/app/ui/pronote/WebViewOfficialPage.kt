@@ -66,6 +66,8 @@ class WebViewOfficialPage(private val application: Application) : OfficialPage {
     }
 
     override fun clearBrowsingData() {
+        webView?.clearCache(true)
+        webView?.clearHistory()
         CookieManager.getInstance().removeAllCookies(null)
         CookieManager.getInstance().flush()
         WebStorage.getInstance().deleteAllData()

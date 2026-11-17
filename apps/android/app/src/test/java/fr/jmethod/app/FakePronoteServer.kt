@@ -33,6 +33,10 @@ class FakePronoteServer(
     val notebookResponses = mutableMapOf<Int, JSONObject>()
     /** `listeOnglets` renvoyé par ParametresUtilisateur (absent si `null`). */
     var tabs: JSONArray? = null
+    /** `actionsDoubleAuth` renvoyé à l’authentification (3 ou 5 : vérification exigée). */
+    var doubleAuth: Int? = null
+    /** Origine écrite dans le QR (par défaut celle du serveur). */
+    var qrOrigin: String? = null
     /** Clé et IV de session côté serveur (contrôle de l’identifiant de pièce jointe). */
     val sessionKey get() = key
     val sessionIv get() = iv
@@ -109,6 +113,7 @@ class FakePronoteServer(
                     token = "jeton-rotation-$issued"
                     JSONObject().put("cle", PronoteCrypto.hex(PronoteCrypto.encrypt(secret.toByteArray(UTF_8), authKey, iv)))
                         .put("jetonConnexionAppliMobile", token)
+                        .also { result -> doubleAuth?.let { result.put("actionsDoubleAuth", JSONObject().put("V", "[$it]")) } }
                 }
             }
             "ParametresUtilisateur" -> {
@@ -148,7 +153,7 @@ class FakePronoteServer(
     /** QR officiel synthétique chiffré avec [pin]. */
     fun qr(pin: String): JSONObject {
         val qrKey = PronoteCrypto.md5(pin.toByteArray(UTF_8))
-        return JSONObject().put("url", "$origin/pronote/eleve.html")
+        return JSONObject().put("url", "${qrOrigin ?: origin}/pronote/eleve.html")
             .put("login", PronoteCrypto.hex(PronoteCrypto.encrypt(username.toByteArray(UTF_8), qrKey, PronoteCrypto.zeroIv)))
             .put("jeton", PronoteCrypto.hex(PronoteCrypto.encrypt(token.toByteArray(UTF_8), qrKey, PronoteCrypto.zeroIv)))
     }

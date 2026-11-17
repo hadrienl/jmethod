@@ -4,6 +4,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.time.Instant
 import java.time.LocalDate
 
 /** Planification de la synchronisation d’arrière-plan (WorkManager dans l’app). */
@@ -23,11 +24,22 @@ class BackgroundSync(
     private val transport: PronoteTransport,
     private val io: CoroutineDispatcher,
     private val today: () -> LocalDate,
-    private val storeLessons: suspend (List<Lesson>) -> Unit,
+    /**
+     * Enregistre les créneaux ; `stillValid` est réévalué dans la transformation du document,
+     * pour qu’une déconnexion survenue entre-temps ne laisse jamais réécrire les créneaux effacés.
+     */
+    private val storeLessons: suspend (List<Lesson>, stillValid: () -> Boolean) -> Unit,
+    private val throttle: PronoteThrottle = MemoryThrottle(),
+    private val now: () -> Instant = { Instant.now() },
 ) {
-    enum class Result { SYNCED, NO_SESSION, TOKEN_REFUSED, RETRY }
+    /**
+     * [RETRY] seulement pour une erreur réseau ; [BLOCKED] : erreur 25, aucun essai pendant une heure ;
+     * [FAILED] : autre erreur, on attend la prochaine période sans nouvel essai rapproché.
+     */
+    enum class Result { SYNCED, NO_SESSION, TOKEN_REFUSED, BLOCKED, FAILED, RETRY }
 
     suspend fun run(): Result = guard.mutex.withLock {
+        if (throttle.isBlocked(now())) return@withLock Result.BLOCKED
         val credentials = vault.load() ?: return@withLock Result.NO_SESSION
         if (vault.needsRelogin()) return@withLock Result.TOKEN_REFUSED
         val epoch = guard.epoch.get()
@@ -45,17 +57,24 @@ class BackgroundSync(
                 client.timetable(today(), 14)
             }
             if (epoch != guard.epoch.get()) return@withLock Result.NO_SESSION
-            storeLessons(lessons)
-            Result.SYNCED
+            storeLessons(lessons) { epoch == guard.epoch.get() }
+            if (epoch != guard.epoch.get()) Result.NO_SESSION else Result.SYNCED
         } catch (error: PronoteException) {
-            if (error.code in REFUSED) {
-                synchronized(guard.vaultLock) { if (epoch == guard.epoch.get()) vault.markNeedsRelogin() }
-                Result.TOKEN_REFUSED
-            } else {
-                Result.RETRY
+            when {
+                PronoteThrottle.isBlockedError(error) -> {
+                    throttle.block(now().plus(PronoteThrottle.BLOCK_DURATION))
+                    Result.BLOCKED
+                }
+                error.code in REFUSED -> {
+                    synchronized(guard.vaultLock) { if (epoch == guard.epoch.get()) vault.markNeedsRelogin() }
+                    Result.TOKEN_REFUSED
+                }
+                else -> Result.FAILED
             }
-        } catch (_: Exception) {
+        } catch (_: java.io.IOException) {
             Result.RETRY
+        } catch (_: Exception) {
+            Result.FAILED
         }
     }
 
