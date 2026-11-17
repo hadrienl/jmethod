@@ -6,7 +6,7 @@ struct SignInView: View {
     @State private var schoolInput = ""
     @State private var accountType: PronoteAccountType = .student
     @State private var username = ""
-    @State private var password = ""
+    @State private var password = PasswordFieldState()
     @State private var remember = true
     @State private var showPassword = false
     @FocusState private var focus: Field?
@@ -59,12 +59,13 @@ struct SignInView: View {
                     LabeledField(title: "Mot de passe") {
                         HStack(spacing: 8) {
                             Group {
-                                if showPassword {
-                                    TextField("Mot de passe", text: $password)
+                                // Un mot de passe enregistré n'est jamais affiché en clair.
+                                if showPassword && password.canReveal {
+                                    TextField("Mot de passe", text: passwordBinding)
                                         .textInputAutocapitalization(.never)
                                         .autocorrectionDisabled()
                                 } else {
-                                    SecureField("Mot de passe", text: $password)
+                                    SecureField("Mot de passe", text: passwordBinding)
                                 }
                             }
                             .textContentType(.password)
@@ -72,14 +73,16 @@ struct SignInView: View {
                             .submitLabel(.go)
                             .onSubmit(submit)
                             .accessibilityLabel("Mot de passe")
-                            Button { showPassword.toggle() } label: {
-                                Image(systemName: showPassword ? "eye.slash" : "eye")
-                                    .foregroundStyle(Theme.textSecondary)
-                                    .frame(width: 44, height: 44)
-                                    .contentShape(Rectangle())
+                            if password.canReveal {
+                                Button { showPassword.toggle() } label: {
+                                    Image(systemName: showPassword ? "eye.slash" : "eye")
+                                        .foregroundStyle(Theme.textSecondary)
+                                        .frame(width: 44, height: 44)
+                                        .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel(showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe")
                             }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel(showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe")
                         }
                     }
 
@@ -126,6 +129,10 @@ struct SignInView: View {
         }
     }
 
+    private var passwordBinding: Binding<String> {
+        Binding(get: { password.text }, set: { password.edit($0) })
+    }
+
     private func prefill() {
         if schoolInput.isEmpty, let school = pronote.school {
             schoolInput = school.input
@@ -133,7 +140,10 @@ struct SignInView: View {
         }
         if username.isEmpty, let login = pronote.savedLogin {
             username = login.username
-            if password.isEmpty, let saved = login.password { password = saved }
+            if password.isEmpty, let saved = login.password {
+                password.prefill(stored: saved)
+                showPassword = false
+            }
         }
     }
 
@@ -142,8 +152,9 @@ struct SignInView: View {
         focus = nil
         // Une adresse complète impose son espace : le choix Élève/Parent est mis à jour.
         accountType = PronoteURL.resolve(schoolInput, account: accountType).account
-        pronote.signIn(school: schoolInput, account: accountType, username: username, password: password, remember: remember)
-        password = ""
+        pronote.signIn(school: schoolInput, account: accountType, username: username, password: password.text, remember: remember)
+        password.clear()
+        showPassword = false
     }
 }
 

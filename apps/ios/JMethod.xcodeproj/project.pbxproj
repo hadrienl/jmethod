@@ -10,6 +10,7 @@
 		0101C4F03E0C959C69674D05 /* PronoteAutomation.js in Resources */ = {isa = PBXBuildFile; fileRef = 8D4ED2F99C3902C5C93D14DB /* PronoteAutomation.js */; };
 		05054A2B7CF2018D05D35877 /* DocumentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68380296D9256024FEED7E0F /* DocumentStore.swift */; };
 		0D2228EC72E0D4645C6D07E3 /* PlanningScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0FB4AD00E70BC483801594F /* PlanningScreen.swift */; };
+		0F8E72A31BB59C43DDDCB3AF /* HardeningTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D47FED192427EBED3DC1AF75 /* HardeningTests.swift */; };
 		113268F29E964AE5760B3D40 /* HTMLEntities.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1306B21919EB579807046089 /* HTMLEntities.swift */; };
 		18AFCC89C2E6EFEF7B4AE01C /* PronoteWebFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CAEB5DFB5673ABE9475D42D /* PronoteWebFlow.swift */; };
 		18B1A19CD05680E85A8314A4 /* AdaptiveAlgorithm.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D60067D99F839646575C3DC /* AdaptiveAlgorithm.swift */; };
@@ -44,6 +45,7 @@
 		6EDB35B4778DEC27AE435723 /* FrenchDate.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE53B72F9B8215BBCA50B4AC /* FrenchDate.swift */; };
 		6F37A0FBD4DCC992914FD72E /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A03BA5B75BE65410D97450F /* Components.swift */; };
 		706FBFB9092FC6F75F0B044E /* EveningProgramme.swift in Sources */ = {isa = PBXBuildFile; fileRef = D79F70AD2F187F514D3FB62F /* EveningProgramme.swift */; };
+		7535990551E276EC2EC16025 /* PasswordField.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD196EFBAB6801493FE185D2 /* PasswordField.swift */; };
 		7A120E3B80030D66A603826A /* DeviationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEC33F7E47FC0C004F57CFF4 /* DeviationTests.swift */; };
 		8B635AD8F612516B11AFBB0D /* StatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E68BCB0DF749A051C645989 /* StatsView.swift */; };
 		8C67E43703BBD69EA98AD066 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE148ACA9596BE68E4E992A6 /* RootView.swift */; };
@@ -51,6 +53,7 @@
 		928E4942E1A32DCAF5776025 /* Celebration.swift in Sources */ = {isa = PBXBuildFile; fileRef = B541EB1557D2095377336CE1 /* Celebration.swift */; };
 		9365835E87F9C37A46C7FB14 /* TodayScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAC3D4FBEBC30EA698B50046 /* TodayScreen.swift */; };
 		9A97B441323BD722DDA10CD9 /* AddCourseSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 656CB585A87005C6F3E4E0CA /* AddCourseSheet.swift */; };
+		9DD5AB248F5C5F5903FB0924 /* PronoteThrottle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 134F665F22AF7A74CFB50108 /* PronoteThrottle.swift */; };
 		A515FBEECD796F28A24CE072 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6745A7A7AF73614A545C4AF /* Theme.swift */; };
 		B0E6261FE9A452FC17792020 /* PronoteURL.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B4479E6E6705697E2AF988B /* PronoteURL.swift */; };
 		B124384768702827E21EFF1E /* PronoteTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96B2A3369C6383842D256676 /* PronoteTransport.swift */; };
@@ -91,6 +94,7 @@
 		0D96B3348DFDB81CC36ECBAD /* Backup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Backup.swift; sourceTree = "<group>"; };
 		104D3BEF38E501955A30294D /* RevisionDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RevisionDetailSheet.swift; sourceTree = "<group>"; };
 		1306B21919EB579807046089 /* HTMLEntities.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTMLEntities.swift; sourceTree = "<group>"; };
+		134F665F22AF7A74CFB50108 /* PronoteThrottle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PronoteThrottle.swift; sourceTree = "<group>"; };
 		1A6AF609D98F6A22422818DD /* JMethodApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JMethodApp.swift; sourceTree = "<group>"; };
 		1BAF9DD5246A1F8FFB6AD8EB /* ScoreSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoreSheet.swift; sourceTree = "<group>"; };
 		1D60067D99F839646575C3DC /* AdaptiveAlgorithm.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdaptiveAlgorithm.swift; sourceTree = "<group>"; };
@@ -137,6 +141,7 @@
 		A6745A7A7AF73614A545C4AF /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		A9009DFF1C50246777E59A63 /* notebook-vectors.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "notebook-vectors.json"; sourceTree = "<group>"; };
 		A9B8DBA03C580EE00D627346 /* DomainVectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DomainVectorTests.swift; sourceTree = "<group>"; };
+		AD196EFBAB6801493FE185D2 /* PasswordField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasswordField.swift; sourceTree = "<group>"; };
 		AD1A2F5D2BFED3D2B90D17F4 /* NotebookModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotebookModel.swift; sourceTree = "<group>"; };
 		AD52C730F458F692A288420E /* CourseFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CourseFlowTests.swift; sourceTree = "<group>"; };
 		B0FB4AD00E70BC483801594F /* PlanningScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanningScreen.swift; sourceTree = "<group>"; };
@@ -146,6 +151,7 @@
 		CE148ACA9596BE68E4E992A6 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		CEC33F7E47FC0C004F57CFF4 /* DeviationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviationTests.swift; sourceTree = "<group>"; };
 		D311AA7F6E6072898C8768E8 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		D47FED192427EBED3DC1AF75 /* HardeningTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HardeningTests.swift; sourceTree = "<group>"; };
 		D79F70AD2F187F514D3FB62F /* EveningProgramme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EveningProgramme.swift; sourceTree = "<group>"; };
 		DCBD2A48301D70A69CBD2E4C /* ProtocolCodec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolCodec.swift; sourceTree = "<group>"; };
 		E3A2B461DB3494BB11F44C33 /* PronoteTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PronoteTests.swift; sourceTree = "<group>"; };
@@ -223,6 +229,7 @@
 				4C7B9C5390B1BA273D6D0B9E /* PronoteKeychain.swift */,
 				78EBC83BE70284E7E207455F /* PronoteModels.swift */,
 				9EB37E581E1A22947F428CF8 /* PronoteSession.swift */,
+				134F665F22AF7A74CFB50108 /* PronoteThrottle.swift */,
 				96B2A3369C6383842D256676 /* PronoteTransport.swift */,
 				9B4479E6E6705697E2AF988B /* PronoteURL.swift */,
 				6CAEB5DFB5673ABE9475D42D /* PronoteWebFlow.swift */,
@@ -236,6 +243,7 @@
 		31B6FFADA6529D687BE2B7FD /* SignIn */ = {
 			isa = PBXGroup;
 			children = (
+				AD196EFBAB6801493FE185D2 /* PasswordField.swift */,
 				30F3FE1E243C0760E035480E /* SignInView.swift */,
 			);
 			path = SignIn;
@@ -247,6 +255,7 @@
 				AD52C730F458F692A288420E /* CourseFlowTests.swift */,
 				CEC33F7E47FC0C004F57CFF4 /* DeviationTests.swift */,
 				A9B8DBA03C580EE00D627346 /* DomainVectorTests.swift */,
+				D47FED192427EBED3DC1AF75 /* HardeningTests.swift */,
 				E96E089466C9C0BE508A501A /* NotebookVectorTests.swift */,
 				E3A2B461DB3494BB11F44C33 /* PronoteTests.swift */,
 				85979BCF46927D316BA47D60 /* ProtocolVectorTests.swift */,
@@ -536,12 +545,14 @@
 				F233CACCDA40A4D393E77E6D /* Notebook.swift in Sources */,
 				679359228AF16FE64B63F358 /* NotebookModel.swift in Sources */,
 				32761D954E6A97C1C3DDF01F /* NotebookView.swift in Sources */,
+				7535990551E276EC2EC16025 /* PasswordField.swift in Sources */,
 				0D2228EC72E0D4645C6D07E3 /* PlanningScreen.swift in Sources */,
 				49B2163237DF036133913027 /* PlanningView.swift in Sources */,
 				2DFD4902274BA6E56BF48BF6 /* PronoteClient.swift in Sources */,
 				4F2391EE9757E31E4477385A /* PronoteKeychain.swift in Sources */,
 				2CF01F86072B20D2A9A04711 /* PronoteModels.swift in Sources */,
 				3C835A370EC3F7A9A7ED0F00 /* PronoteSession.swift in Sources */,
+				9DD5AB248F5C5F5903FB0924 /* PronoteThrottle.swift in Sources */,
 				B124384768702827E21EFF1E /* PronoteTransport.swift in Sources */,
 				B0E6261FE9A452FC17792020 /* PronoteURL.swift in Sources */,
 				18AFCC89C2E6EFEF7B4AE01C /* PronoteWebFlow.swift in Sources */,
@@ -573,6 +584,7 @@
 				4DD0DD4E20C7D3269C7F2060 /* CourseFlowTests.swift in Sources */,
 				7A120E3B80030D66A603826A /* DeviationTests.swift in Sources */,
 				2DA33C90CD50329EF64899AE /* DomainVectorTests.swift in Sources */,
+				0F8E72A31BB59C43DDDCB3AF /* HardeningTests.swift in Sources */,
 				E995D77CF4AA5DCB4426F338 /* NotebookVectorTests.swift in Sources */,
 				F8725271A6E91CE859F34A79 /* PronoteTests.swift in Sources */,
 				C67FEE5EC4B39254FC31F6E3 /* ProtocolVectorTests.swift in Sources */,

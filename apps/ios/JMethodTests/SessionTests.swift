@@ -18,9 +18,11 @@ final class FakePage: LoginPageDriver {
     var onEvent: ((PronoteWebFlow.Event) -> Void)?
     private(set) var starts: [(url: URL, username: String, password: String)] = []
     private(set) var closes = 0
+    private(set) var verifications: [String] = []
     func start(url: URL, username: String, password: String) { starts.append((url, username, password)) }
     func close() { closes += 1 }
     func setPageVisible(_ visible: Bool) {}
+    func revealForVerification(_ message: String) { verifications.append(message) }
     func emit(_ event: PronoteWebFlow.Event) { onEvent?(event) }
 }
 
@@ -32,12 +34,20 @@ actor FakeClient: PronoteSessionClient {
         case offline
         /// Jeton renouvelé reçu puis tâche annulée (expiration de l'arrière-plan).
         case rotatedThenCancelled(String)
+        /// Jeton enregistré puis double authentification exigée par l'API (actions 3/5).
+        case mfaAfterToken(String)
+        /// Erreur Pronote 25 (trop de tentatives).
+        case blocked
     }
 
     final class Counter: @unchecked Sendable {
         // Utilisé uniquement depuis le MainActor du test et l'acteur du client, jamais en même temps.
         var logins = 0
         var timetables = 0
+        /// Durée de la lecture de l'emploi du temps (tâche de fond interrompue par une déconnexion).
+        var timetableDelay: Duration?
+        /// UUID d'application reçu à chaque connexion.
+        var uuids: [String] = []
     }
 
     private var credentials: PronoteCredentials
@@ -54,6 +64,7 @@ actor FakeClient: PronoteSessionClient {
 
     func login(mode: PronoteClient.LoginMode, persist: (@Sendable (PronoteCredentials) async throws -> Void)?) async throws -> PronoteAccount {
         counter.logins += 1
+        counter.uuids.append(credentials.uuid)
         switch mode == .token ? tokenOutcome : qrOutcome {
         case .success(let rotated):
             if let rotated {
@@ -69,11 +80,18 @@ actor FakeClient: PronoteSessionClient {
             credentials.password = rotated
             try await persist?(credentials)
             throw CancellationError()
+        case .mfaAfterToken(let rotated):
+            credentials.password = rotated
+            try await persist?(credentials)
+            throw PronoteFailure.invalid("mfa", "vérification")
+        case .blocked:
+            throw PronoteFailure.invalid(PronoteThrottle.blockedCode, PronoteThrottle.blockedMessage)
         }
     }
 
     func timetable(days: Int, childId: String?, now: Date) async throws -> [PronoteLesson] {
         counter.timetables += 1
+        if let delay = counter.timetableDelay { try await Task.sleep(for: delay) }
         return [PronoteLesson(id: "l-2026-11-18T08:00:00-0", subject: "MATHEMATIQUES", start: "2026-11-18T08:00:00", end: "2026-11-18T09:00:00", teacher: "", room: "", cancelled: false)]
     }
 
@@ -84,19 +102,28 @@ actor FakeClient: PronoteSessionClient {
 final class SessionTests: XCTestCase {
     private let token = PronoteCredentials(url: "https://abcd1234.index-education.net/pronote/mobile.eleve.html", username: "u", password: "old-token", uuid: "uuid-test", clientIdentifier: nil)
 
-    private struct Setup {
+    struct Setup {
         let session: PronoteSession
         let vault: PronoteVault
         let page: FakePage
         let app: AppModel
         let counter: FakeClient.Counter
+        let throttle: PronoteThrottle
+        let clock: TestClock
     }
 
-    private func makeSetup(token: FakeClient.Outcome, qr: FakeClient.Outcome = .success(rotatedToken: nil),
-                           savedToken: Bool = true, savedPassword: String? = "secret") async -> Setup {
-        let vault = PronoteVault(store: MemoryStore())
+    final class TestClock: @unchecked Sendable {
+        // Utilisé uniquement depuis le MainActor du test.
+        var now = Date(timeIntervalSince1970: 1_794_942_000)
+    }
+
+    /// L'établissement « demo » correspond à l'origine du QR des vecteurs (`demo.index-education.net`).
+    func makeSetup(token: FakeClient.Outcome, qr: FakeClient.Outcome = .success(rotatedToken: nil),
+                   savedToken: Bool = true, savedPassword: String? = "secret", vault existing: PronoteVault? = nil,
+                   throttle existingThrottle: PronoteThrottle? = nil, clock existingClock: TestClock? = nil) async -> Setup {
+        let vault = existing ?? PronoteVault(store: MemoryStore())
         if savedToken { try? vault.saveCredentials(self.token) }
-        vault.saveSchool(.init(input: "abcd1234", account: .student))
+        vault.saveSchool(.init(input: "demo", account: .student))
         vault.saveLogin(.init(username: "eleve.test", password: savedPassword))
         let file = FileManager.default.temporaryDirectory.appendingPathComponent("jmethod-session-\(UUID().uuidString).json")
         addTeardownBlock { try? FileManager.default.removeItem(at: file) }
@@ -106,14 +133,18 @@ final class SessionTests: XCTestCase {
         await app.load()
         let page = FakePage()
         let counter = FakeClient.Counter()
-        let session = PronoteSession(app: app, vault: vault, page: page, clearWebData: {}) { credentials in
+        let throttleSuite = "jmethod-throttle-\(UUID().uuidString)"
+        if existingThrottle == nil { addTeardownBlock { UserDefaults().removePersistentDomain(forName: throttleSuite) } }
+        let throttle = existingThrottle ?? PronoteThrottle(suiteName: throttleSuite)
+        let clock = existingClock ?? TestClock()
+        let session = PronoteSession(app: app, vault: vault, page: page, clearWebData: {}, throttle: throttle, now: { clock.now }) { credentials in
             FakeClient(credentials: credentials, token: token, qr: qr, counter: counter)
         }
-        return Setup(session: session, vault: vault, page: page, app: app, counter: counter)
+        return Setup(session: session, vault: vault, page: page, app: app, counter: counter, throttle: throttle, clock: clock)
     }
 
     /// Attend qu'une condition devienne vraie (tâches de la session sur le MainActor).
-    private func until(_ condition: () -> Bool, file: StaticString = #filePath, line: UInt = #line) async {
+    func until(_ condition: () -> Bool, file: StaticString = #filePath, line: UInt = #line) async {
         for _ in 0..<200 {
             if condition() { return }
             try? await Task.sleep(for: .milliseconds(10))
@@ -121,7 +152,7 @@ final class SessionTests: XCTestCase {
         XCTFail("condition non atteinte", file: file, line: line)
     }
 
-    private func vectorQR() throws -> (PronoteQRData, String) {
+    func vectorQR() throws -> (PronoteQRData, String) {
         let qr = try XCTUnwrap(try SharedVectors.object("protocol-vectors.json")["qr"] as? [String: Any])
         return (try decodeJSON(PronoteQRData.self, qr["qrData"]), try XCTUnwrap(qr["pin"] as? String))
     }
@@ -162,7 +193,7 @@ final class SessionTests: XCTestCase {
         setup.session.resumeAtLaunch()
         await until { setup.page.starts.count == 1 }
         let start = try XCTUnwrap(setup.page.starts.first)
-        XCTAssertEqual(start.url.absoluteString, "https://abcd1234.index-education.net/pronote/eleve.html")
+        XCTAssertEqual(start.url.absoluteString, "https://demo.index-education.net/pronote/eleve.html")
         XCTAssertEqual(start.username, "eleve.test")
         XCTAssertEqual(start.password, "secret")
         XCTAssertTrue(setup.session.silentRelogin)
@@ -204,7 +235,7 @@ final class SessionTests: XCTestCase {
         XCTAssertEqual(setup.session.access, .signedOut)
         XCTAssertNotNil(setup.session.errorMessage)
         XCTAssertEqual(setup.vault.loadLogin(), .init(username: "eleve.test", password: nil))
-        XCTAssertEqual(setup.vault.loadSchool()?.input, "abcd1234")
+        XCTAssertEqual(setup.vault.loadSchool()?.input, "demo")
         XCTAssertEqual(setup.session.savedLogin?.password, nil, "le formulaire n'est plus prérempli avec l'ancien mot de passe")
     }
 
@@ -234,15 +265,15 @@ final class SessionTests: XCTestCase {
     func testStayConnectedChoiceControlsStoredLogin() async throws {
         let (qr, pin) = try vectorQR()
         let on = await makeSetup(token: .success(rotatedToken: nil), savedToken: false, savedPassword: nil)
-        on.session.signIn(school: "abcd1234", account: .parent, username: "parent.test", password: "motdepasse", remember: true)
-        XCTAssertEqual(on.page.starts.first?.url.absoluteString, "https://abcd1234.index-education.net/pronote/parent.html")
+        on.session.signIn(school: "demo", account: .parent, username: "parent.test", password: "motdepasse", remember: true)
+        XCTAssertEqual(on.page.starts.first?.url.absoluteString, "https://demo.index-education.net/pronote/parent.html")
         on.page.emit(.qr(qr, pin: pin))
         await until { on.session.access == .connected }
         XCTAssertEqual(on.vault.loadLogin(), .init(username: "parent.test", password: "motdepasse"))
-        XCTAssertEqual(on.vault.loadSchool(), .init(input: "abcd1234", account: .parent))
+        XCTAssertEqual(on.vault.loadSchool(), .init(input: "demo", account: .parent))
 
         let off = await makeSetup(token: .success(rotatedToken: nil), savedToken: false, savedPassword: "ancien")
-        off.session.signIn(school: "abcd1234", account: .student, username: "eleve.test", password: "motdepasse", remember: false)
+        off.session.signIn(school: "demo", account: .student, username: "eleve.test", password: "motdepasse", remember: false)
         off.page.emit(.qr(qr, pin: pin))
         await until { off.session.access == .connected }
         XCTAssertEqual(off.vault.loadLogin(), .init(username: "eleve.test", password: nil), "désactivé : le mot de passe enregistré est effacé")
@@ -261,7 +292,7 @@ final class SessionTests: XCTestCase {
         XCTAssertFalse(keep.vault.needsSilentRelogin)
         XCTAssertEqual(keep.app.document.pronoteEvents, [])
         XCTAssertEqual(keep.vault.loadLogin(), .init(username: "eleve.test", password: "secret"))
-        XCTAssertEqual(keep.vault.loadSchool(), .init(input: "abcd1234", account: .student))
+        XCTAssertEqual(keep.vault.loadSchool(), .init(input: "demo", account: .student))
         XCTAssertEqual(keep.session.savedLogin?.password, "secret", "le formulaire est prérempli")
 
         let forget = await makeSetup(token: .success(rotatedToken: "t2"))
@@ -270,7 +301,7 @@ final class SessionTests: XCTestCase {
         await forget.session.disconnect(forgetLogin: true)
         XCTAssertNil(try forget.vault.loadCredentials())
         XCTAssertNil(forget.vault.loadLogin())
-        XCTAssertEqual(forget.vault.loadSchool(), .init(input: "abcd1234", account: .student))
+        XCTAssertEqual(forget.vault.loadSchool(), .init(input: "demo", account: .student))
         XCTAssertNil(forget.session.savedLogin)
     }
 
@@ -280,7 +311,7 @@ final class SessionTests: XCTestCase {
         await setup.session.disconnect(forgetLogin: false)
         // Lancement suivant : formulaire prérempli, aucune reconnexion silencieuse.
         setup.vault.setNeedsSilentRelogin(true)
-        let next = PronoteSession(app: setup.app, vault: setup.vault, page: setup.page, clearWebData: {}) { credentials in
+        let next = PronoteSession(app: setup.app, vault: setup.vault, page: setup.page, clearWebData: {}, throttle: setup.throttle, now: { setup.clock.now }) { credentials in
             FakeClient(credentials: credentials, token: .refused, qr: .success(rotatedToken: "t3"), counter: setup.counter)
         }
         XCTAssertEqual(next.access, .signedOut)
@@ -290,7 +321,7 @@ final class SessionTests: XCTestCase {
         XCTAssertEqual(next.savedLogin?.password, "secret")
 
         // La connexion réussie suivante réactive la reconnexion automatique.
-        next.signIn(school: "abcd1234", account: .student, username: "eleve.test", password: "secret", remember: true)
+        next.signIn(school: "demo", account: .student, username: "eleve.test", password: "secret", remember: true)
         setup.page.emit(.qr(qr, pin: pin))
         await until { next.access == .connected }
         XCTAssertTrue(setup.vault.autoReloginEnabled)
@@ -298,7 +329,7 @@ final class SessionTests: XCTestCase {
 
     func testTypedPasswordRejectedAlsoClearsStoredPassword() async throws {
         let setup = await makeSetup(token: .success(rotatedToken: nil), savedToken: false)
-        setup.session.signIn(school: "abcd1234", account: .student, username: "eleve.test", password: "autre", remember: true)
+        setup.session.signIn(school: "demo", account: .student, username: "eleve.test", password: "autre", remember: true)
         setup.page.emit(.rejected("Identifiant ou mot de passe incorrect."))
         XCTAssertEqual(setup.vault.loadLogin(), .init(username: "eleve.test", password: nil))
         XCTAssertEqual(setup.session.access, .signedOut)

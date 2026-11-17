@@ -6,7 +6,10 @@ protocol PronoteSessionClient: Actor {
     func timetable(days: Int, childId: String?, now: Date) async throws -> [PronoteLesson]
     func credentialSnapshot() -> PronoteCredentials
     func notebook(today: String, childId: String?) async throws -> NotebookRead
-    func download(attachmentId: String, name: String, session: UUID, to destination: URL) async throws
+    /// - Parameter fileName: `L` brut de la pièce jointe (même vide).
+    func download(attachmentId: String, fileName: String, session: UUID, to destination: URL) async throws
+    /// Déconnexion : plus aucun téléchargement de cette session.
+    func invalidate()
 }
 
 /// Lecture du cahier de textes et session qui l'a produite : un téléchargement n'est permis que dans cette session.
@@ -20,9 +23,11 @@ extension PronoteSessionClient {
         throw PronoteFailure.invalid("notebook-unavailable", NotebookRules.unavailable)
     }
 
-    func download(attachmentId: String, name: String, session: UUID, to destination: URL) async throws {
+    func download(attachmentId: String, fileName: String, session: UUID, to destination: URL) async throws {
         throw PronoteFailure.invalid("download", NotebookRules.downloadUnavailable)
     }
+
+    func invalidate() {}
 }
 
 /// Client du protocole mobile Pronote, strictement en lecture seule.
@@ -70,8 +75,12 @@ actor PronoteClient: PronoteSessionClient {
     }
 
     /// Déchiffre le QR officiel avec le code temporaire. L'UUID d'application est stable pour ce compte.
-    static func credentials(qr: PronoteQRData, pin: String, uuid: String = UUID().uuidString) throws -> PronoteCredentials {
+    /// - Parameter expectedOrigin: origine de la tentative (page officielle ouverte) ; un QR d'une autre origine est refusé.
+    static func credentials(qr: PronoteQRData, pin: String, uuid: String = UUID().uuidString, expectedOrigin: String? = nil) throws -> PronoteCredentials {
         let url = try PronoteURL.validated(qr.url)
+        if let expectedOrigin, PronoteURL.origin(url) != expectedOrigin {
+            throw PronoteFailure.invalid("qr-origin", "La connexion n’a pas pu être finalisée. Réessaie.")
+        }
         guard pin.count == 4, pin.allSatisfy({ $0.isASCII && $0.isNumber }) else {
             throw PronoteFailure.invalid("pin", "La connexion n’a pas pu être finalisée. Réessaie.")
         }
@@ -125,23 +134,14 @@ actor PronoteClient: PronoteSessionClient {
             lowercaseUsername: ProtocolJSON.bool(identification["modeCompLog"]), lowercasePassword: ProtocolJSON.bool(identification["modeCompMdp"])
         )
         let challenge = try ProtocolCodec.challengeResponse(ProtocolJSON.string(identification["challenge"]), key: authenticationKey, iv: iv)
-        let authenticated = try await call("Authentification", data: ["connexion": 0, "challenge": challenge, "espace": space])
-        guard let encryptedKey = authenticated["cle"] as? String else {
-            throw PronoteFailure.invalid("login", mode == .token
-                ? "Pronote demande de te reconnecter."
-                : "Pronote a refusé la connexion. Réessaie.")
-        }
-        key = try ProtocolCodec.sessionKey(encryptedCle: encryptedKey, authenticationKey: authenticationKey, iv: iv)
-
-        // Le jeton mobile tourne : il est enregistré avant toute autre requête susceptible d'échouer.
-        if let token = authenticated["jetonConnexionAppliMobile"] as? String, !token.isEmpty {
-            credentials.password = token
-            try await persist?(credentials)
-        }
-        if let actionText = ProtocolJSON.unwrap(authenticated["actionsDoubleAuth"]) as? String,
-           let actionData = actionText.data(using: .utf8),
-           let actions = try? JSONSerialization.jsonObject(with: actionData) as? [Int],
-           actions.contains(3) || actions.contains(5) {
+        // Dernier point d'annulation : une fois l'Authentification envoyée, Pronote fait tourner le jeton. La suite va
+        // jusqu'à l'enregistrement du jeton renouvelé, même si la tâche appelante est annulée entre-temps
+        // (« Ouvrir sans attendre », nouvelle tentative, fin de l'actualisation en arrière-plan).
+        try Task.checkCancellation()
+        let doubleAuthentication = try await Task {
+            try await self.authenticate(challenge: challenge, space: space, authenticationKey: authenticationKey, mode: mode, persist: persist)
+        }.value
+        if doubleAuthentication {
             throw PronoteFailure.invalid("mfa", "Pronote demande une vérification de sécurité : reconnecte-toi pour la terminer.")
         }
         try Task.checkCancellation()
@@ -163,6 +163,33 @@ actor PronoteClient: PronoteSessionClient {
             name: ProtocolJSON.string(userResource["L"]),
             children: childResources.map { .init(id: ProtocolJSON.string($0["N"]), name: ProtocolJSON.string($0["L"])) }
         )
+    }
+
+    /// Authentification, clé de session et enregistrement immédiat du jeton renouvelé, sans point d'annulation.
+    /// - Returns: vrai si Pronote exige une double authentification (actions 3 ou 5).
+    private func authenticate(challenge: String, space: Int, authenticationKey: Data, mode: LoginMode,
+                              persist: (@Sendable (PronoteCredentials) async throws -> Void)?) async throws -> Bool {
+        let authenticated = try await call("Authentification", data: ["connexion": 0, "challenge": challenge, "espace": space])
+        guard let encryptedKey = authenticated["cle"] as? String else {
+            throw PronoteFailure.invalid("login", mode == .token
+                ? "Pronote demande de te reconnecter."
+                : "Pronote a refusé la connexion. Réessaie.")
+        }
+        key = try ProtocolCodec.sessionKey(encryptedCle: encryptedKey, authenticationKey: authenticationKey, iv: iv)
+        // Le jeton mobile tourne : il est enregistré avant toute autre requête susceptible d'échouer.
+        if let token = authenticated["jetonConnexionAppliMobile"] as? String, !token.isEmpty {
+            credentials.password = token
+            try await persist?(credentials)
+        }
+        guard let actionText = ProtocolJSON.unwrap(authenticated["actionsDoubleAuth"]) as? String,
+              let actionData = actionText.data(using: .utf8),
+              let actions = try? JSONSerialization.jsonObject(with: actionData) as? [Int] else { return false }
+        return actions.contains(3) || actions.contains(5)
+    }
+
+    /// Déconnexion : les téléchargements en attente de ce client sont refusés (identifiant de session renouvelé).
+    func invalidate() {
+        sessionID = UUID()
     }
 
     /// Lit les cours des `days` prochains jours (aujourd'hui compris) au calendrier de l'établissement.
@@ -241,7 +268,7 @@ actor PronoteClient: PronoteSessionClient {
 
     /// Télécharge une pièce jointe (`FichiersExternes`) avec la session et les cookies courants. L'URL est construite ici,
     /// utilisée une fois puis oubliée : elle n'est ni renvoyée, ni journalisée, ni conservée.
-    func download(attachmentId: String, name: String, session: UUID, to destination: URL) async throws {
+    func download(attachmentId: String, fileName: String, session: UUID, to destination: URL) async throws {
         await acquire()
         defer { release() }
         guard session == sessionID, NotebookRules.isDownloadableId(attachmentId) else {
@@ -249,7 +276,7 @@ actor PronoteClient: PronoteSessionClient {
         }
         let rootText = root.absoluteString.hasSuffix("/") ? String(root.absoluteString.dropLast()) : root.absoluteString
         let encrypted = try NotebookRules.encryptedId(attachmentId, key: key, iv: iv)
-        guard let url = URL(string: NotebookRules.downloadURL(root: rootText, encryptedId: encrypted, name: name, session: ProtocolJSON.integer(attributes["h"]))) else {
+        guard let url = URL(string: NotebookRules.downloadURL(root: rootText, encryptedId: encrypted, name: fileName, session: ProtocolJSON.integer(attributes["h"]))) else {
             throw PronoteFailure.invalid("download", NotebookRules.downloadUnavailable)
         }
         let status: Int
@@ -398,7 +425,7 @@ actor PronoteClient: PronoteSessionClient {
             let code = ProtocolJSON.string(error["G"])
             let message = switch code {
             case "10", "22": "La session Pronote a expiré."
-            case "25": "Pronote bloque temporairement les connexions après trop de tentatives. Réessaie plus tard."
+            case "25": PronoteThrottle.blockedMessage
             default: "Pronote a refusé la requête. Réessaie plus tard sans multiplier les tentatives."
             }
             throw PronoteFailure.invalid("pronote-\(code)", message)

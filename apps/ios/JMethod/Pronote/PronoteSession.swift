@@ -49,6 +49,8 @@ final class PronoteSession {
         case busy
         /// Jeton refusé : reconnexion silencieuse marquée pour le prochain premier plan.
         case tokenRefused
+        /// Erreur 25 récente : aucun essai pendant au moins une heure.
+        case blocked
         case failed
     }
 
@@ -95,12 +97,19 @@ final class PronoteSession {
     /// Identifiants à enregistrer après une connexion réussie (« Rester connecté »), puis effacés de la mémoire.
     @ObservationIgnored private var pendingRemember: (school: PronoteVault.School, login: PronoteVault.SavedLogin)?
     @ObservationIgnored private var rememberLogin = true
+    /// Origine de la page officielle de la tentative en cours : un QR d'une autre origine est refusé.
+    @ObservationIgnored private var attemptOrigin: String?
+    @ObservationIgnored private let throttle: PronoteThrottle
+    @ObservationIgnored private let now: () -> Date
 
     init(app: AppModel, vault: PronoteVault = .live, page: LoginPageDriver? = nil,
          clearWebData: @escaping () async -> Void = { await PronoteWebFlow.clearWebsiteData() },
+         throttle: PronoteThrottle = .live, now: @escaping () -> Date = Date.init,
          makeClient: ((PronoteCredentials) throws -> any PronoteSessionClient)? = nil) {
         self.app = app
         self.vault = vault
+        self.throttle = throttle
+        self.now = now
         self.clearWebData = clearWebData
         if let page {
             self.page = page
@@ -111,7 +120,9 @@ final class PronoteSession {
             self.web = flow
         }
         self.makeClient = makeClient ?? { try PronoteClient(credentials: $0) }
-        let saved = (try? vault.loadCredentials()) != nil
+        // Trousseau inaccessible pour l'instant (lancement en arrière-plan avant le premier déverrouillage) :
+        // la connexion est supposée présente ; rien n'est effacé, la reprise relira le jeton.
+        let saved = vault.credentialsState ?? true
         hasSavedConnection = saved
         let canRelogin = vault.needsSilentRelogin && vault.autoReloginEnabled && vault.loadLogin()?.password != nil
         access = saved || canRelogin ? .resuming : .signedOut
@@ -122,6 +133,19 @@ final class PronoteSession {
     }
 
     var isWorking: Bool { phase.isWorking }
+
+    /// Erreur 25 récente : aucune connexion automatique ni « Réessayer » pendant au moins une heure.
+    var isBlocked: Bool { throttle.isBlocked(now: now()) }
+
+    /// Blocage affiché sans aucun essai : l'app s'ouvre sur les données locales si une connexion existe.
+    private func showBlocked() {
+        errorMessage = PronoteThrottle.blockedMessage
+        phase = .failed
+        silentRelogin = false
+        if access == .connected { return }
+        let canRelogin = vault.autoReloginEnabled && vault.loadLogin()?.password != nil
+        access = hasSavedConnection || canRelogin || account != nil ? .offline : .signedOut
+    }
 
     /// Un échec de connexion par jeton n'impose une nouvelle connexion que si Pronote refuse explicitement le jeton
     /// ou demande une vérification ; sinon (réseau, serveur, appareil verrouillé) la connexion est conservée.
@@ -142,6 +166,7 @@ final class PronoteSession {
     func resumeAtLaunch() {
         guard !resumed else { return }
         resumed = true
+        if isBlocked { return showBlocked() }
         if vault.needsSilentRelogin && vault.autoReloginEnabled {
             handleRefusedToken()
         } else if hasSavedConnection {
@@ -153,7 +178,7 @@ final class PronoteSession {
 
     /// Retour au premier plan : reconnexion différée (jeton refusé en arrière-plan) ou synchronisation après 6 h.
     func foregroundActivated(now: Date = Date()) {
-        guard resumed, !isWorking, !tokenLoginInFlight, !webActive else { return }
+        guard resumed, !isWorking, !tokenLoginInFlight, !webActive, !throttle.isBlocked(now: now) else { return }
         if vault.needsSilentRelogin && vault.autoReloginEnabled {
             handleRefusedToken()
         } else if access == .connected, Self.shouldSyncOnForeground(lastSync: app?.lastPronoteSync, now: now) {
@@ -163,6 +188,7 @@ final class PronoteSession {
 
     /// Reprise par jeton (lancement, bouton Réessayer du mode hors ligne) ; sans jeton, reconnexion avec les identifiants enregistrés.
     func resumeSavedConnection() {
+        if isBlocked { return showBlocked() }
         do {
             guard let saved = try vault.loadCredentials() else {
                 // Sans jeton valide : nouvelle reconnexion silencieuse demandée par l'utilisateur (bouton Réessayer).
@@ -218,6 +244,7 @@ final class PronoteSession {
             silentRelogin = false
             webActive = true
             webVisible = false
+            attemptOrigin = PronoteURL.origin(url)
             page.start(url: url, username: user, password: password)
         } catch {
             fail(error)
@@ -226,6 +253,7 @@ final class PronoteSession {
 
     func synchronize() {
         guard !isWorking, !tokenLoginInFlight else { return }
+        if isBlocked { return showBlocked() }
         guard let client else {
             if hasSavedConnection { resumeSavedConnection() }
             return
@@ -244,7 +272,7 @@ final class PronoteSession {
                     lessons = try await client.timetable(days: PronoteClient.maximumDays, childId: child, now: Date())
                 } catch let failure as PronoteFailure where failure.isExpiredSession {
                     // Session expirée : une seule reconnexion par jeton, puis nouvelle lecture.
-                    guard let self, let saved = try self.vault.loadCredentials() else { throw failure }
+                    guard let self, !self.isBlocked, let saved = try self.vault.loadCredentials() else { throw failure }
                     let fresh = try self.makeClient(saved)
                     _ = try await fresh.login(mode: .token, persist: self.tokenPersister(epoch: epoch))
                     self.client = fresh
@@ -252,7 +280,7 @@ final class PronoteSession {
                 }
                 try Task.checkCancellation()
                 guard let self, self.generation == attempt else { return }
-                self.finish(lessons: lessons)
+                self.finish(lessons: lessons, epoch: epoch)
             } catch {
                 guard let self, self.generation == attempt, !Task.isCancelled else { return }
                 self.connectionFailed(error, mode: .token)
@@ -305,6 +333,7 @@ final class PronoteSession {
         await clearWebData()
         app?.clearPronoteData()
         notebookScope += 1
+        await client?.invalidate()
         client = nil
         account = nil
         selectedChildId = nil
@@ -324,27 +353,47 @@ final class PronoteSession {
         guard let client else {
             throw PronoteFailure.invalid("offline", "Pronote n’est pas connecté. Réessaie la connexion, puis rouvre le cahier de textes.")
         }
+        if isBlocked { throw PronoteFailure.invalid(PronoteThrottle.blockedCode, PronoteThrottle.blockedMessage) }
         let child = selectedChildId
         let today = SchoolDay.today(now: now)
         do {
             return try await client.notebook(today: today, childId: child)
         } catch let failure as PronoteFailure where failure.isExpiredSession {
-            guard !tokenLoginInFlight, let saved = try vault.loadCredentials() else { throw failure }
+            guard !tokenLoginInFlight, !isBlocked, let saved = try vault.loadCredentials() else { throw failure }
             tokenLoginInFlight = true
             defer { tokenLoginInFlight = false }
             let fresh = try makeClient(saved)
-            _ = try await fresh.login(mode: .token, persist: tokenPersister(epoch: epoch))
+            do {
+                _ = try await fresh.login(mode: .token, persist: tokenPersister(epoch: epoch))
+            } catch {
+                throttle.note(error, now: self.now())
+                throw error
+            }
             self.client = fresh
             return try await fresh.notebook(today: today, childId: child)
+        } catch {
+            throttle.note(error, now: self.now())
+            throw error
         }
     }
 
     /// Télécharge une pièce jointe dans le cache privé ; refusé si la session a changé depuis la lecture.
+    /// Contrôlé juste avant le GET (client actif, aucune déconnexion), puis au retour : un résultat arrivé après une
+    /// déconnexion est effacé et rien n'est ouvert.
     func downloadAttachment(_ attachment: NotebookAttachment, session: UUID, to destination: URL) async throws {
-        guard attachment.kind == .file, let client else {
-            throw PronoteFailure.invalid("download", NotebookRules.downloadUnavailable)
+        let unavailable = PronoteFailure.invalid("download", NotebookRules.downloadUnavailable)
+        guard attachment.kind == .file, access == .connected || access == .offline, let client else { throw unavailable }
+        let epoch = self.epoch
+        do {
+            try await client.download(attachmentId: attachment.id, fileName: attachment.fileName, session: session, to: destination)
+        } catch {
+            try? FileManager.default.removeItem(at: destination)
+            throw error
         }
-        try await client.download(attachmentId: attachment.id, name: attachment.name, session: session, to: destination)
+        guard epoch == self.epoch, self.client === client else {
+            try? FileManager.default.removeItem(at: destination)
+            throw unavailable
+        }
     }
 
     // MARK: Arrière-plan
@@ -354,6 +403,7 @@ final class PronoteSession {
     /// la reconnexion silencieuse est marquée pour le prochain premier plan.
     func backgroundRefresh(now: Date = Date()) async -> BackgroundResult {
         guard !isWorking, !tokenLoginInFlight, !webActive else { return .busy }
+        guard !throttle.isBlocked(now: now) else { return .blocked }
         guard let saved = try? vault.loadCredentials() else { return .noConnection }
         await app?.ensureLoaded()
         guard app?.loadState == .ready else { return .failed }
@@ -369,11 +419,13 @@ final class PronoteSession {
             let lessons = try await client.timetable(days: PronoteClient.maximumDays, childId: selectedChildId, now: now)
             guard epoch == self.epoch else { return .failed }
             app?.applyPronote(lessons: lessons, syncedAt: now, announce: false)
+            silentAttemptUsed = false
             errorMessage = nil
             phase = .ready
             access = .connected
             return .synced
         } catch {
+            if throttle.note(error, now: now) { return .blocked }
             guard epoch == self.epoch else { return .failed }
             if Self.classifyResumeFailure(error) == .signInRequired {
                 vault.setNeedsSilentRelogin(true)
@@ -425,7 +477,8 @@ final class PronoteSession {
             }
         case .qr(let qr, let pin):
             do {
-                connect(try PronoteClient.credentials(qr: qr, pin: pin, uuid: stableUUID()), mode: .qr)
+                // UUID d'application stable ; QR refusé s'il ne vient pas de l'origine de la tentative.
+                connect(try PronoteClient.credentials(qr: qr, pin: pin, uuid: vault.applicationUUID(), expectedOrigin: attemptOrigin), mode: .qr)
             } catch {
                 connectionFailed(error, mode: .qr)
             }
@@ -444,11 +497,14 @@ final class PronoteSession {
         }
         // Marque conservée jusqu'à la réussite : le prochain lancement retentera une fois.
         vault.setNeedsSilentRelogin(true)
-        guard userInitiated || !silentAttemptUsed else {
-            if access == .resuming { access = .offline }
+        if isBlocked { return showBlocked() }
+        // Automatique : une seule tentative tant qu'aucune synchronisation n'a réussi, et au plus une par heure.
+        guard userInitiated || (!silentAttemptUsed && throttle.silentAllowed(now: now())) else {
+            if access == .resuming || access == .signedOut { access = .offline }
             return
         }
         silentAttemptUsed = true
+        throttle.recordSilentAttempt(now: now())
         startSilentRelogin(school: school, username: login.username, password: password)
     }
 
@@ -474,12 +530,8 @@ final class PronoteSession {
         webActive = true
         webVisible = false
         if access == .signedOut { access = .resuming }
+        attemptOrigin = PronoteURL.origin(url)
         page.start(url: url, username: username, password: password)
-    }
-
-    /// Conserve l'UUID d'application déjà associé au même compte lors d'une reconnexion.
-    private func stableUUID() -> String {
-        (try? vault.loadCredentials())?.uuid ?? UUID().uuidString
     }
 
     private func connect(_ credentials: PronoteCredentials, mode: PronoteClient.LoginMode) {
@@ -499,13 +551,23 @@ final class PronoteSession {
                 let persist = mode == .token ? self.tokenPersister(epoch: epoch) : self.newLoginPersister(attempt: attempt, epoch: epoch)
                 let account = try await client.login(mode: mode, persist: persist)
                 guard epoch == self.epoch else { return }
-                if mode == .qr { try Task.checkCancellation(); guard self.generation == attempt else { return } }
-                try self.vault.saveCredentials(await client.credentialSnapshot())
+                // Jeton : déjà enregistré par le client ; la génération n'est contrôlée qu'à l'adoption du résultat.
+                if mode == .token { try self.vault.saveCredentials(await client.credentialSnapshot()) }
+                guard self.generation == attempt else { return }
+                if mode == .qr {
+                    try Task.checkCancellation()
+                    try self.vault.saveCredentials(await client.credentialSnapshot())
+                }
                 self.adopt(client: client, account: account)
+                if mode == .qr {
+                    // Le jeton suffit désormais : cookies, stockage et cache de la page officielle sont effacés.
+                    self.closePage()
+                    await self.clearWebData()
+                }
                 self.phase = .synchronizing
                 let lessons = try await client.timetable(days: PronoteClient.maximumDays, childId: self.selectedChildId, now: Date())
-                guard epoch == self.epoch else { return }
-                self.finish(lessons: lessons)
+                guard epoch == self.epoch, self.generation == attempt else { return }
+                self.finish(lessons: lessons, epoch: epoch)
             } catch {
                 guard epoch == self.epoch, !(error is CancellationError) || mode == .token else { return }
                 if mode == .qr, self.generation != attempt { return }
@@ -517,7 +579,6 @@ final class PronoteSession {
     /// Connexion réussie : nouveau jeton enregistré, identifiants mémorisés selon « Rester connecté », enfant suivi.
     private func adopt(client: any PronoteSessionClient, account: PronoteAccount) {
         hasSavedConnection = true
-        silentAttemptUsed = false
         vault.setNeedsSilentRelogin(false)
         vault.setAutoReloginEnabled(true)
         if let remember = pendingRemember {
@@ -568,8 +629,12 @@ final class PronoteSession {
         hasSavedConnection = true
     }
 
-    private func finish(lessons: [PronoteLesson]) {
+    /// Synchronisation réussie : créneaux écrits (sauf déconnexion entre-temps) ; une reconnexion silencieuse
+    /// automatique redevient possible.
+    private func finish(lessons: [PronoteLesson], epoch: Int) {
+        guard epoch == self.epoch else { return }
         app?.applyPronote(lessons: lessons, syncedAt: Date())
+        silentAttemptUsed = false
         closePage()
         errorMessage = nil
         phase = .ready
@@ -577,6 +642,22 @@ final class PronoteSession {
     }
 
     private func connectionFailed(_ error: Error, mode: PronoteClient.LoginMode) {
+        throttle.note(error, now: now())
+        if mode == .qr, (error as? PronoteFailure)?.code == "mfa" {
+            // Vérification exigée par l'API après l'enregistrement du jeton : ce jeton ne servira pas, il est effacé
+            // (sinon chaque lancement recommencerait), et la page officielle est affichée pour la terminer.
+            vault.removeCredentials()
+            hasSavedConnection = false
+            client = nil
+            account = nil
+            errorMessage = nil
+            phase = .signingIn
+            webActive = true
+            webVisible = true
+            webMessage = "Pronote demande une vérification de sécurité : termine-la ci-dessous, la connexion continuera ensuite."
+            page.revealForVerification(webMessage ?? "")
+            return
+        }
         let wasSilent = silentRelogin
         silentRelogin = false
         pendingRemember = nil

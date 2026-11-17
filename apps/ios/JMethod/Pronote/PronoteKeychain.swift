@@ -29,6 +29,8 @@ struct KeychainItemStore: SecureItemStore {
         var result: CFTypeRef?
         let status = SecItemCopyMatching(search as CFDictionary, &result)
         if status == errSecItemNotFound { return nil }
+        // errSecInteractionNotAllowed (iPhone pas encore déverrouillé depuis le démarrage) et autres erreurs passagères :
+        // l'élément existe peut-être ; rien n'est effacé.
         guard status == errSecSuccess, let data = result as? Data else { throw PronoteVault.unavailable }
         return data
     }
@@ -66,9 +68,14 @@ struct PronoteVault: Sendable {
 
     /// Identifiant et mot de passe enregistrés avec « Rester connecté ». Le mot de passe disparaît
     /// si Pronote le refuse ; l'identifiant reste pour préremplir le formulaire.
-    struct SavedLogin: Codable, Equatable, Sendable {
+    struct SavedLogin: Codable, Equatable, Sendable, CustomStringConvertible, CustomDebugStringConvertible, CustomReflectable {
         var username: String
         var password: String?
+
+        // Aucune description (journal, débogueur, `dump`) n'expose l'identifiant ni le mot de passe.
+        var description: String { "SavedLogin(<masqué>)" }
+        var debugDescription: String { description }
+        var customMirror: Mirror { Mirror(self, children: [], displayStyle: .struct) }
     }
 
     static let unavailable = PronoteFailure.invalid("keychain", "Ta connexion enregistrée n’est pas accessible. Déverrouille l’iPhone puis réessaie.")
@@ -81,15 +88,42 @@ struct PronoteVault: Sendable {
         static let login = "login"
         static let relogin = "needs-relogin"
         static let autoReloginOff = "auto-relogin-off"
+        static let appUUID = "app-uuid"
     }
 
     let store: any SecureItemStore
 
     // MARK: Jeton
 
+    /// Erreur passagère du trousseau : levée, rien n'est effacé. Données illisibles (élément abîmé) : effacées, nil.
     func loadCredentials() throws -> PronoteCredentials? {
         guard let data = try store.read(Key.credentials) else { return nil }
-        do { return try JSONDecoder().decode(PronoteCredentials.self, from: data) } catch { throw Self.unavailable }
+        guard let credentials = try? JSONDecoder().decode(PronoteCredentials.self, from: data) else {
+            store.delete(Key.credentials)
+            return nil
+        }
+        return credentials
+    }
+
+    /// Jeton présent (true), absent (false), ou inaccessible pour l'instant (nil : iPhone verrouillé depuis le démarrage).
+    var credentialsState: Bool? {
+        do { return try loadCredentials() != nil } catch { return nil }
+    }
+
+    // MARK: UUID d'application
+
+    /// UUID d'application mobile Pronote : généré une fois, réutilisé pour toutes les connexions (QR et jeton) et conservé
+    /// à la déconnexion. À la première utilisation, l'UUID de la session déjà enregistrée est repris pour ne pas casser
+    /// le jeton en place. Erreur passagère du trousseau : l'UUID de la session ou un UUID neuf, sans rien écrire.
+    func applicationUUID() -> String {
+        do {
+            if let data = try store.read(Key.appUUID), let stored = String(data: data, encoding: .utf8), !stored.isEmpty { return stored }
+        } catch {
+            return (try? loadCredentials())?.uuid ?? UUID().uuidString
+        }
+        let created = (try? loadCredentials())?.uuid ?? UUID().uuidString
+        try? store.write(Data(created.utf8), account: Key.appUUID)
+        return created
     }
 
     func saveCredentials(_ credentials: PronoteCredentials) throws {

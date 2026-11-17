@@ -41,6 +41,7 @@ final class NotebookModel {
     @ObservationIgnored private var session: UUID?
     @ObservationIgnored private var scope: Int
     @ObservationIgnored private var reading: Task<Void, Never>?
+    @ObservationIgnored private var downloading: Task<Void, Never>?
 
     init(pronote: PronoteSession) {
         self.pronote = pronote
@@ -61,6 +62,8 @@ final class NotebookModel {
         scope = pronote.notebookScope
         reading?.cancel()
         reading = nil
+        downloading?.cancel()
+        downloading = nil
         loading = false
         snapshot = nil
         session = nil
@@ -98,18 +101,20 @@ final class NotebookModel {
         downloadingId = attachment.id
         let expected = scope
         let destination = NotebookCache.destination(for: attachment.name)
-        Task { [weak self] in
+        downloading = Task { [weak self] in
             guard let self else { return }
             defer { if self.scope == expected { self.downloadingId = nil } }
             do {
                 try await pronote.downloadAttachment(attachment, session: session, to: destination)
-                guard expected == self.scope else {
+                // Résultat arrivé après une déconnexion, un changement d'enfant ou une annulation : rien n'est ouvert.
+                guard !Task.isCancelled, expected == self.scope, expected == pronote.notebookScope else {
                     try? FileManager.default.removeItem(at: destination.deletingLastPathComponent())
                     return
                 }
                 self.preview = destination
             } catch {
-                guard expected == self.scope else { return }
+                try? FileManager.default.removeItem(at: destination.deletingLastPathComponent())
+                guard !Task.isCancelled, expected == self.scope else { return }
                 self.message = Self.text(for: error, fallback: NotebookRules.downloadUnavailable)
             }
         }

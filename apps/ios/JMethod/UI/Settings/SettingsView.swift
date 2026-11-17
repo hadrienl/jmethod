@@ -297,16 +297,21 @@ struct SettingsView: View {
             app.showToast(Backup.errorTitle, Backup.invalidMessage, warning: true)
             return
         }
-        let scoped = url.startAccessingSecurityScopedResource()
-        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-        let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
-        guard size <= 20 * 1024 * 1024, let data = try? Data(contentsOf: url) else {
-            app.showToast(Backup.errorTitle, Backup.invalidMessage, warning: true)
-            return
-        }
-        switch Backup.parse(data) {
-        case .accepted(let accepted): pendingImport = accepted
-        case .rejected(let title, let message): app.showToast(title, message, warning: true)
+        // Lecture et analyse hors du fil principal : un gros fichier ne fige pas l'interface.
+        Task {
+            let result = await Task.detached(priority: .userInitiated) { () -> Backup.ImportResult in
+                let scoped = url.startAccessingSecurityScopedResource()
+                defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+                let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+                guard size <= 20 * 1024 * 1024, let data = try? Data(contentsOf: url) else {
+                    return .rejected(title: Backup.errorTitle, message: Backup.invalidMessage)
+                }
+                return Backup.parse(data)
+            }.value
+            switch result {
+            case .accepted(let accepted): pendingImport = accepted
+            case .rejected(let title, let message): app.showToast(title, message, warning: true)
+            }
         }
     }
 }

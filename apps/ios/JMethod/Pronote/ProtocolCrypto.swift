@@ -68,6 +68,9 @@ enum ProtocolCrypto {
         return Data(output.prefix(length))
     }
 
+    /// Taille maximale d'une réponse décompressée (bombe de décompression).
+    static let maximumInflatedBytes = 16 * 1024 * 1024
+
     static func deflateRaw(_ value: Data) throws -> Data { try zlibTransform(value, compress: true) }
     static func inflateRaw(_ value: Data) throws -> Data { try zlibTransform(value, compress: false) }
 
@@ -94,7 +97,7 @@ enum ProtocolCrypto {
                 }
                 guard status == Z_OK || status == Z_STREAM_END else { throw PronoteFailure.invalid("compression", "Réponse Pronote compressée invalide.") }
                 output.append(contentsOf: chunk.prefix(produced))
-                guard output.count <= 20 * 1024 * 1024 else { throw PronoteFailure.invalid("size", "Réponse Pronote trop volumineuse.") }
+                guard output.count <= maximumInflatedBytes else { throw PronoteFailure.invalid("size", "Réponse Pronote trop volumineuse.") }
                 if produced == 0 && status != Z_STREAM_END { throw PronoteFailure.invalid("compression", "Réponse Pronote tronquée.") }
             } while status != Z_STREAM_END
             return output

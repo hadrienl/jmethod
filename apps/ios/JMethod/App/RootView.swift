@@ -189,7 +189,8 @@ private struct OfflineBanner: View {
             Image(systemName: "wifi.slash").foregroundStyle(Theme.warning).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text("Hors ligne").font(.subheadline.bold())
-                Text(pronote.isWorking ? "Connexion à Pronote…" : "Tes données enregistrées restent disponibles.")
+                Text(pronote.isWorking ? "Connexion à Pronote…"
+                     : pronote.isBlocked ? PronoteThrottle.blockedMessage : "Tes données enregistrées restent disponibles.")
                     .font(.caption).foregroundStyle(Theme.textSecondary)
             }
             .accessibilityElement(children: .combine)

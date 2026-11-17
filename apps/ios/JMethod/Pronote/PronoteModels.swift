@@ -1,19 +1,28 @@
 import Foundation
 
 /// Modèles du contrat partagé (`native/shared/CONTRACT.md`).
-struct PronoteCredentials: Codable, Sendable, Equatable {
+struct PronoteCredentials: Codable, Sendable, Equatable, CustomStringConvertible, CustomDebugStringConvertible, CustomReflectable {
     var url: String
     var username: String
     /// Jeton mobile rotatif, jamais le mot de passe de l'utilisateur.
     var password: String
     var uuid: String
     var clientIdentifier: String?
+
+    // Aucune description (journal, débogueur, `dump`) n'expose le jeton ni l'identifiant.
+    var description: String { "PronoteCredentials(<masqué>)" }
+    var debugDescription: String { description }
+    var customMirror: Mirror { Mirror(self, children: [], displayStyle: .struct) }
 }
 
-struct PronoteQRData: Codable, Sendable, Equatable {
+struct PronoteQRData: Codable, Sendable, Equatable, CustomStringConvertible, CustomDebugStringConvertible, CustomReflectable {
     var url: String
     var login: String
     var jeton: String
+
+    var description: String { "PronoteQRData(<masqué>)" }
+    var debugDescription: String { description }
+    var customMirror: Mirror { Mirror(self, children: [], displayStyle: .struct) }
 }
 
 struct PronoteChild: Identifiable, Sendable, Equatable, Hashable {

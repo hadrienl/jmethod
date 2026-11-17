@@ -9,6 +9,9 @@ protocol LoginPageDriver: AnyObject {
     func start(url: URL, username: String, password: String)
     func close()
     func setPageVisible(_ visible: Bool)
+    /// Vérification exigée après le QR : la page officielle est affichée, une nouvelle tentative (nonce, code) attend
+    /// que l'utilisateur termine, sans identifiants.
+    func revealForVerification(_ message: String)
 }
 
 /// Page officielle Pronote dans un WKWebView conservé (masqué ou visible) et pont `jmethodPronote`.
@@ -87,6 +90,12 @@ final class PronoteWebFlow: NSObject, WKNavigationDelegate, LoginPageDriver {
     }
 
     func setPageVisible(_ visible: Bool) { pageVisible = visible }
+
+    func revealForVerification(_ message: String) {
+        guard trusted(webView.url) else { fail("La connexion n’a pas abouti. Réessaie."); return }
+        isActive = true
+        watchVisiblePage(message)
+    }
 
     /// Arrête le script et invalide la tentative courante ; la page reste chargée.
     func stop() {
@@ -184,7 +193,11 @@ final class PronoteWebFlow: NSObject, WKNavigationDelegate, LoginPageDriver {
             return
         }
         let attempt = nonce
-        webView.evaluateJavaScript("window.__JM_CONFIG = \(json);\n" + script) { [weak self] _, error in
+        // Configuration (identifiants compris) posée seulement sur l'origine attendue et dans le cadre principal,
+        // vérifiés dans la page elle-même en plus des contrôles natifs.
+        let expected = (try? JSONSerialization.data(withJSONObject: origin, options: [.fragmentsAllowed, .withoutEscapingSlashes])).flatMap { String(data: $0, encoding: .utf8) } ?? "\"\""
+        let guarded = "if (location.origin === \(expected) && window.top === window) { window.__JM_CONFIG = \(json); }\n"
+        webView.evaluateJavaScript(guarded + script) { [weak self] _, error in
             guard let self, error != nil, self.nonce == attempt, !self.claimed else { return }
             self.fail("La connexion n’a pas pu démarrer. Réessaie.")
         }
@@ -240,24 +253,39 @@ final class PronoteWebFlow: NSObject, WKNavigationDelegate, LoginPageDriver {
         }
     }
 
-    private func handleError(code: String) {
+    /// Suite donnée à un code d'erreur du script partagé. Seul `LOGIN_REJECTED` (message de refus visible) efface
+    /// le mot de passe enregistré ; une réponse lente (`LOGIN_STALLED`) affiche la page sans rien effacer.
+    enum ErrorOutcome: Equatable {
+        case rejected(String)
+        /// Tentative conservée, page affichée.
+        case reveal(String)
+        /// Page affichée, script relancé sans identifiants.
+        case watch(String)
+        case fail(String)
+    }
+
+    nonisolated static func outcome(forErrorCode code: String) -> ErrorOutcome {
         switch code {
-        case "LOGIN_REJECTED":
+        case "LOGIN_REJECTED": .rejected("Identifiant ou mot de passe incorrect.")
+        // Non terminal : la tentative continue, le script signale lui-même la fin de la vérification.
+        case "MFA_REQUIRED": .reveal("Pronote demande une vérification de sécurité : termine-la ci-dessous.")
+        case "LOGIN_FORM_NOT_FOUND": .watch("Connecte-toi ci-dessous pour terminer.")
+        case "LOGIN_STALLED": .watch("Pronote ne répond pas : vérifie la page ci-dessous.")
+        case "LOGIN_TIMEOUT": .fail("La connexion a pris trop de temps. Réessaie.")
+        // QR_TIMEOUT, QR_TOO_LARGE, AUTOMATION_FAILED et codes inconnus.
+        default: .fail("La connexion n’a pas abouti. Réessaie.")
+        }
+    }
+
+    private func handleError(code: String) {
+        switch Self.outcome(forErrorCode: code) {
+        case .rejected(let message):
             stop()
             pageVisible = false
-            onEvent?(.rejected("Identifiant ou mot de passe incorrect."))
-        case "MFA_REQUIRED":
-            // Non terminal : la tentative continue, le script signale lui-même la fin de la vérification.
-            reveal("Pronote demande une vérification de sécurité : termine-la ci-dessous.")
-        case "LOGIN_FORM_NOT_FOUND":
-            watchVisiblePage("Connecte-toi ci-dessous pour terminer.")
-        case "LOGIN_STALLED":
-            watchVisiblePage("Pronote ne répond pas : vérifie la page ci-dessous.")
-        case "LOGIN_TIMEOUT":
-            fail("La connexion a pris trop de temps. Réessaie.")
-        default:
-            // QR_TIMEOUT, QR_TOO_LARGE, AUTOMATION_FAILED et codes inconnus.
-            fail("La connexion n’a pas abouti. Réessaie.")
+            onEvent?(.rejected(message))
+        case .reveal(let message): reveal(message)
+        case .watch(let message): watchVisiblePage(message)
+        case .fail(let message): fail(message)
         }
     }
 

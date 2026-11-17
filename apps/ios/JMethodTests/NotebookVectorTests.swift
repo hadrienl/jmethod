@@ -260,7 +260,7 @@ final class NotebookVectorTests: XCTestCase {
         let credentials = PronoteCredentials(url: "https://school.index-education.net/pronote/mobile.eleve.html", username: "u", password: "p", uuid: "uuid")
         let client = try PronoteClient(credentials: credentials, transport: FailingTransport())
         do {
-            try await client.download(attachmentId: "pj-file-01", name: "a.pdf", session: UUID(), to: FileManager.default.temporaryDirectory.appendingPathComponent("never"))
+            try await client.download(attachmentId: "pj-file-01", fileName: "a.pdf", session: UUID(), to: FileManager.default.temporaryDirectory.appendingPathComponent("never"))
             XCTFail("téléchargement accepté")
         } catch {
             XCTAssertEqual((error as? PronoteFailure)?.message, NotebookRules.downloadUnavailable)

@@ -31,7 +31,8 @@ final class SameOriginRedirectDelegate: NSObject, URLSessionTaskDelegate, @unche
 
 /// Transport HTTPS direct, session éphémère (cookies en mémoire seulement), taille de réponse bornée.
 actor URLSessionPronoteTransport: PronoteTransport {
-    static let maximumResponseBytes = 20 * 1024 * 1024
+    /// Réponses `appelfonction` et page de connexion : 16 Mo au plus (les pièces jointes ont leur propre limite).
+    static let maximumResponseBytes = 16 * 1024 * 1024
     private let session: URLSession
     private let origin: URL
 

@@ -7,13 +7,13 @@ enum Backup {
     static let errorTitle = "Erreur d’importation"
     static let invalidMessage = "Le fichier fourni est invalide."
 
-    enum ImportResult: Equatable {
+    enum ImportResult: Equatable, Sendable {
         /// Données lues, à appliquer après confirmation.
         case accepted(Accepted)
         case rejected(title: String, message: String)
     }
 
-    struct Accepted: Equatable {
+    struct Accepted: Equatable, Sendable {
         var courses: [Course]
         var revisions: [Revision]
         /// nil : matières conservées (clé absente ou nulle).

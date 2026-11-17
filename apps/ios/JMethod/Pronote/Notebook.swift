@@ -13,9 +13,12 @@ struct NotebookAttachment: Equatable, Hashable, Sendable, Identifiable {
     enum Kind: String, Sendable { case file, link }
     var kind: Kind
     var id: String
+    /// Nom affiché (texte nettoyé, « Document » ou « Lien » par défaut).
     var name: String
     /// Lien seulement.
     var url: String?
+    /// Fichier seulement : `L` brut de Pronote (même vide), seul utilisé pour construire l'URL `FichiersExternes`.
+    var fileName: String = ""
 }
 
 struct NotebookContent: Equatable, Sendable {
@@ -455,7 +458,7 @@ enum NotebookRules {
                 guard let url = validLinkURL(target) else { return nil }
                 return NotebookAttachment(kind: .link, id: id, name: name.isEmpty ? "Lien" : name, url: url)
             case "1":
-                return NotebookAttachment(kind: .file, id: id, name: name.isEmpty ? "Document" : name, url: nil)
+                return NotebookAttachment(kind: .file, id: id, name: name.isEmpty ? "Document" : name, url: nil, fileName: raw["L"] as? String ?? "")
             default:
                 return nil
             }
