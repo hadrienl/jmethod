@@ -7,3 +7,8 @@ dist/
 .env.*
 !.env.example
 .claude/worktrees/
+
+# Private Pronote connection material and local exports
+.pronote-local/
+__pycache__/
+*.pyc
