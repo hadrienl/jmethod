@@ -28,7 +28,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({todayStr,courses,re
   const visible = revisions.filter(r=>(r.scheduledDate<=todayStr && r.status!=='completed') || (r.completedDate===todayStr && r.status==='completed')).filter(r=>courseMap.has(r.courseId));
   const events = pronoteEvents.filter(e=>e.date===todayStr);
   return <div className="space-y-7 animate-fade-in">
-    {due.length === 0 && completed.length > 0 && <div role="status" className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-950"><h2 className="font-extrabold text-xl">🎉 Toutes tes révisions sont terminées !</h2><p className="text-sm mt-2">Bravo pour tes séances d’aujourd’hui. Tu peux profiter de ta journée.</p></div>}
+    {due.length === 0 && completed.length > 0 && <div role="status" className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-950"><h2 className="font-extrabold text-xl">Toutes tes révisions sont terminées !</h2><p className="text-sm mt-2">Bravo pour tes séances d’aujourd’hui. Tu peux profiter de ta journée.</p></div>}
     <header className="flex items-start justify-between gap-4">
       <div><p className="eyebrow">{format(parseISO(todayStr),'EEEE d MMMM',{locale:fr})}</p><h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight mt-2">Un petit pas, <span className="text-violet-700">chaque jour.</span></h1><p className="text-slate-600 mt-3 text-sm sm:text-base">Tes révisions sont prêtes. On y va à ton rythme ?</p></div>
       <span className="hidden sm:flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold"><span className="w-2 h-2 rounded-full bg-emerald-500"/> Mon espace révision</span>
@@ -40,7 +40,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({todayStr,courses,re
           <p className="text-violet-100 mt-3 leading-relaxed text-sm">{nextCourse?<>Commence par <strong className="text-white">{nextSubject?.name ?? 'ton cours'}</strong>.<br/>{nextCourse.title}</>:'Tes révisions sont à jour. Profite de ta journée, tu l’as bien mérité.'}</p>
           {next && <button onClick={()=>onOpenScoreModal(next)} className="mt-6 inline-flex items-center gap-3 rounded-xl bg-lime-200 text-violet-950 px-5 py-3 font-bold text-sm min-h-12 hover:bg-lime-100">Faire le point sur ce cours <ArrowRight size={18}/></button>}
         </div>
-        <div className="hero-art" aria-hidden="true"><div className="orbit orbit-one"/><div className="orbit orbit-two"/><div className="art-book"><BookOpen size={66} strokeWidth={1.5}/></div><span className="art-star">✦</span><span className="art-check"><Check size={24}/></span></div>
+        <div className="hero-art" aria-hidden="true"><div className="orbit orbit-one"/><div className="orbit orbit-two"/><div className="art-book"><BookOpen size={66} strokeWidth={1.5}/></div><span className="art-check"><Check size={24}/></span></div>
       </div>
       <div className="surface p-5 sm:p-6 flex flex-col justify-between"><div className="flex items-center justify-between"><h2 className="font-bold">Tes petits progrès</h2></div>
         <div className="flex items-end gap-2 mt-5"><span className="text-5xl font-extrabold tracking-tight">{completed.length}</span><span className="text-slate-600 pb-1">/ {total} séance{total>1?'s':''} terminée{total>1?'s':''}</span></div>

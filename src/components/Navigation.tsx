@@ -31,7 +31,7 @@ export const Navigation: React.FC<NavigationProps> = ({activeTab, onSelectTab, p
         <Sparkles className="text-violet-700 mb-3" size={24}/><p className="font-bold text-sm">À ton rythme.</p><p className="text-sm text-slate-600 mt-2 leading-relaxed">Les petites séances d’aujourd’hui font les grands progrès de demain.</p>
         <button onClick={()=>onSelectTab('stats')} className="flex items-center gap-2 text-violet-700 text-sm font-bold mt-4">Voir mes progrès <ArrowUpRight size={16}/></button>
       </div>
-      <p className="text-xs text-slate-500 text-center mt-5">Ton cerveau te dira merci ✦</p>
+      <p className="text-xs text-slate-500 text-center mt-5">Ton cerveau te dira merci</p>
     </aside>
     <header className="md:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-slate-200 sticky top-0 z-30">{logo}<button onClick={onOpenAddCourse} className="primary-button !px-3"><Plus size={18}/><span>Cours</span></button></header>
     <nav aria-label="Navigation mobile" className="md:hidden fixed bottom-0 inset-x-0 z-40 flex justify-around bg-white border-t border-slate-200 bottom-nav-safe px-1 pt-2">

@@ -23,7 +23,6 @@
 .study-hero { position:relative; isolation:isolate; overflow:hidden; border-radius:24px; background:#6d28d9; color:white; padding:28px; min-height:290px; }
 .hero-art { position:absolute; right:5%; top:24%; width:150px; height:180px; opacity:.9; z-index:0; }
 .art-book { position:absolute; top:35px; left:25px; width:112px; height:130px; background:#ede9fe; color:#6d28d9; display:flex; align-items:center; justify-content:center; border:5px solid #c4b5fd; border-radius:20px; transform:rotate(-13deg); box-shadow:10px 12px 0 #4c1d95; }
-.art-star { position:absolute; top:-15px; right:-9px; color:#d9f99d; font-size:65px; }
 .art-check { position:absolute; bottom:0; left:0; background:#d9f99d; color:#3b0764; padding:12px; border-radius:16px; transform:rotate(10deg); }
 .orbit { position:absolute; border:1px solid #ffffff25; border-radius:50%; width:260px; height:260px; top:-40px; left:-40px; }
 .orbit-two { width:340px; height:340px; left:-80px; top:-80px; }
