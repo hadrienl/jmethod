@@ -6,6 +6,7 @@ import { PlanningView } from './views/PlanningView';
 import { CoursesView } from './views/CoursesView';
 import { StatsView } from './views/StatsView';
 import { SettingsView } from './views/SettingsView';
+import { CompletionFireworks } from './components/CompletionFireworks';
 import { ScoreModal } from './components/ScoreModal';
 import { AddCourseModal } from './components/AddCourseModal';
 import { CourseDetailModal } from './components/CourseDetailModal';
@@ -26,6 +27,7 @@ import { Course, Revision, Subject, PronoteEvent, AppSettings } from './types';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 
 export const App: React.FC = () => {
+  const [celebration, setCelebration] = useState(0);
   const [activeTab, setActiveTab] = useState<NavTab>('dashboard');
 
   // Core state
@@ -83,7 +85,7 @@ export const App: React.FC = () => {
     if (!settings) return;
 
     const targetRev = revisions.find((r) => r.id === revisionId);
-    if (!targetRev) return;
+    if (!targetRev || targetRev.status === 'completed') return;
 
     const courseRevs = revisions.filter((r) => r.courseId === targetRev.courseId);
     const result = applyAdaptiveReview(courseRevs, revisionId, score, settings, todayStr);
@@ -93,6 +95,10 @@ export const App: React.FC = () => {
     // Collect all updated plus newly inserted (like emergency revisions)
     const newGlobalRevisions = [...otherRevisions, ...result.updatedRevisions];
 
+    const isDue = (r: Revision) => r.scheduledDate <= todayStr && r.status !== 'completed' && courses.some(c => c.id === r.courseId);
+    if (revisions.some(isDue) && !newGlobalRevisions.some(isDue)) {
+      setCelebration(value => value + 1);
+    }
     setRevisions(newGlobalRevisions);
     saveRevisions(newGlobalRevisions);
 
@@ -249,7 +255,7 @@ export const App: React.FC = () => {
       />
 
       {/* Main Content Area */}
-      <main id="main-content" tabIndex={-1} className="flex-1 md:pl-[18rem] min-h-screen p-3 sm:p-5 md:p-8 pb-28 md:pb-8 max-w-7xl mx-auto w-full">
+      <main id="main-content" tabIndex={-1} className={`flex-1 min-w-0 md:pl-[18rem] min-h-screen p-3 sm:p-5 md:p-8 pb-28 md:pb-8 ${activeTab === 'planning' ? 'max-w-none' : 'max-w-7xl mx-auto'} w-full`}>
         {/* Floating Toast Notification */}
         {toast && (
           <div className="fixed top-16 md:top-5 left-3 right-3 md:left-auto md:right-5 z-50 max-w-sm mx-auto p-4 rounded-2xl bg-white border border-slate-300 shadow-2xl flex items-start gap-3 animate-fade-in">
@@ -292,8 +298,7 @@ export const App: React.FC = () => {
             revisions={revisions}
             subjects={subjects}
             pronoteEvents={pronoteEvents}
-            onOpenScoreModal={(rev) => setScoreModalRev(rev)}
-            onOpenCourseDetail={(c) => setDetailCourse(c)}
+            onValidateRevision={handleScoreSubmit}
           />
         )}
 
@@ -334,6 +339,8 @@ export const App: React.FC = () => {
           />
         )}
       </main>
+
+      <CompletionFireworks trigger={celebration}/>
 
       {/* MODALS */}
       {/* 1. Score Modal */}

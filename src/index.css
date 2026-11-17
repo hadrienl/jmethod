@@ -37,3 +37,26 @@
 @media(max-width:1279px) { .hero-art { right:-30px; opacity:.25; } }
 @media(max-width:639px) { .study-hero { padding:24px; } }
 @media(prefers-reduced-motion:reduce) { *, *::before, *::after { animation:none !important; transition:none !important; scroll-behavior:auto !important; } }
+
+/* The planning uses the available screen width; overflow stays inside the agenda. */
+.planning-rows { display:flex; flex-direction:column; gap:14px; }
+.planning-day { border:1px solid #e2e8f0; border-radius:18px; background:#fff; min-width:0; overflow:hidden; }
+.planning-day.is-today { border-color:#a78bfa; }
+.planning-day-heading { padding:18px; border-bottom:1px solid #e2e8f0; background:#f8fafc; }
+.is-today > .planning-day-heading { background:#f5f3ff; }
+.planning-day-content { padding:16px; min-width:0; }
+.planning-sessions { display:flex; gap:12px; overflow-x:auto; padding:2px 2px 12px; scroll-snap-type:x proximity; }
+.planning-tile { flex:0 0 260px; width:260px; max-width:85vw; min-height:150px; border:1px solid #e2e8f0; border-left-width:4px; border-radius:12px; background:white; padding:14px; text-align:left; scroll-snap-align:start; overflow-wrap:anywhere; }
+.planning-tile:hover { background:#f8fafc; border-top-color:#a78bfa; border-bottom-color:#a78bfa; border-right-color:#a78bfa; }
+.planning-tile.is-completed { background:#f8fafc; }
+.planning-scroll { max-width:100%; overflow-x:auto; padding-bottom:12px; }
+.planning-columns, .planning-month { display:grid; grid-template-columns:repeat(7,minmax(230px,1fr)); gap:12px; min-width:1700px; }
+.planning-month { min-width:1500px; grid-template-columns:repeat(7,minmax(200px,1fr)); }
+.planning-columns .planning-sessions, .planning-month .planning-sessions { flex-direction:column; overflow:visible; }
+.planning-columns .planning-tile, .planning-month .planning-tile { flex-basis:auto; width:100%; max-width:none; }
+.planning-month .planning-tile { min-height:0; }
+.planning-month .outside-month { background:#f8fafc; }
+@media(min-width:768px) {
+  .planning-rows .planning-day { display:grid; grid-template-columns:155px minmax(0,1fr); }
+  .planning-rows .planning-day-heading { border-bottom:0; border-right:1px solid #e2e8f0; }
+}

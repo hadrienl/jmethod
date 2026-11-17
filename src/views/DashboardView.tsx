@@ -28,6 +28,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({todayStr,courses,re
   const visible = revisions.filter(r=>(r.scheduledDate<=todayStr && r.status!=='completed') || (r.completedDate===todayStr && r.status==='completed')).filter(r=>courseMap.has(r.courseId));
   const events = pronoteEvents.filter(e=>e.date===todayStr);
   return <div className="space-y-7 animate-fade-in">
+    {due.length === 0 && completed.length > 0 && <div role="status" className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-950"><h2 className="font-extrabold text-xl">🎉 Toutes tes révisions sont terminées !</h2><p className="text-sm mt-2">Bravo pour tes séances d’aujourd’hui. Tu peux profiter de ta journée.</p></div>}
     <header className="flex items-start justify-between gap-4">
       <div><p className="eyebrow">{format(parseISO(todayStr),'EEEE d MMMM',{locale:fr})}</p><h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight mt-2">Un petit pas, <span className="text-violet-700">chaque jour.</span></h1><p className="text-slate-600 mt-3 text-sm sm:text-base">Tes révisions sont prêtes. On y va à ton rythme ?</p></div>
       <span className="hidden sm:flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold"><span className="w-2 h-2 rounded-full bg-emerald-500"/> Mon espace révision</span>
