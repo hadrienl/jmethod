@@ -5,11 +5,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.webkit.WebViewFeature
 import fr.jmethod.app.AppContainer
-import fr.jmethod.app.data.AppDocumentCodec
-import fr.jmethod.app.pronote.AccessPhase
 import fr.jmethod.app.pronote.NativeTransport
 import fr.jmethod.app.pronote.PronoteConnectionController
-import fr.jmethod.app.pronote.PronoteEventMapper
 import fr.jmethod.app.pronote.QrImageDecoder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
@@ -17,6 +14,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import java.time.Instant
 
 data class PronoteSyncInfo(val lastSync: String?, val eventCount: Int)
 
@@ -40,21 +38,19 @@ class PronoteViewModel(application: Application, private val container: AppConta
         decodeQr = QrImageDecoder::decode,
         automationScript = { script },
         today = { container.clock.today() },
-        storeLessons = { lessons ->
-            val syncedAt = AppDocumentCodec.isoMillis(container.clock.now())
-            container.repository.update { document ->
-                document.copy(
-                    pronoteEvents = PronoteEventMapper.toEvents(lessons, document.subjects),
-                    settings = document.settings.copy(lastPronoteSync = syncedAt),
-                )
-            }
-        },
+        storeLessons = container::storeLessons,
         clearLessons = {
             container.repository.update { document ->
                 document.copy(pronoteEvents = emptyList(), settings = document.settings.copy(lastPronoteSync = null))
             }
         },
-        loginPreferences = container.loginPreferences,
+        loginStore = container.loginStore,
+        guard = container.sessionGuard,
+        scheduler = container.scheduler,
+        now = { container.clock.now() },
+        lastSync = {
+            container.repository.document.value?.settings?.lastPronoteSync?.let { runCatching { Instant.parse(it) }.getOrNull() }
+        },
         webMessagesSupported = WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER),
     )
 
@@ -70,8 +66,9 @@ class PronoteViewModel(application: Application, private val container: AppConta
                 controller.onBridgeMessage(raw, sourceOrigin, isMainFrame)
             override fun onRendererGone() = controller.cancel()
         }
-        // Reprise automatique de la session enregistrée au lancement (écran de chargement en attendant).
-        if (controller.uiState.value.access == AccessPhase.CHECKING) controller.restoreSaved()
+        // Reprise automatique au lancement (écran de chargement en attendant) : par jeton, ou
+        // reconnexion silencieuse si seuls les identifiants sont enregistrés.
+        controller.start()
     }
 
     override fun onCleared() {

@@ -33,6 +33,7 @@ final class AppModel {
     @ObservationIgnored private let now: () -> Date
     @ObservationIgnored private let preferences: UserDefaults
     @ObservationIgnored private var version = 0
+    @ObservationIgnored private var loading: Task<Void, Never>?
 
     /// Indicateur (non sensible) de la migration qui retire le jeu de démonstration du jalon 1.
     static let demoMigrationKey = "fr.jmethod.migration.demoDataRemoved"
@@ -63,7 +64,21 @@ final class AppModel {
 
     // MARK: Chargement
 
+    /// Charge le document une seule fois, même si le premier plan et une actualisation en arrière-plan le demandent ensemble.
     func load() async {
+        if let loading { return await loading.value }
+        let work = Task { await performLoad() }
+        loading = work
+        await work.value
+        loading = nil
+    }
+
+    /// Utilisé par l'actualisation en arrière-plan, qui peut démarrer avant l'interface.
+    func ensureLoaded() async {
+        if loadState != .ready { await load() }
+    }
+
+    private func performLoad() async {
         refreshDay()
         guard let store else {
             loadState = .failed("Le dossier de l’app est inaccessible.")
@@ -152,11 +167,12 @@ final class AppModel {
 
     // MARK: Pronote
 
-    func applyPronote(lessons: [PronoteLesson], syncedAt: Date) {
+    func applyPronote(lessons: [PronoteLesson], syncedAt: Date, announce: Bool = true) {
         let events = LessonConverter.events(from: lessons, subjects: document.subjects)
         document.pronoteEvents = events
         document.settings.lastPronoteSync = Self.isoString(syncedAt)
         persist()
+        guard announce else { return }
         toast = .init(title: "Pronote synchronisé", message: "\(events.count) créneau\(events.count > 1 ? "x" : "") importé\(events.count > 1 ? "s" : "") dans ton planning.", kind: .success)
     }
 

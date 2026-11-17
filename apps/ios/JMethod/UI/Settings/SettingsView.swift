@@ -56,10 +56,11 @@ struct SettingsView: View {
             .navigationTitle("Réglages")
         }
         .confirmationDialog("Se déconnecter de Pronote ?", isPresented: $confirmingDisconnect, titleVisibility: .visible) {
-            Button("Se déconnecter", role: .destructive) { Task { await pronote.disconnect() } }
+            Button("Se déconnecter", role: .destructive) { Task { await pronote.disconnect(forgetLogin: false) } }
+            Button("Se déconnecter et oublier mes identifiants", role: .destructive) { Task { await pronote.disconnect(forgetLogin: true) } }
             Button("Annuler", role: .cancel) {}
         } message: {
-            Text("Ta connexion Pronote et ton emploi du temps importé sont effacés de cet iPhone. Tes cours et tes révisions restent enregistrés.")
+            Text("« Se déconnecter » garde ton établissement, ton identifiant et ton mot de passe enregistrés sur cet iPhone pour te reconnecter plus vite. L’autre choix efface aussi ton identifiant et ton mot de passe. Dans les deux cas, ton emploi du temps importé est effacé et tes cours et tes révisions restent enregistrés.")
         }
     }
 

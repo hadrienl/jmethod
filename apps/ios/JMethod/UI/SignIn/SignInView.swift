@@ -7,6 +7,8 @@ struct SignInView: View {
     @State private var accountType: PronoteAccountType = .student
     @State private var username = ""
     @State private var password = ""
+    @State private var remember = true
+    @State private var showPassword = false
     @FocusState private var focus: Field?
 
     private enum Field { case school, username, password }
@@ -28,6 +30,7 @@ struct SignInView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     LabeledField(title: "Code ou adresse de l’établissement") {
                         TextField("Exemple : abcd1234", text: $schoolInput)
+                            .accessibilityLabel("Code ou adresse de l’établissement")
                             .keyboardType(.URL)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
@@ -44,6 +47,7 @@ struct SignInView: View {
 
                     LabeledField(title: "Identifiant") {
                         TextField("Identifiant", text: $username)
+                            .accessibilityLabel("Identifiant")
                             .textContentType(.username)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
@@ -53,11 +57,42 @@ struct SignInView: View {
                     }
 
                     LabeledField(title: "Mot de passe") {
-                        SecureField("Mot de passe", text: $password)
+                        HStack(spacing: 8) {
+                            Group {
+                                if showPassword {
+                                    TextField("Mot de passe", text: $password)
+                                        .textInputAutocapitalization(.never)
+                                        .autocorrectionDisabled()
+                                } else {
+                                    SecureField("Mot de passe", text: $password)
+                                }
+                            }
                             .textContentType(.password)
                             .focused($focus, equals: .password)
                             .submitLabel(.go)
                             .onSubmit(submit)
+                            .accessibilityLabel("Mot de passe")
+                            Button { showPassword.toggle() } label: {
+                                Image(systemName: showPassword ? "eye.slash" : "eye")
+                                    .foregroundStyle(Theme.textSecondary)
+                                    .frame(width: 44, height: 44)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe")
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Toggle("Rester connecté", isOn: $remember)
+                            .font(.body.weight(.semibold))
+                            .tint(Theme.violet)
+                            .frame(minHeight: 44)
+                        Text(remember
+                             ? "Ton identifiant et ton mot de passe sont enregistrés de façon chiffrée, uniquement sur cet iPhone, pour te reconnecter automatiquement."
+                             : "Ton mot de passe ne sera pas enregistré, et celui déjà enregistré sera effacé : il faudra le saisir de nouveau si Pronote te déconnecte.")
+                            .font(.footnote)
+                            .foregroundStyle(Theme.textSecondary)
                     }
 
                     Button(action: submit) {
@@ -85,15 +120,21 @@ struct SignInView: View {
         .scrollDismissesKeyboard(.interactively)
         .background(Theme.background)
         .onAppear(perform: prefill)
+        .onChange(of: pronote.savedLogin) { _, _ in prefill() }
         .onChange(of: pronote.errorMessage) { _, message in
             if let message { AccessibilityNotification.Announcement(message).post() }
         }
     }
 
     private func prefill() {
-        guard schoolInput.isEmpty, let school = pronote.school else { return }
-        schoolInput = school.input
-        accountType = school.account
+        if schoolInput.isEmpty, let school = pronote.school {
+            schoolInput = school.input
+            accountType = school.account
+        }
+        if username.isEmpty, let login = pronote.savedLogin {
+            username = login.username
+            if password.isEmpty, let saved = login.password { password = saved }
+        }
     }
 
     private func submit() {
@@ -101,7 +142,7 @@ struct SignInView: View {
         focus = nil
         // Une adresse complète impose son espace : le choix Élève/Parent est mis à jour.
         accountType = PronoteURL.resolve(schoolInput, account: accountType).account
-        pronote.signIn(school: schoolInput, account: accountType, username: username, password: password)
+        pronote.signIn(school: schoolInput, account: accountType, username: username, password: password, remember: remember)
         password = ""
     }
 }
@@ -134,7 +175,6 @@ struct LabeledField<Content: View>: View {
                 .frame(minHeight: 48)
                 .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12))
                 .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.border))
-                .accessibilityLabel(title)
         }
     }
 }

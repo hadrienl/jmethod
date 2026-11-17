@@ -1,8 +1,15 @@
 import Foundation
 
+/// Ce que la session attend d'un client Pronote (remplaçable dans les tests).
+protocol PronoteSessionClient: Actor {
+    func login(mode: PronoteClient.LoginMode, persist: (@Sendable (PronoteCredentials) async throws -> Void)?) async throws -> PronoteAccount
+    func timetable(days: Int, childId: String?, now: Date) async throws -> [PronoteLesson]
+    func credentialSnapshot() -> PronoteCredentials
+}
+
 /// Client du protocole mobile Pronote, strictement en lecture seule.
 /// Clé, IV, numéro d'ordre et ressources appartiennent à une session : ils sont réinitialisés à chaque authentification.
-actor PronoteClient {
+actor PronoteClient: PronoteSessionClient {
     enum LoginMode: Sendable { case qr, token }
 
     /// Liste blanche explicite des fonctions réseau. Ne pas l'étendre pour contourner une erreur.

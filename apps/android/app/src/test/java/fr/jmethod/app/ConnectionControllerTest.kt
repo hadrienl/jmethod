@@ -4,7 +4,9 @@ import fr.jmethod.app.pronote.AccessPhase
 import fr.jmethod.app.pronote.AccountType
 import fr.jmethod.app.pronote.Credentials
 import fr.jmethod.app.pronote.Lesson
-import fr.jmethod.app.pronote.LoginPreferences
+import fr.jmethod.app.pronote.BackgroundScheduler
+import fr.jmethod.app.pronote.LoginStore
+import fr.jmethod.app.pronote.SavedLogin
 import fr.jmethod.app.pronote.OfficialPage
 import fr.jmethod.app.pronote.PronoteConnectionController
 import fr.jmethod.app.pronote.SessionVault
@@ -22,6 +24,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.security.SecureRandom
+import java.time.Instant
 import java.time.LocalDate
 
 /** Flux de connexion sans WebView : routage d’accès, bridge, réclamation du QR, MFA, annulation et déconnexion. */
@@ -41,20 +44,32 @@ class ConnectionControllerTest {
         fun config(): JSONObject = configs().last()
     }
 
-    private class FakeVault : SessionVault {
+    class FakeVault : SessionVault {
         var credentials: Credentials? = null
         var child: String? = null
+        var relogin = false
         val saves = mutableListOf<String>()
         override fun load() = credentials
-        override fun save(credentials: Credentials) { saves += credentials.password; this.credentials = credentials }
+        override fun save(credentials: Credentials) { saves += credentials.password; this.credentials = credentials; relogin = false }
         override fun selectedChildId() = child
         override fun saveSelectedChildId(childId: String?) { child = childId }
-        override fun clear() { credentials = null; child = null }
+        override fun needsRelogin() = relogin
+        override fun markNeedsRelogin() { relogin = true }
+        override fun clear() { credentials = null; child = null; relogin = false }
     }
 
-    private class FakePreferences(var value: Pair<String, AccountType>? = null) : LoginPreferences {
+    class FakeLoginStore(var value: SavedLogin? = null) : LoginStore {
         override fun load() = value
-        override fun save(school: String, accountType: AccountType) { value = school to accountType }
+        override fun save(login: SavedLogin) { value = login }
+        override fun forgetPassword() { value = value?.copy(password = null) }
+        override fun forgetCredentials() { value = value?.copy(username = null, password = null) }
+    }
+
+    private class FakeScheduler : BackgroundScheduler {
+        var scheduled = 0
+        var cancelled = 0
+        override fun schedule() { scheduled++ }
+        override fun cancel() { cancelled++ }
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
@@ -63,6 +78,7 @@ class ConnectionControllerTest {
     }
     private val origin = "https://abcd1234.index-education.net"
     private val pageUrl = "$origin/pronote/eleve.html"
+    private val now: Instant = Instant.parse("2026-11-17T19:00:00Z")
     private var cleared = 0
 
     @After
@@ -73,7 +89,9 @@ class ConnectionControllerTest {
         page: FakePage,
         vault: FakeVault,
         stored: MutableList<List<Lesson>>,
-        preferences: FakePreferences = FakePreferences(),
+        store: FakeLoginStore = FakeLoginStore(),
+        scheduler: FakeScheduler = FakeScheduler(),
+        lastSync: Instant? = null,
     ) = PronoteConnectionController(
         scope = scope,
         io = Dispatchers.Unconfined,
@@ -85,7 +103,10 @@ class ConnectionControllerTest {
         today = { LocalDate.of(2026, 11, 17) },
         storeLessons = { stored += it },
         clearLessons = { cleared++ },
-        loginPreferences = preferences,
+        loginStore = store,
+        scheduler = scheduler,
+        now = { now },
+        lastSync = { lastSync },
         random = fixedPin,
     )
 
@@ -124,8 +145,9 @@ class ConnectionControllerTest {
         val page = FakePage()
         val vault = FakeVault()
         val stored = mutableListOf<List<Lesson>>()
-        val preferences = FakePreferences()
-        val controller = controller(server, page, vault, stored, preferences)
+        val store = FakeLoginStore()
+        val scheduler = FakeScheduler()
+        val controller = controller(server, page, vault, stored, store, scheduler)
         assertEquals(AccessPhase.SIGNED_OUT, controller.uiState.value.access)
         val nonce = submit(controller, page)
         send(controller, message("authenticated", nonce))
@@ -146,13 +168,15 @@ class ConnectionControllerTest {
         assertEquals("Élève Test", state.account?.name)
         assertFalse(state.browserStarted)
         assertTrue(page.scripts.contains("window.__JM_PRONOTE_POC?.stop()"))
-        // Établissement et type mémorisés, jamais le mot de passe.
-        assertEquals("ABCD1234" to AccountType.STUDENT, preferences.value)
+        // « Rester connecté » (par défaut) : établissement, type, identifiant et mot de passe enregistrés.
+        assertEquals(SavedLogin("ABCD1234", AccountType.STUDENT, "eleve.test", "mot-de-passe"), store.value)
+        assertTrue(state.hasStoredPassword)
+        assertEquals(1, scheduler.scheduled)
     }
 
     @Test
     fun savedSchoolPrefillsTheForm() {
-        val controller = controller(FakePronoteServer(token = "t"), FakePage(), FakeVault(), mutableListOf(), FakePreferences("abcd1234" to AccountType.PARENT))
+        val controller = controller(FakePronoteServer(token = "t"), FakePage(), FakeVault(), mutableListOf(), FakeLoginStore(SavedLogin("abcd1234", AccountType.PARENT)))
         assertEquals("abcd1234", controller.uiState.value.form.school)
         assertEquals(AccountType.PARENT, controller.uiState.value.form.accountType)
         assertEquals("", controller.uiState.value.form.password)
@@ -377,5 +401,231 @@ class ConnectionControllerTest {
         assertFalse(page.config().has("credentials"))
         send(controller, message("authenticated", page.config().getString("nonce")))
         assertFalse(controller.uiState.value.showBrowser)
+    }
+
+    private fun storedLogin() = FakeLoginStore(SavedLogin("abcd1234", AccountType.STUDENT, "eleve.test", "mot-de-passe-enregistre"))
+
+    @Test
+    fun stayConnectedOffKeepsOnlyTheToken() {
+        val server = FakePronoteServer(token = "jeton-qr")
+        val page = FakePage()
+        val vault = FakeVault()
+        val store = FakeLoginStore()
+        val controller = controller(server, page, vault, mutableListOf(), store)
+        controller.onStayConnectedChange(false)
+        val nonce = submit(controller, page)
+        send(controller, message("authenticated", nonce))
+        send(controller, qr(nonce))
+        assertEquals(AccessPhase.CONNECTED, controller.uiState.value.access)
+        assertEquals(SavedLogin("ABCD1234", AccountType.STUDENT), store.value)
+        assertFalse(controller.uiState.value.hasStoredPassword)
+        assertNotNull(vault.credentials)
+    }
+
+    @Test
+    fun failedSignInStoresNothing() {
+        val page = FakePage()
+        val store = FakeLoginStore()
+        val controller = controller(FakePronoteServer(token = "t"), page, FakeVault(), mutableListOf(), store)
+        val nonce = submit(controller, page, password = "faux")
+        send(controller, message("error", nonce) { put("code", "LOGIN_REJECTED") })
+        assertNull(store.value)
+    }
+
+    @Test
+    fun refusedTokenTriggersOneSilentReconnection() {
+        val server = FakePronoteServer(token = "jeton-valide")
+        val page = FakePage()
+        val vault = savedVault(server, token = "jeton-perime")
+        val store = storedLogin()
+        val controller = controller(server, page, vault, mutableListOf(), store)
+        assertEquals(AccessPhase.CHECKING, controller.uiState.value.access)
+        controller.start()
+        // Jeton refusé : parcours masqué avec les identifiants enregistrés, sans écran de connexion.
+        assertNull(vault.credentials)
+        assertEquals(pageUrl, page.loaded.single())
+        val state = controller.uiState.value
+        assertEquals(AccessPhase.CHECKING, state.access)
+        assertTrue(state.reconnecting)
+        assertFalse(state.showBrowser)
+        controller.onPageFinished(pageUrl)
+        assertEquals("mot-de-passe-enregistre", page.config().getJSONObject("credentials").getString("password"))
+        // Échec du parcours : bandeau hors ligne, pas de nouvelle tentative automatique.
+        send(controller, message("error", page.config().getString("nonce")) { put("code", "QR_TIMEOUT") })
+        assertEquals(AccessPhase.OFFLINE, controller.uiState.value.access)
+        assertFalse(controller.uiState.value.reconnecting)
+        controller.onForeground()
+        assertEquals(1, page.loaded.size)
+        // Réessayer est une action de l’utilisateur : nouvelle tentative autorisée.
+        controller.retry()
+        assertEquals(2, page.loaded.size)
+    }
+
+    @Test
+    fun silentReconnectionSucceedsAndOpensApp() {
+        val server = FakePronoteServer(token = "jeton-qr")
+        val page = FakePage()
+        val vault = FakeVault()
+        val stored = mutableListOf<List<Lesson>>()
+        val controller = controller(server, page, vault, stored, storedLogin())
+        assertEquals(AccessPhase.CHECKING, controller.uiState.value.access)
+        controller.start()
+        controller.onPageFinished(pageUrl)
+        val nonce = page.config().getString("nonce")
+        send(controller, message("authenticated", nonce))
+        send(controller, qr(nonce))
+        assertEquals(AccessPhase.CONNECTED, controller.uiState.value.access)
+        assertFalse(controller.uiState.value.reconnecting)
+        assertEquals("jeton-rotation-1", vault.credentials?.password)
+        assertEquals(1, stored.size)
+    }
+
+    @Test
+    fun silentLoginRejectedForgetsOnlyThePassword() {
+        val page = FakePage()
+        val store = storedLogin()
+        val controller = controller(FakePronoteServer(token = "t"), page, FakeVault(), mutableListOf(), store)
+        controller.start()
+        controller.onPageFinished(pageUrl)
+        send(controller, message("error", page.config().getString("nonce")) { put("code", "LOGIN_REJECTED") })
+        assertEquals(SavedLogin("abcd1234", AccountType.STUDENT, "eleve.test", null), store.value)
+        val state = controller.uiState.value
+        assertEquals(AccessPhase.SIGNED_OUT, state.access)
+        assertFalse(state.hasStoredPassword)
+        assertEquals("eleve.test", state.form.username)
+        assertTrue(state.formError!!.contains("mot de passe"))
+    }
+
+    @Test
+    fun silentMfaRevealsThePage() {
+        val page = FakePage()
+        val controller = controller(FakePronoteServer(token = "t"), page, FakeVault(), mutableListOf(), storedLogin())
+        controller.start()
+        controller.onPageFinished(pageUrl)
+        send(controller, message("error", page.config().getString("nonce")) { put("code", "MFA_REQUIRED") })
+        assertTrue(controller.uiState.value.showBrowser)
+        assertEquals(AccessPhase.CHECKING, controller.uiState.value.access)
+    }
+
+    @Test
+    fun disconnectKeepsCredentialsForPrefillWithoutAutoReconnect() {
+        val server = FakePronoteServer(token = "jeton-enregistre")
+        val vault = savedVault(server).apply { child = "enfant-a" }
+        val store = storedLogin()
+        val scheduler = FakeScheduler()
+        val controller = controller(server, FakePage(), vault, mutableListOf(), store, scheduler)
+        controller.restoreSaved()
+        assertEquals(1, scheduler.scheduled)
+        controller.disconnect()
+        assertNull(vault.credentials)
+        assertNull(vault.child)
+        assertEquals(1, cleared)
+        assertTrue(scheduler.cancelled >= 1)
+        assertEquals(SavedLogin("abcd1234", AccountType.STUDENT, "eleve.test", "mot-de-passe-enregistre", autoReconnect = false), store.value)
+        val form = controller.uiState.value.form
+        assertEquals("eleve.test", form.username)
+        assertEquals("mot-de-passe-enregistre", form.password)
+        // Lancement suivant : écran de connexion prérempli, aucune reconnexion silencieuse.
+        val page = FakePage()
+        val next = controller(server, page, FakeVault(), mutableListOf(), store)
+        assertEquals(AccessPhase.SIGNED_OUT, next.uiState.value.access)
+        assertEquals("mot-de-passe-enregistre", next.uiState.value.form.password)
+        next.start()
+        assertTrue(page.loaded.isEmpty())
+        // Une connexion réussie réactive la reconnexion silencieuse.
+        val nonce = submit(next, page, password = "mot-de-passe-enregistre")
+        send(next, message("authenticated", nonce))
+        send(next, qr(nonce))
+        assertTrue(store.value!!.autoReconnect)
+    }
+
+    @Test
+    fun disconnectAndForgetCredentials() {
+        val server = FakePronoteServer(token = "jeton-enregistre")
+        val vault = savedVault(server)
+        val store = storedLogin()
+        val controller = controller(server, FakePage(), vault, mutableListOf(), store)
+        controller.restoreSaved()
+        controller.disconnect(forgetCredentials = true)
+        assertEquals(SavedLogin("abcd1234", AccountType.STUDENT), store.value)
+        assertNull(vault.credentials)
+        assertFalse(controller.uiState.value.hasStoredPassword)
+        assertEquals("", controller.uiState.value.form.username)
+        assertEquals("", controller.uiState.value.form.password)
+    }
+
+    @Test
+    fun storedPasswordIsPrefilled() {
+        val controller = controller(FakePronoteServer(token = "t"), FakePage(), FakeVault(), mutableListOf(), storedLogin())
+        val form = controller.uiState.value.form
+        assertEquals("abcd1234", form.school)
+        assertEquals("eleve.test", form.username)
+        assertEquals("mot-de-passe-enregistre", form.password)
+    }
+
+    @Test
+    fun rejectedTypedPasswordAlsoErasesStoredPassword() {
+        val page = FakePage()
+        val store = storedLogin().apply { value = value!!.copy(autoReconnect = false) }
+        val controller = controller(FakePronoteServer(token = "t"), page, FakeVault(), mutableListOf(), store)
+        val nonce = submit(controller, page, password = "nouveau")
+        send(controller, message("error", nonce) { put("code", "LOGIN_REJECTED") })
+        assertNull(store.value!!.password)
+        assertEquals("", controller.uiState.value.form.password)
+    }
+
+    @Test
+    fun foregroundSyncsOnlyAfterSixHours() {
+        val server = FakePronoteServer(token = "jeton-enregistre")
+        val recent = controller(server, FakePage(), savedVault(server), mutableListOf(), lastSync = now.minusSeconds(3_600))
+        recent.restoreSaved()
+        val reads = server.calls.count { it == "PageEmploiDuTemps" }
+        recent.onForeground()
+        assertEquals(reads, server.calls.count { it == "PageEmploiDuTemps" })
+
+        val server2 = FakePronoteServer(token = "jeton-enregistre")
+        val stored = mutableListOf<List<Lesson>>()
+        val stale = controller(server2, FakePage(), savedVault(server2), stored, lastSync = now.minusSeconds(7 * 3_600))
+        stale.restoreSaved()
+        stale.onForeground()
+        assertEquals(2, stored.size)
+    }
+
+    @Test
+    fun foregroundAfterBackgroundRefusalReconnectsSilently() {
+        val server = FakePronoteServer(token = "jeton-enregistre")
+        val page = FakePage()
+        val vault = savedVault(server)
+        val controller = controller(server, page, vault, mutableListOf(), storedLogin(), lastSync = now)
+        controller.restoreSaved()
+        assertEquals(AccessPhase.CONNECTED, controller.uiState.value.access)
+        // Le worker a trouvé le jeton refusé pendant que l’app était en arrière-plan.
+        vault.markNeedsRelogin()
+        controller.onForeground()
+        assertNull(vault.credentials)
+        assertEquals(pageUrl, page.loaded.single())
+        assertTrue(controller.uiState.value.reconnecting)
+        assertEquals(AccessPhase.CONNECTED, controller.uiState.value.access)
+    }
+
+    @Test
+    fun skippingSilentReconnectionOpensOfflineAndAllowsRetry() {
+        val page = FakePage()
+        val controller = controller(FakePronoteServer(token = "t"), page, FakeVault(), mutableListOf(), storedLogin())
+        controller.start()
+        controller.skipResume()
+        assertEquals(AccessPhase.OFFLINE, controller.uiState.value.access)
+        assertFalse(controller.uiState.value.browserStarted)
+        controller.retry()
+        assertEquals(2, page.loaded.size)
+    }
+
+    @Test
+    fun backgroundRefusalWithoutCredentialsShowsSignInAtLaunch() {
+        val server = FakePronoteServer(token = "jeton-enregistre")
+        val vault = savedVault(server).apply { markNeedsRelogin() }
+        val controller = controller(server, FakePage(), vault, mutableListOf())
+        assertEquals(AccessPhase.SIGNED_OUT, controller.uiState.value.access)
+        assertNull(vault.credentials)
     }
 }

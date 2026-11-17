@@ -32,7 +32,17 @@ struct RootView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in app.refreshDay() }
-        .onChange(of: scenePhase) { _, phase in if phase == .active { app.refreshDay() } }
+        .onChange(of: scenePhase) { _, phase in
+            switch phase {
+            case .active:
+                app.refreshDay()
+                pronote.foregroundActivated()
+            case .background:
+                if pronote.hasSavedConnection { BackgroundRefresh.schedule() }
+            default:
+                break
+            }
+        }
         .onChange(of: pronote.access) { old, new in
             // Après une connexion réussie, l'app s'ouvre sur Aujourd'hui.
             if new == .connected && old != .connected { tab = .today }
@@ -62,7 +72,11 @@ struct RootView: View {
                     .tag(Tab.settings)
             }
             .safeAreaInset(edge: .top, spacing: 0) {
-                if offline { OfflineBanner(pronote: pronote) }
+                if pronote.silentRelogin {
+                    ReconnectingBanner()
+                } else if offline {
+                    OfflineBanner(pronote: pronote)
+                }
             }
         }
     }
@@ -90,6 +104,22 @@ private struct ResumingView: View {
             try? await Task.sleep(for: .seconds(10))
             allowSkip = true
         }
+    }
+}
+
+/// Reconnexion silencieuse avec les identifiants enregistrés : bandeau discret, sans écran de connexion.
+private struct ReconnectingBanner: View {
+    var body: some View {
+        HStack(spacing: 12) {
+            ProgressView()
+            Text("Reconnexion à Pronote…").font(.subheadline)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(Theme.violetSoft)
+        .overlay(alignment: .bottom) { Divider() }
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -175,7 +205,7 @@ private struct OfficialPageLayer: View {
                 .padding(.vertical, 12)
                 .background(Theme.surface)
                 Divider()
-                OfficialWebView(webView: pronote.web.webView)
+                if let web = pronote.web { OfficialWebView(webView: web.webView) }
             }
             .background(Theme.surface)
             .clipShape(UnevenRoundedRectangle(topLeadingRadius: 20, topTrailingRadius: 20, style: .continuous))

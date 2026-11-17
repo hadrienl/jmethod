@@ -15,6 +15,7 @@
 		1B84CC84BF97369231A406C0 /* RevisionDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 104D3BEF38E501955A30294D /* RevisionDetailSheet.swift */; };
 		1B977EBD762537371C87BDF4 /* Constants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53EB5FC314AA93DDB932AA6D /* Constants.swift */; };
 		220C8ACAC05135A766252B95 /* ScoreRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71289FBB54C4AD49A71BA3E6 /* ScoreRules.swift */; };
+		2462B07548E2F9BAEE08F423 /* BackgroundRefresh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B84F447E07C04009DF5F674 /* BackgroundRefresh.swift */; };
 		2CF01F86072B20D2A9A04711 /* PronoteModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78EBC83BE70284E7E207455F /* PronoteModels.swift */; };
 		2DA33C90CD50329EF64899AE /* DomainVectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9B8DBA03C580EE00D627346 /* DomainVectorTests.swift */; };
 		2DE1DE7BAA674E1EEA1A3290 /* TodayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4ED7B4DEEEF9E67797B91AA /* TodayView.swift */; };
@@ -45,6 +46,7 @@
 		CFA0BA3E35B079A47084CAF2 /* JMethodApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A6AF609D98F6A22422818DD /* JMethodApp.swift */; };
 		DED133BEB77A1121A8AC2330 /* DemoMigration.swift in Sources */ = {isa = PBXBuildFile; fileRef = B590DA545D52797C5DB5F8EA /* DemoMigration.swift */; };
 		E2012BA049A2ED0DB0780249 /* SubjectMatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4272D901F7FE229470402FF0 /* SubjectMatcher.swift */; };
+		F32A9C3626CA76DAB5E8CC3B /* SessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE6A6A2D229FE8539E3E168A /* SessionTests.swift */; };
 		F519DB02124D32285255E326 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = D311AA7F6E6072898C8768E8 /* Models.swift */; };
 		F8725271A6E91CE859F34A79 /* PronoteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3A2B461DB3494BB11F44C33 /* PronoteTests.swift */; };
 		FC553BFB52C23D75AFB4299E /* constants.json in Resources */ = {isa = PBXBuildFile; fileRef = 98E8EBF17BC45D1C1106FCE6 /* constants.json */; };
@@ -84,6 +86,7 @@
 		71289FBB54C4AD49A71BA3E6 /* ScoreRules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoreRules.swift; sourceTree = "<group>"; };
 		78EBC83BE70284E7E207455F /* PronoteModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PronoteModels.swift; sourceTree = "<group>"; };
 		7B63C4C3EF21BC929D17E0A9 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		7B84F447E07C04009DF5F674 /* BackgroundRefresh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundRefresh.swift; sourceTree = "<group>"; };
 		818FE6CC2F3BBFCBF9E7BD35 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		85979BCF46927D316BA47D60 /* ProtocolVectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolVectorTests.swift; sourceTree = "<group>"; };
 		8CB62F2E78918A317FEADCD3 /* SchoolDay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchoolDay.swift; sourceTree = "<group>"; };
@@ -107,6 +110,7 @@
 		E4ED7B4DEEEF9E67797B91AA /* TodayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayView.swift; sourceTree = "<group>"; };
 		E6AB624882908E192C946B80 /* JMethodTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = JMethodTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F8E34816E73E4409329A6BFA /* ProtocolJSON.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolJSON.swift; sourceTree = "<group>"; };
+		FE6A6A2D229FE8539E3E168A /* SessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -187,6 +191,7 @@
 				A9B8DBA03C580EE00D627346 /* DomainVectorTests.swift */,
 				E3A2B461DB3494BB11F44C33 /* PronoteTests.swift */,
 				85979BCF46927D316BA47D60 /* ProtocolVectorTests.swift */,
+				FE6A6A2D229FE8539E3E168A /* SessionTests.swift */,
 				65969278A632416230C24C94 /* StorageAndModelTests.swift */,
 				48F7B9D29C682E24738D82A3 /* TestSupport.swift */,
 			);
@@ -295,6 +300,7 @@
 			children = (
 				7B63C4C3EF21BC929D17E0A9 /* AppModel.swift */,
 				5B3E90F36597B762978D9E97 /* AppRoute.swift */,
+				7B84F447E07C04009DF5F674 /* BackgroundRefresh.swift */,
 				1A6AF609D98F6A22422818DD /* JMethodApp.swift */,
 				CE148ACA9596BE68E4E992A6 /* RootView.swift */,
 			);
@@ -408,6 +414,7 @@
 				18B1A19CD05680E85A8314A4 /* AdaptiveAlgorithm.swift in Sources */,
 				CC8389095E9392BF79148EF8 /* AppModel.swift in Sources */,
 				CE120064A26642EA8DEF9361 /* AppRoute.swift in Sources */,
+				2462B07548E2F9BAEE08F423 /* BackgroundRefresh.swift in Sources */,
 				928E4942E1A32DCAF5776025 /* Celebration.swift in Sources */,
 				1B977EBD762537371C87BDF4 /* Constants.swift in Sources */,
 				DED133BEB77A1121A8AC2330 /* DemoMigration.swift in Sources */,
@@ -447,6 +454,7 @@
 				2DA33C90CD50329EF64899AE /* DomainVectorTests.swift in Sources */,
 				F8725271A6E91CE859F34A79 /* PronoteTests.swift in Sources */,
 				C67FEE5EC4B39254FC31F6E3 /* ProtocolVectorTests.swift in Sources */,
+				F32A9C3626CA76DAB5E8CC3B /* SessionTests.swift in Sources */,
 				BC9BC8C2479D83463C7080F6 /* StorageAndModelTests.swift in Sources */,
 				BD140FE13A93848009FAE5EB /* TestSupport.swift in Sources */,
 			);

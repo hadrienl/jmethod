@@ -18,6 +18,8 @@ La signature se règle localement dans Xcode (équipe personnelle non versionné
 - `JMethod/UI` : écran de connexion, Aujourd'hui, autoévaluation, détail d'une séance, feu d'artifice, Réglages (Pronote).
 
 Accès : sans connexion active, seul l'écran de connexion s'affiche. Avec un jeton enregistré, l'app reprend la connexion au lancement ; si Pronote est injoignable, elle s'ouvre hors ligne sur les données locales.
+
+« Rester connecté » (activé par défaut) enregistre établissement, type de compte, identifiant et mot de passe de façon chiffrée, uniquement sur cet iPhone (trousseau, `AfterFirstUnlockThisDeviceOnly`, sans iCloud). Si Pronote refuse le jeton, l'app tente une seule reconnexion silencieuse au premier plan par la page officielle masquée. Une actualisation en arrière-plan (`BGAppRefreshTask` `fr.jmethod.app.refresh`) se reconnecte par jeton en HTTPS natif et synchronise les 14 jours ; un jeton refusé en arrière-plan est seulement marqué pour une reconnexion au prochain premier plan. Au retour au premier plan, l'emploi du temps est relu si la dernière synchronisation date de plus de 6 h.
 - `JMethodTests` : vecteurs partagés `native/shared/domain/*.json` et `native/shared/protocol-vectors.json` (référencés, jamais copiés), stockage, modèle.
 
 Le script `native/shared/PronoteAutomation.js` est intégré tel quel au bundle.

@@ -74,6 +74,11 @@ class PronoteClient(
     var selectedChildId: String? = null
         private set
 
+    /** Remplace les identifiants mobiles par les plus récents du coffre (jeton renouvelé ailleurs). */
+    fun useCredentials(latest: Credentials) {
+        credentials = latest
+    }
+
     private fun request(method: String, url: String, body: String? = null): HttpResult {
         if (!url.startsWith("$origin/")) throw PronoteException("origin", "Requête hors établissement refusée.")
         val headers = linkedMapOf("User-Agent" to "iPhone", "Accept" to if (method == "GET") "text/html" else "application/json")

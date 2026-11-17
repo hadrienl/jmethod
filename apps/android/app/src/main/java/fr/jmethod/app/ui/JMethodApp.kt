@@ -35,6 +35,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
@@ -90,6 +92,9 @@ fun JMethodApp() {
         }
     }
 
+    // Retour au premier plan : reconnexion ou synchronisation si la dernière date de plus de 6 h.
+    LifecycleEventEffect(Lifecycle.Event.ON_START) { pronoteViewModel.controller.onForeground() }
+
     Box(Modifier.fillMaxSize()) {
         // La page officielle reste montée pendant toute la tentative (écran de connexion compris),
         // sous le contenu quand elle est masquée.
@@ -103,7 +108,7 @@ fun JMethodApp() {
                 Scaffold(
                     containerColor = MaterialTheme.colorScheme.background,
                     topBar = {
-                        if (pronote.access == AccessPhase.OFFLINE) OfflineBanner(pronote, pronoteViewModel.controller::retry)
+                        if (pronote.access == AccessPhase.OFFLINE || pronote.reconnecting) OfflineBanner(pronote, pronoteViewModel.controller::retry)
                     },
                     snackbarHost = {
                         SnackbarHost(snackbar) { data ->

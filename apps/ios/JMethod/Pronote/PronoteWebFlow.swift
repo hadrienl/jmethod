@@ -2,10 +2,19 @@ import SwiftUI
 import WebKit
 import CoreImage
 
+/// Parcours de connexion par la page officielle (remplaçable dans les tests).
+@MainActor
+protocol LoginPageDriver: AnyObject {
+    var onEvent: ((PronoteWebFlow.Event) -> Void)? { get set }
+    func start(url: URL, username: String, password: String)
+    func close()
+    func setPageVisible(_ visible: Bool)
+}
+
 /// Page officielle Pronote dans un WKWebView conservé (masqué ou visible) et pont `jmethodPronote`.
 /// Le mot de passe saisi dans le formulaire natif est transmis une seule fois au script partagé, puis effacé.
 @MainActor
-final class PronoteWebFlow: NSObject, WKNavigationDelegate {
+final class PronoteWebFlow: NSObject, WKNavigationDelegate, LoginPageDriver {
     enum Event {
         case phase(PronoteSession.Phase)
         /// La page doit être affichée (ENT, vérification de sécurité, formulaire inhabituel) ; la tentative continue.

@@ -7,8 +7,12 @@ struct JMethodApp: App {
 
     init() {
         let model = AppModel.live()
+        let session = PronoteSession(app: model)
         _app = State(initialValue: model)
-        _pronote = State(initialValue: PronoteSession(app: model))
+        _pronote = State(initialValue: session)
+        if !Self.isRunningUnitTests {
+            BackgroundRefresh.register(session: session)
+        }
     }
 
     private static var isRunningUnitTests: Bool {
