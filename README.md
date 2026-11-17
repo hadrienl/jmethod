@@ -2,6 +2,12 @@
 
 POC web d’un assistant de révision pour collégiens et lycéens, basé sur la méthode des J. Objectif à terme : applications iOS et Android.
 
+## Version de test
+
+https://hadrienl.github.io/jmethod/
+
+Chaque push sur `main` déclenche la compilation et la publication via GitHub Actions. Le build Pages utilise la base `/jmethod/`. Les données de chaque testeur restent dans son navigateur.
+
 ## Démarrer
 
 ```sh
