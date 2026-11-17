@@ -14,7 +14,14 @@
     "src/views/DashboardView.tsx": "01cb7c2b09dab397685ea44fa4a86aaba6fca8638fdda9240ff04ede426ef5a6",
     "src/App.tsx": "ebca3c59c8921a7adb4c0751ce991efb4691d0fe9dbdb43995fa069e3e053739",
     "src/components/Navigation.tsx": "4613119ba32519f45b80cf8a9b06942e1f99c0bf8b80c7832c3209d85e9c1d2a",
-    "src/components/ScoreModal.tsx": "9b3954535cbf3d2b965a1f4fcf633ebc7b51f350b5468dd6e2e71643e5ab393a"
+    "src/components/ScoreModal.tsx": "9b3954535cbf3d2b965a1f4fcf633ebc7b51f350b5468dd6e2e71643e5ab393a",
+    "src/views/PlanningView.tsx": "d5c9456bdc4237b0a93b3e0ca22d73c8a1c5212b1e6bd48fa936b61ba0a428c5",
+    "src/components/RevisionDetailModal.tsx": "7c00e4d894dfbc4868bb127d4d73ae0e2b1fcd0bb608f49e28dc0fdf6bd3a3fb",
+    "src/views/CoursesView.tsx": "85a543a8e13547d1e97e0bc06c86ec1ab661df0d186c38a41a4b3b9be73828d8",
+    "src/components/AddCourseModal.tsx": "dfd1ed03dd1d8e1c8b19b528e4a90700d1f2f53f89b52cef643712479af61968",
+    "src/components/CourseDetailModal.tsx": "ca36f2fec11f7473ae3172c692393b34b247d5401440bdd234df920a9d8c58ea",
+    "src/views/StatsView.tsx": "ccdfa6d1cfeb4582964a13c2f60e772f3c11c5c035832e85d9e2c4ebeda13cfe",
+    "src/views/SettingsView.tsx": "e832b0ecb8d4c49ffc24ac9e45a559282aa54af5999b4c54da42aabd37bf4e8e"
   },
   "DEFAULT_SUBJECTS": [
     {"id":"maths","name":"Mathématiques","color":"#38BDF8","description":"Algèbre, Géométrie, Arithmétique, Probabilités"},
@@ -41,5 +48,8 @@
     "recuperation": {"label":"Se tester","hint":"Essaie de te rappeler sans regarder.","symbol":"03"}
   },
   "SCORE_PRESETS": [{"val":0,"label":"0","sub":"Pas encore"},{"val":25,"label":"25","sub":"Difficile"},{"val":50,"label":"50","sub":"Ça revient"},{"val":75,"label":"75","sub":"Maîtrisé"},{"val":100,"label":"100","sub":"Parfait"}],
-  "SCORE_SLIDER": {"min":0,"max":100,"step":5,"initial":50}
+  "SCORE_SLIDER": {"min":0,"max":100,"step":5,"initial":50},
+  "REVISION_PHASE_LABELS": {"encodage":"Encodage","consolidation":"Consolidation","recuperation":"Récupération"},
+  "SETTINGS_SLIDERS": {"sensitivity":{"min":0.1,"max":0.8,"step":0.05},"emergencyThreshold":{"min":10,"max":40,"step":5}},
+  "INTERVALS_REMOVE_REQUIRES_MORE_THAN": 2
 }

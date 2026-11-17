@@ -58,6 +58,7 @@ globalThis.localStorage = {
 
 const warnings = [];
 console.warn = (...args) => warnings.push(args.map(String).join(' '));
+console.error = (...args) => warnings.push(args.map(String).join(' '));
 
 // ---------------------------------------------------------------------------
 // Load the TypeScript sources
@@ -77,6 +78,13 @@ const SOURCES = [
   'src/App.tsx',
   'src/components/Navigation.tsx',
   'src/components/ScoreModal.tsx',
+  'src/views/PlanningView.tsx',
+  'src/components/RevisionDetailModal.tsx',
+  'src/views/CoursesView.tsx',
+  'src/components/AddCourseModal.tsx',
+  'src/components/CourseDetailModal.tsx',
+  'src/views/StatsView.tsx',
+  'src/views/SettingsView.tsx',
 ];
 const sourceText = Object.fromEntries(SOURCES.map((s) => [s, readFileSync(path.join(root, s), 'utf8')]));
 const sourceHashes = Object.fromEntries(
@@ -140,7 +148,10 @@ const bundle = await build({
       export * from './src/lib/icalParser.ts';
       export * from './src/lib/constants.ts';
       export * from './src/lib/storage.ts';
-      export { format, parseISO, addDays } from 'date-fns';
+      export {
+        format, parseISO, addDays, addWeeks, addMonths, startOfWeek, endOfWeek,
+        startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isSameMonth,
+      } from 'date-fns';
       export { fr } from 'date-fns/locale';
     `,
     resolveDir: root,
@@ -1317,6 +1328,904 @@ for (const [sensitivity, emergencyThreshold, scores] of [
   }
 }
 
+// ===========================================================================
+// Milestones 2 to 4: Planning, Mes cours, Mes progrès, Réglages
+// All logic below is inline in React components; it is copied and guarded.
+// ===========================================================================
+assertSource('src/views/PlanningView.tsx', [
+  'const weekStart = startOfWeek(date, { weekStartsOn: 1 });',
+  'start: startOfWeek(startOfMonth(date), { weekStartsOn: 1 }),',
+  'end: endOfWeek(endOfMonth(date), { weekStartsOn: 1 }),',
+  'eachDayOfInterval({ start: weekStart, end: addDays(weekStart, 6) })',
+  'course &&',
+  'subjectMap.has(course.subjectId) &&',
+  '(subjectId === "all" || course.subjectId === subjectId) &&',
+  '(phase === "all" || r.phase === phase)',
+  '.filter((r) => r.scheduledDate === key)',
+  'Number(a.status === "completed") -',
+  'Number(b.status === "completed") ||',
+  'a.stepIndex - b.stepIndex,',
+  '(subjectId === "all" || e.matchedSubjectId === subjectId),',
+  '? addMonths(d, direction)',
+  '? addWeeks(d, direction)',
+  ': addDays(d, direction),',
+  '? format(date, "MMMM yyyy", { locale: fr })',
+  '? format(date, "EEEE d MMMM yyyy", { locale: fr })',
+  ': `${format(weekStart, "d MMM", { locale: fr })} – ${format(addDays(weekStart, 6), "d MMM yyyy", { locale: fr })}`;',
+  '{format(day, mode === "month" ? "EEE d" : "EEEE d MMM", {',
+  '{isSameDay(day, new Date()) ? " · Aujourd’hui" : ""}',
+  "${mode === \"month\" && !isSameMonth(day, date) ? \"outside-month\" : \"\"}",
+  'Emploi du temps · {events.length} cours',
+  '<span>{e.startTime} · </span>',
+  '{e.isCancelled && " · Annulé"}',
+  '{REVISION_PHASE_LABELS[revision.phase]} · C{course.courseNumber}',
+  '<CheckCircle2 size={14} /> Terminée · {revision.score ?? "—"}/100',
+  'aria-label={`${subject.name}, ${revision.stepLabel}, ${REVISION_PHASE_LABELS[revision.phase]}, C${course.courseNumber} ${course.title}${done ? ", terminée" : ""}`}',
+  'Aucune séance prévue.',
+  '{selected && selectedCourse && selectedSubject && (',
+]);
+assertSource('src/components/RevisionDetailModal.tsx', [
+  'encodage: "Encodage",',
+  'consolidation: "Consolidation",',
+  'recuperation: "Récupération",',
+  'r.courseId === course.id &&',
+  'r.id !== revision.id &&',
+  'r.status === "completed" &&',
+  '(revision.status !== "completed" ||',
+  '(r.completedDate ?? r.scheduledDate) <=',
+  '(revision.completedDate ?? revision.scheduledDate)),',
+  '(b.completedDate ?? b.scheduledDate).localeCompare(',
+  ') || b.stepIndex - a.stepIndex,',
+  '· {r.score !== undefined ? `${r.score}/100` : "Sans note"}',
+  'Sessions précédentes ({history.length})',
+  'Aucune session terminée avant celle-ci.',
+  '{format(parseISO(revision.scheduledDate), "d MMMM yyyy", {',
+  '? ` le ${format(parseISO(revision.completedDate), "dd/MM/yyyy")}`',
+  '· {revision.score ?? "—"}/100',
+  'C{course.courseNumber} · {course.title}',
+  'Terminer cette séance avec {score}/100 ?',
+]);
+assertSource('src/views/CoursesView.tsx', [
+  "if (selectedSubjectId !== 'all' && c.subjectId !== selectedSubjectId) return false;",
+  'if (search.trim()) {',
+  'const q = search.toLowerCase();',
+  'c.title.toLowerCase().includes(q) ||',
+  'c.chapter.toLowerCase().includes(q) ||',
+  '`c${c.courseNumber}`.toLowerCase().includes(q)',
+  'const subjCourses = filteredCourses.filter((c) => c.subjectId === subj.id);',
+  'if (!chaptersMap.has(c.chapter)) chaptersMap.set(c.chapter, []);',
+  'courses: cList.sort((a, b) => a.courseNumber - b.courseNumber),',
+  "const completedRevs = courseRevs.filter((r) => r.status === 'completed');",
+  '? Math.round((completedRevs.length / courseRevs.length) * 100)',
+  "const nextPending = courseRevs.find((r) => r.status === 'pending');",
+  'const scoredRevs = courseRevs.filter((r) => r.score !== undefined);',
+  '? scoredRevs[scoredRevs.length - 1].score',
+  'Mes cours ({courses.length})',
+  '({chapters.reduce((acc, ch) => acc + ch.courses.length, 0)} cours)',
+  '{completedRevs.length} / {courseRevs.length} J',
+  "{format(parseISO(course.date), 'dd/MM/yyyy', { locale: fr })}",
+  "{format(parseISO(nextPending.scheduledDate), 'dd/MM')}",
+  'Prochain : {nextPending.stepLabel}',
+  'Dernier score : {lastScore}/100',
+]);
+assertSource('src/components/AddCourseModal.tsx', [
+  "const [subjectId, setSubjectId] = useState<string>(subjects[0]?.id || 'maths');",
+  "const [date, setDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));",
+  'if (initialSubjectId) setSubjectId(initialSubjectId);',
+  'if (initialDate) setDate(initialDate);',
+  'if (initialTitle) setTitle(initialTitle);',
+  "else setTitle('');",
+  "setDescription('');",
+  'const subjectCourses = courses.filter((c) => c.subjectId === subjectId);',
+  'const existingChapters = Array.from(new Set(subjectCourses.map((c) => c.chapter)));',
+  '{existingChapters.length > 0 && !chapter && (',
+  '{existingChapters.slice(0, 3).map((ch) => (',
+  'if (!chapter.trim()) {',
+  'c.chapter.trim().toLowerCase() === chapter.trim().toLowerCase()',
+  'const maxNum = Math.max(...matches.map((c) => c.courseNumber), 0);',
+  'setCourseNumber(maxNum + 1);',
+  'if (!title.trim() || !chapter.trim()) return;',
+  'chapter: chapter.trim(),',
+  'title: title.trim(),',
+  'description: description.trim() || undefined,',
+]);
+assertSource('src/App.tsx', [
+  'const newId = `course-${Date.now()}`;',
+  "createdAt: format(new Date(), 'yyyy-MM-dd'),",
+  'const newRevisions = generateInitialRevisions(newCourse, settings.intervals);',
+  'const updatedCourses = [newCourse, ...courses];',
+  'const updatedRevisions = [...revisions, ...newRevisions];',
+  '`C${newCourse.courseNumber} « ${newCourse.title} » ajouté avec ses 10 échéances de révision.`,',
+  'const updatedCourses = courses.filter((c) => c.id !== courseId);',
+  'const updatedRevisions = revisions.filter((r) => r.courseId !== courseId);',
+  "showToast('Cours supprimé', 'Le cours et son calendrier ont été supprimés.', 'info');",
+  'subjectId: ev.matchedSubjectId || subjects[0]?.id,',
+  'date: ev.date,',
+  'title: ev.subjectName,',
+  'const success = importAllData(jsonStr);',
+  "showToast('Erreur d’importation', 'Le fichier fourni est invalide.', 'warning');",
+]);
+assertSource('src/components/CourseDetailModal.tsx', [
+  'const sortedRevisions = [...revisions].sort((a, b) => a.stepIndex - b.stepIndex);',
+  "const completedCount = sortedRevisions.filter((r) => r.status === 'completed').length;",
+  'const progressPercent = Math.round((completedCount / sortedRevisions.length) * 100);',
+  'const scores = sortedRevisions.filter((r) => r.score !== undefined).map((r) => r.score as number);',
+  'const averageScore = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;',
+  '{rev.score ?? 50}/100',
+  "Créé le {format(parseISO(course.date), 'dd MMMM yyyy', { locale: fr })}",
+  "Prévu : {format(parseISO(rev.scheduledDate), 'dd MMM yyyy', { locale: fr })}",
+  "• Fait le {format(parseISO(rev.completedDate), 'dd/MM')}",
+  '{completedCount} / {sortedRevisions.length} effectuées ({progressPercent}%)',
+  'if (confirm(`Es-tu sûr de vouloir supprimer définitivement le cours C${course.courseNumber} : ${course.title} ?`)) {',
+  "const isOverdue = rev.status === 'overdue';",
+]);
+assertSource('src/views/StatsView.tsx', [
+  "const completedRevisions = revisions.filter((r) => r.status === 'completed');",
+  'const scoredRevisions = revisions.filter((r) => r.score !== undefined);',
+  'scoredRevisions.reduce((acc, r) => acc + (r.score ?? 0), 0) / scoredRevisions.length',
+  ': 50;',
+  'revisions.length > 0 ? Math.round((completedRevisions.length / revisions.length) * 100) : 0;',
+  'const subjCourses = courses.filter((c) => c.subjectId === subj.id);',
+  'return c?.subjectId === subj.id;',
+  '? Math.round(subjScored.reduce((a, b) => a + (b.score ?? 0), 0) / subjScored.length)',
+  'rate: subjRevs.length > 0 ? Math.round((subjCompleted.length / subjRevs.length) * 100) : 0,',
+  '.filter((s) => s.coursesCount > 0);',
+  'const weakSubjects = subjectStats.filter((s) => s.avgScore !== null && s.avgScore < 50);',
+  '{completedRevisions.length} sur {revisions.length} faites',
+  "{overallAvgScore >= 50 ? 'Au-dessus de l’équilibre' : 'Sous l’équilibre'}",
+  '>5 j</div>',
+  'Sur {subjectStats.length} matières',
+  '({st.coursesCount} cours • {st.completedRevs}/{st.totalRevs} J)',
+]);
+assertSource('src/views/SettingsView.tsx', [
+  'pronoteIcalUrl: icalUrl.trim(),',
+  'intervals: [...intervals].sort((a, b) => a - b),',
+  'const val = parseInt(newIntervalVal, 10);',
+  'if (!isNaN(val) && val >= 0 && !intervals.includes(val)) {',
+  'const updated = [...intervals, val].sort((a, b) => a - b);',
+  'if (intervals.length > 2) {',
+  'setIntervals(intervals.filter((i) => i !== val));',
+  'setIntervals(DEFAULT_INTERVALS);',
+  '{val !== 0 && (',
+  'Impact max : ±{Math.round(sensitivity * 100)}%',
+  'min="0.1"',
+  'max="0.8"',
+  'step="0.05"',
+  'min="10"',
+  'max="40"',
+  'onChange={(e) => setEmergencyThreshold(parseInt(e.target.value, 10))}',
+  's.id === subj.id ? { ...s, color: e.target.value } : s',
+]);
+assertSource('src/lib/storage.ts', [
+  "INITIALIZED: 'jmethod_initialized_v1',",
+  'if (!data.courses || !data.revisions) return false;',
+  'if (data.subjects) saveSubjects(data.subjects);',
+  'if (data.settings) saveSettings(data.settings);',
+  'return raw ? { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } : DEFAULT_SETTINGS;',
+]);
+
+const fixtures = {};
+const fmt = (ymd, pattern, locale = true) =>
+  lib.format(lib.parseISO(ymd), pattern, locale ? { locale: lib.fr } : undefined);
+const ymdOf = (d) => lib.format(d, 'yyyy-MM-dd');
+
+// ---------------------------------------------------------------------------
+// Planning (PlanningView + RevisionDetailModal)
+// ---------------------------------------------------------------------------
+const REVISION_PHASE_LABELS = { encodage: 'Encodage', consolidation: 'Consolidation', recuperation: 'Récupération' };
+
+function planningView({ revisions, courses, subjects, pronoteEvents }, { mode, date, subjectId = 'all', phase = 'all' }) {
+  const anchor = lib.parseISO(date);
+  const now = new Date();
+  const courseMap = new Map(courses.map((c) => [c.id, c]));
+  const subjectMap = new Map(subjects.map((s) => [s.id, s]));
+  const filtered = revisions.filter((r) => {
+    const course = courseMap.get(r.courseId);
+    return (
+      course &&
+      subjectMap.has(course.subjectId) &&
+      (subjectId === 'all' || course.subjectId === subjectId) &&
+      (phase === 'all' || r.phase === phase)
+    );
+  });
+  const weekStart = lib.startOfWeek(anchor, { weekStartsOn: 1 });
+  const days =
+    mode === 'day'
+      ? [anchor]
+      : mode === 'week'
+        ? lib.eachDayOfInterval({ start: weekStart, end: lib.addDays(weekStart, 6) })
+        : lib.eachDayOfInterval({
+            start: lib.startOfWeek(lib.startOfMonth(anchor), { weekStartsOn: 1 }),
+            end: lib.endOfWeek(lib.endOfMonth(anchor), { weekStartsOn: 1 }),
+          });
+  const period =
+    mode === 'month'
+      ? lib.format(anchor, 'MMMM yyyy', { locale: lib.fr })
+      : mode === 'day'
+        ? lib.format(anchor, 'EEEE d MMMM yyyy', { locale: lib.fr })
+        : `${lib.format(weekStart, 'd MMM', { locale: lib.fr })} – ${lib.format(lib.addDays(weekStart, 6), 'd MMM yyyy', { locale: lib.fr })}`;
+  return {
+    period,
+    days: days.map((day) => {
+      const key = ymdOf(day);
+      const dayRevisions = filtered
+        .filter((r) => r.scheduledDate === key)
+        .sort((a, b) => Number(a.status === 'completed') - Number(b.status === 'completed') || a.stepIndex - b.stepIndex);
+      const events = pronoteEvents.filter(
+        (e) => e.date === key && (subjectId === 'all' || e.matchedSubjectId === subjectId)
+      );
+      const isToday = lib.isSameDay(day, now);
+      const out = {
+        date: key,
+        heading: lib.format(day, mode === 'month' ? 'EEE d' : 'EEEE d MMM', { locale: lib.fr }),
+        countLabel: `${dayRevisions.length} séance${dayRevisions.length > 1 ? 's' : ''}${isToday ? ' · Aujourd’hui' : ''}`,
+        isToday,
+      };
+      if (mode === 'month') out.outsideMonth = !lib.isSameMonth(day, anchor);
+      if (events.length) {
+        out.timetableSummary = `Emploi du temps · ${events.length} cours`;
+        out.events = events.map((e) => ({
+          id: e.id,
+          label: `${e.startTime} · ${e.subjectName}${e.isCancelled ? ' · Annulé' : ''}`,
+          subjectId: subjectMap.has(e.matchedSubjectId ?? '') ? e.matchedSubjectId : null,
+        }));
+      }
+      if (dayRevisions.length) {
+        out.tiles = dayRevisions.map((r) => {
+          const course = courseMap.get(r.courseId);
+          const subject = subjectMap.get(course.subjectId);
+          const done = r.status === 'completed';
+          return {
+            revisionId: r.id,
+            subjectName: subject.name,
+            stepLabel: r.stepLabel,
+            phaseLine: `${REVISION_PHASE_LABELS[r.phase]} · C${course.courseNumber}`,
+            title: course.title,
+            chapter: course.chapter,
+            done,
+            footer: done ? `Terminée · ${r.score ?? '—'}/100` : 'Voir la séance →',
+            accessibilityLabel: `${subject.name}, ${r.stepLabel}, ${REVISION_PHASE_LABELS[r.phase]}, C${course.courseNumber} ${course.title}${done ? ', terminée' : ''}`,
+          };
+        });
+      } else {
+        out.empty = 'Aucune séance prévue.';
+      }
+      return out;
+    }),
+  };
+}
+
+const planCourses = [
+  course('course-pl-maths', 'maths', '2026-03-23', { chapter: 'Algèbre', courseNumber: 1, title: 'Cours de test équations' }),
+  course('course-pl-fr', 'francais', '2026-03-29', { chapter: 'Grammaire', courseNumber: 2, title: 'Cours de test subordonnées' }),
+  course('course-pl-pc', 'physique-chimie', '2026-10-19', { chapter: 'Énergie', courseNumber: 1, title: 'Cours de test énergie' }),
+  course('course-pl-svt', 'svt', '2026-12-28', { chapter: 'Génétique', courseNumber: 3, title: 'Cours de test ADN' }),
+  course('course-pl-orphan', 'subject-removed', '2026-03-25', { chapter: 'Ancienne matière', courseNumber: 1, title: 'Cours de matière supprimée' }),
+];
+const planRevisions = [
+  ...schedule(planCourses[0], lib.DEFAULT_INTERVALS, 3, 72).map((r) =>
+    r.stepIndex === 2 ? (({ score, ...rest }) => rest)(r) : r
+  ),
+  ...schedule(planCourses[1], lib.DEFAULT_INTERVALS, 1, 40),
+  rev('course-pl-fr-emerg-1774810800000', 'course-pl-fr', '2026-03-30', {
+    stepIndex: 0, stepLabel: 'J0* (Rattrapage)', phase: 'consolidation', isEmergencySession: true, adjustedIntervalDays: 1,
+  }),
+  ...schedule(planCourses[2], lib.DEFAULT_INTERVALS, 2, 85),
+  ...schedule(planCourses[3], lib.DEFAULT_INTERVALS, 0),
+  ...schedule(planCourses[4], lib.DEFAULT_INTERVALS, 0),
+].map((r) => (r.id === 'course-pl-maths-rev-6' ? { ...r, status: 'overdue' } : r));
+// Out-of-order completion on the same day as a pending one: course-pl-maths J4 done early.
+planRevisions.splice(
+  planRevisions.findIndex((r) => r.id === 'course-pl-maths-rev-3'),
+  1,
+  { ...planRevisions.find((r) => r.id === 'course-pl-maths-rev-3'), scheduledDate: '2026-03-30', status: 'completed', completedDate: '2026-03-29', score: 90 }
+);
+const planEvents = lib.parseICalFeed(
+  [
+    'BEGIN:VCALENDAR',
+    'BEGIN:VEVENT', 'UID:pl-1', 'DTSTART:20260330T080000', 'DTEND:20260330T090000', 'SUMMARY:MATHEMATIQUES', 'END:VEVENT',
+    'BEGIN:VEVENT', 'UID:pl-2', 'DTSTART:20260330T100000', 'DTEND:20260330T110000', 'SUMMARY:[ANNULÉ] FRANCAIS', 'STATUS:CANCELLED', 'END:VEVENT',
+    'BEGIN:VEVENT', 'UID:pl-3', 'DTSTART:20260330T140000', 'DTEND:20260330T150000', 'SUMMARY:LATIN', 'END:VEVENT',
+    'BEGIN:VEVENT', 'UID:pl-4', 'DTSTART:20261025T080000', 'DTEND:20261025T090000', 'SUMMARY:PHYSIQUE-CHIMIE', 'END:VEVENT',
+    'BEGIN:VEVENT', 'UID:pl-5', 'DTSTART:20261231T090000', 'DTEND:20261231T100000', 'SUMMARY:SVT', 'END:VEVENT',
+    'END:VCALENDAR',
+  ].join('\n'),
+  SUBJECTS
+);
+fixtures.planning = { courses: planCourses, revisions: planRevisions, subjects: SUBJECTS, pronoteEvents: planEvents };
+
+const planningCases = [];
+function planningCase(name, nowMs, view, note) {
+  setNow(nowMs);
+  planningCases.push({
+    name,
+    ...(note ? { note } : {}),
+    now: nowField(nowMs),
+    fixture: 'planning',
+    input: view,
+    expected: clone(planningView(fixtures.planning, view)),
+  });
+}
+const nowMarch30 = paris('2026-03-30', '17:00');
+planningCase('day_dst_monday_all', nowMarch30, { mode: 'day', date: '2026-03-30' },
+  'pending first, then completed; stepIndex ascending; the orphan-subject course is hidden');
+planningCase('day_subject_filter_maths', nowMarch30, { mode: 'day', date: '2026-03-30', subjectId: 'maths' },
+  'events are filtered by matchedSubjectId too');
+planningCase('day_phase_filter_consolidation', nowMarch30, { mode: 'day', date: '2026-03-30', phase: 'consolidation' },
+  'phase filter does not apply to timetable events');
+planningCase('day_not_today', nowMarch30, { mode: 'day', date: '2026-03-31' });
+planningCase('week_of_dst_spring_from_thursday', nowMarch30, { mode: 'week', date: '2026-03-26' });
+planningCase('week_from_sunday_starts_previous_monday', nowMarch30, { mode: 'week', date: '2026-03-29' });
+planningCase('week_dst_autumn', paris('2026-10-25', '10:00'), { mode: 'week', date: '2026-10-25' });
+planningCase('week_across_year_end', paris('2026-12-31', '18:00'), { mode: 'week', date: '2026-12-31' });
+planningCase('week_filters_subject_and_phase', nowMarch30, { mode: 'week', date: '2026-03-30', subjectId: 'francais', phase: 'consolidation' });
+planningCase('month_march_2026_starts_sunday', nowMarch30, { mode: 'month', date: '2026-03-15' });
+planningCase('month_february_2026', nowMarch30, { mode: 'month', date: '2026-02-10' });
+planningCase('month_june_2026_starts_monday', nowMarch30, { mode: 'month', date: '2026-06-30' });
+planningCase('month_october_2026_dst', paris('2026-10-25', '10:00'), { mode: 'month', date: '2026-10-01' });
+planningCase('month_december_2026_spills_into_2027', paris('2026-12-31', '18:00'), { mode: 'month', date: '2026-12-31', subjectId: 'svt' });
+
+const navigateCases = [];
+for (const [mode, date, direction] of [
+  ['day', '2026-03-28', 1],
+  ['day', '2026-03-30', -1],
+  ['day', '2026-12-31', 1],
+  ['week', '2026-03-26', 1],
+  ['week', '2026-10-29', -1],
+  ['week', '2026-12-30', 1],
+  ['month', '2026-01-31', 1],
+  ['month', '2026-03-31', -1],
+  ['month', '2026-12-15', 1],
+  ['month', '2028-03-31', -1],
+]) {
+  const fn = mode === 'month' ? lib.addMonths : mode === 'week' ? lib.addWeeks : lib.addDays;
+  navigateCases.push({
+    name: `${mode}_${date}_${direction > 0 ? 'next' : 'previous'}`,
+    input: { mode, date, direction },
+    expected: ymdOf(fn(lib.parseISO(date), direction)),
+  });
+}
+
+function revisionDetail(revisions, courses, subjects, revisionId) {
+  const revision = revisions.find((r) => r.id === revisionId);
+  const course = courses.find((c) => c.id === revision.courseId);
+  const subject = subjects.find((s) => s.id === course?.subjectId);
+  if (!course || !subject) return { opens: false };
+  const history = revisions
+    .filter(
+      (r) =>
+        r.courseId === course.id &&
+        r.id !== revision.id &&
+        r.status === 'completed' &&
+        (revision.status !== 'completed' ||
+          (r.completedDate ?? r.scheduledDate) <= (revision.completedDate ?? revision.scheduledDate))
+    )
+    .sort(
+      (a, b) =>
+        (b.completedDate ?? b.scheduledDate).localeCompare(a.completedDate ?? a.scheduledDate) || b.stepIndex - a.stepIndex
+    );
+  return {
+    opens: true,
+    subjectName: subject.name,
+    title: `C${course.courseNumber} · ${course.title}`,
+    chapterLine: `Chapitre : ${course.chapter}`,
+    stepLabel: revision.stepLabel,
+    phaseLabel: REVISION_PHASE_LABELS[revision.phase],
+    plannedLine: `Prévue le ${fmt(revision.scheduledDate, 'd MMMM yyyy')}`,
+    description: course.description ?? null,
+    historyTitle: `Sessions précédentes (${history.length})`,
+    history: history.map((r) => ({
+      revisionId: r.id,
+      label: `${r.stepLabel} · ${REVISION_PHASE_LABELS[r.phase]}`,
+      detail: `${fmt(r.completedDate ?? r.scheduledDate, 'dd/MM/yyyy', false)} · ${r.score !== undefined ? `${r.score}/100` : 'Sans note'}`,
+    })),
+    historyEmpty: history.length ? null : 'Aucune session terminée avant celle-ci.',
+    completedLine:
+      revision.status === 'completed'
+        ? `Séance terminée${revision.completedDate ? ` le ${fmt(revision.completedDate, 'dd/MM/yyyy', false)}` : ''} · ${revision.score ?? '—'}/100`
+        : null,
+    canValidate: revision.status !== 'completed',
+  };
+}
+const detailCourse = course('course-rd', 'histoire-geo', '2026-11-02', {
+  chapter: 'Révolution', courseNumber: 4, title: 'Cours de test révolution',
+});
+detailCourse.description = 'Notes de test\nsur deux lignes';
+const detailRevs = schedule(detailCourse, lib.DEFAULT_INTERVALS, 5, 65).map((r) => {
+  if (r.stepIndex === 1) return { ...r, completedDate: '2026-11-04', score: 20 }; // late, same day as J2
+  if (r.stepIndex === 2) return { ...r, completedDate: '2026-11-04', score: 55 };
+  if (r.stepIndex === 3) return (({ completedDate, ...rest }) => rest)(r); // completed without completedDate
+  if (r.stepIndex === 4) return (({ score, ...rest }) => rest)(r); // completed without score
+  return r;
+});
+detailRevs.splice(2, 0, rev('course-rd-emerg-1', 'course-rd', '2026-11-05', {
+  stepIndex: 1, stepLabel: 'J1* (Rattrapage)', phase: 'consolidation', isEmergencySession: true,
+  status: 'completed', completedDate: '2026-11-04', score: 60, adjustedIntervalDays: 1,
+}));
+const detailOther = schedule(course('course-rd-other', 'histoire-geo', '2026-11-02'), lib.DEFAULT_INTERVALS, 3, 99);
+fixtures.revisionDetail = {
+  courses: [detailCourse, course('course-rd-other', 'histoire-geo', '2026-11-02'), course('course-rd-orphan', 'subject-removed', '2026-11-02')],
+  revisions: [...detailRevs, ...detailOther, ...schedule(course('course-rd-orphan', 'subject-removed', '2026-11-02'), [0, 1])],
+  subjects: SUBJECTS,
+};
+const revisionDetailCases = [
+  ['pending_revision_lists_all_completed', 'course-rd-rev-5'],
+  ['completed_revision_lists_earlier_or_same_day', 'course-rd-rev-2'],
+  ['completed_without_completed_date_uses_scheduled_date', 'course-rd-rev-3'],
+  ['completed_without_score', 'course-rd-rev-4'],
+  ['first_step_has_empty_history', 'course-rd-rev-0'],
+  ['emergency_session', 'course-rd-emerg-1'],
+  ['orphan_subject_does_not_open', 'course-rd-orphan-rev-0'],
+].map(([name, revisionId]) => ({
+  name,
+  fixture: 'revisionDetail',
+  input: { revisionId },
+  expected: clone(revisionDetail(fixtures.revisionDetail.revisions, fixtures.revisionDetail.courses, SUBJECTS, revisionId)),
+}));
+
+// ---------------------------------------------------------------------------
+// Mes cours (CoursesView, CourseDetailModal, AddCourseModal, App handlers)
+// ---------------------------------------------------------------------------
+function coursesList({ courses, revisions, subjects }, { search = '', subjectId = 'all' }) {
+  const filteredCourses = courses.filter((c) => {
+    if (subjectId !== 'all' && c.subjectId !== subjectId) return false;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      return c.title.toLowerCase().includes(q) || c.chapter.toLowerCase().includes(q) || `c${c.courseNumber}`.toLowerCase().includes(q);
+    }
+    return true;
+  });
+  const groups = [];
+  for (const subj of subjects) {
+    const subjCourses = filteredCourses.filter((c) => c.subjectId === subj.id);
+    if (!subjCourses.length) continue;
+    const chaptersMap = new Map();
+    for (const c of subjCourses) {
+      if (!chaptersMap.has(c.chapter)) chaptersMap.set(c.chapter, []);
+      chaptersMap.get(c.chapter).push(c);
+    }
+    const chapters = Array.from(chaptersMap.entries()).map(([chapter, list]) => ({
+      chapter,
+      courses: list.sort((a, b) => a.courseNumber - b.courseNumber),
+    }));
+    groups.push({
+      subjectId: subj.id,
+      countLabel: `(${chapters.reduce((acc, ch) => acc + ch.courses.length, 0)} cours)`,
+      chapters: chapters.map(({ chapter, courses: list }) => ({
+        chapter,
+        courses: list.map((c) => {
+          const courseRevs = revisions.filter((r) => r.courseId === c.id);
+          const completedRevs = courseRevs.filter((r) => r.status === 'completed');
+          const progress = courseRevs.length > 0 ? Math.round((completedRevs.length / courseRevs.length) * 100) : 0;
+          const nextPending = courseRevs.find((r) => r.status === 'pending');
+          const scoredRevs = courseRevs.filter((r) => r.score !== undefined);
+          const lastScore = scoredRevs.length > 0 ? scoredRevs[scoredRevs.length - 1].score : undefined;
+          return {
+            courseId: c.id,
+            badge: `C${c.courseNumber}`,
+            dateLine: `Cours du ${fmt(c.date, 'dd/MM/yyyy')}`,
+            lastScoreLine: lastScore !== undefined ? `Dernier score : ${lastScore}/100` : null,
+            counter: `${completedRevs.length} / ${courseRevs.length} J`,
+            progress,
+            next: nextPending ? { label: `Prochain : ${nextPending.stepLabel}`, date: fmt(nextPending.scheduledDate, 'dd/MM', false) } : null,
+          };
+        }),
+      })),
+    });
+  }
+  return { header: `Mes cours (${courses.length})`, empty: groups.length === 0, groups };
+}
+const listCourses = [
+  course('course-l-fr-new', 'francais', '2026-11-16', { chapter: 'grammaire', courseNumber: 1, title: 'Cours de test accord' }),
+  course('course-l-maths-10', 'maths', '2026-11-10', { chapter: 'Arithmétique', courseNumber: 10, title: 'Cours de test PGCD' }),
+  course('course-l-maths-2', 'maths', '2026-10-01', { chapter: 'Arithmétique', courseNumber: 2, title: 'Cours de test nombres premiers' }),
+  course('course-l-pc', 'physique-chimie', '2026-11-12', { chapter: 'Énergie', courseNumber: 1, title: 'Cours de test énergie cinétique' }),
+  course('course-l-fr-old', 'francais', '2026-10-05', { chapter: 'Grammaire', courseNumber: 3, title: 'Cours de test relatives' }),
+  course('course-l-maths-1', 'maths', '2026-09-20', { chapter: 'Géométrie', courseNumber: 1, title: 'Cours de test Thalès' }),
+  course('course-l-orphan', 'subject-removed', '2026-11-01', { chapter: 'Ancien', courseNumber: 1, title: 'Cours de matière supprimée' }),
+];
+setNow(paris('2026-11-17'));
+const listRevisions = [
+  ...schedule(listCourses[1], lib.DEFAULT_INTERVALS, 4, 70),
+  ...schedule(listCourses[2], lib.DEFAULT_INTERVALS, 10, 80),
+  ...lib.applyAdaptiveReview(schedule(listCourses[3], lib.DEFAULT_INTERVALS, 1, 60), 'course-l-pc-rev-1', 15, SETTINGS, '2026-11-12', '2026-11-13').updatedRevisions,
+  ...schedule(listCourses[4], lib.DEFAULT_INTERVALS, 6, 45).map((r) => (r.stepIndex === 6 ? { ...r, status: 'overdue' } : r)),
+  ...schedule(listCourses[5], lib.DEFAULT_INTERVALS, 7, 90).map((r) => (r.stepIndex === 0 ? { ...r, score: 30 } : r)),
+  ...schedule(listCourses[6], lib.DEFAULT_INTERVALS, 2, 50),
+];
+// Last score is taken in array order: move J0 of course-l-maths-1 (score 30) to the end.
+listRevisions.push(listRevisions.splice(listRevisions.findIndex((r) => r.id === 'course-l-maths-1-rev-0'), 1)[0]);
+fixtures.coursesList = { courses: listCourses, revisions: listRevisions, subjects: SUBJECTS };
+const coursesListCases = [
+  ['no_filter', {}],
+  ['subject_filter', { subjectId: 'maths' }],
+  ['search_course_number_c1_matches_c10', { search: 'c1' }],
+  ['search_upper_case', { search: 'GRAM' }],
+  ['search_trailing_space_is_not_trimmed', { search: 'test ' }],
+  ['search_trailing_space_no_match', { search: 'thalès ' }],
+  ['search_only_spaces_is_ignored', { search: '   ' }],
+  ['search_without_accent_does_not_match', { search: 'energie' }],
+  ['search_with_accent', { search: 'Énergie' }],
+  ['filter_and_search_no_result', { subjectId: 'svt', search: 'test' }],
+  ['orphan_subject_never_listed', { search: 'supprimée' }],
+].map(([name, filter]) => ({
+  name,
+  fixture: 'coursesList',
+  input: filter,
+  expected: clone(coursesList(fixtures.coursesList, filter)),
+}));
+
+function courseDetail(c, subjects, revisions) {
+  const subject = subjects.find((s) => s.id === c.subjectId) ?? null;
+  const sortedRevisions = [...revisions].sort((a, b) => a.stepIndex - b.stepIndex);
+  const completedCount = sortedRevisions.filter((r) => r.status === 'completed').length;
+  const progressPercent = Math.round((completedCount / sortedRevisions.length) * 100);
+  const scores = sortedRevisions.filter((r) => r.score !== undefined).map((r) => r.score);
+  const averageScore = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
+  return {
+    subjectLabel: subject?.name || 'Matière',
+    createdLine: `Créé le ${fmt(c.date, 'dd MMMM yyyy')}`,
+    averageLine: averageScore !== null ? `Moyenne des séances : ${averageScore}/100` : null,
+    notes: c.description ?? null,
+    progressLine: `${completedCount} / ${sortedRevisions.length} effectuées (${progressPercent}%)`,
+    progressPercent: Number.isNaN(progressPercent) ? 'NaN' : progressPercent,
+    timeline: sortedRevisions.map((r) => ({
+      revisionId: r.id,
+      stepLabel: r.stepLabel,
+      phaseLabel: lib.PHASE_CONFIG[r.phase].label,
+      emergencyBadge: !!r.isEmergencySession,
+      state: r.status === 'completed' ? 'completed' : r.status === 'overdue' ? 'overdue' : 'pending',
+      plannedLine: `Prévu : ${fmt(r.scheduledDate, 'dd MMM yyyy')}`,
+      doneLine: r.completedDate ? `• Fait le ${fmt(r.completedDate, 'dd/MM', false)}` : null,
+      right: r.status === 'completed' ? `${r.score ?? 50}/100` : 'Valider',
+    })),
+    deleteConfirm: `Es-tu sûr de vouloir supprimer définitivement le cours C${c.courseNumber} : ${c.title} ?`,
+  };
+}
+const courseDetailCases = [
+  ['with_emergency_and_overdue', 'course-l-pc'],
+  ['overdue_status', 'course-l-fr-old'],
+  ['last_score_and_average', 'course-l-maths-1'],
+  ['orphan_subject_label_fallback', 'course-l-orphan'],
+  ['no_revisions_gives_nan_percent', 'course-l-fr-new'],
+].map(([name, courseId]) => {
+  const c = listCourses.find((x) => x.id === courseId);
+  return {
+    name,
+    fixture: 'coursesList',
+    input: { courseId },
+    expected: clone(courseDetail(c, SUBJECTS, listRevisions.filter((r) => r.courseId === courseId))),
+  };
+});
+
+/** AddCourseModal numbering and validation, then App.handleAddCourse. */
+function courseCreate({ courses, revisions, settings, form }) {
+  const subjectCourses = courses.filter((c) => c.subjectId === form.subjectId);
+  const existingChapters = Array.from(new Set(subjectCourses.map((c) => c.chapter)));
+  let courseNumber = 1;
+  if (form.chapter.trim()) {
+    const matches = courses.filter(
+      (c) => c.subjectId === form.subjectId && c.chapter.trim().toLowerCase() === form.chapter.trim().toLowerCase()
+    );
+    courseNumber = matches.length === 0 ? 1 : Math.max(...matches.map((c) => c.courseNumber), 0) + 1;
+  }
+  const base = {
+    courseNumber,
+    submitLabel: `Créer le cours C${courseNumber}`,
+    chapterSuggestions: existingChapters.length > 0 && !form.chapter ? existingChapters.slice(0, 3) : [],
+  };
+  if (!form.title.trim() || !form.chapter.trim()) return { ...base, created: false };
+  const courseData = {
+    subjectId: form.subjectId,
+    chapter: form.chapter.trim(),
+    courseNumber,
+    title: form.title.trim(),
+    date: form.date,
+    description: form.description.trim() || undefined,
+  };
+  const newCourse = { ...courseData, id: `course-${Date.now()}`, createdAt: lib.format(new Date(), 'yyyy-MM-dd') };
+  const newRevisions = lib.generateInitialRevisions(newCourse, settings.intervals);
+  return {
+    ...base,
+    created: true,
+    course: clone(newCourse),
+    newRevisions: clone(newRevisions),
+    courseOrder: ids([newCourse, ...courses]),
+    revisionOrder: ids([...revisions, ...newRevisions]),
+    toast: {
+      title: 'Nouveau cours créé !',
+      message: `C${newCourse.courseNumber} « ${newCourse.title} » ajouté avec ses 10 échéances de révision.`,
+      type: 'success',
+    },
+  };
+}
+const courseCreateCases = [];
+function createCase(name, nowMs, form, settings = SETTINGS, note) {
+  setNow(nowMs);
+  courseCreateCases.push({
+    name,
+    ...(note ? { note } : {}),
+    now: nowField(nowMs),
+    fixture: 'coursesList',
+    input: { settings: clone(settings), form },
+    expected: courseCreate({ courses: listCourses, revisions: listRevisions, settings, form }),
+  });
+}
+const nowCreate = paris('2026-11-17', '18:30');
+const form = (patch) => ({ subjectId: 'maths', chapter: '', title: '', date: '2026-11-18', description: '', ...patch });
+createCase('new_chapter_starts_at_c1', nowCreate, form({ chapter: 'Statistiques', title: 'Cours de test moyenne' }));
+createCase('existing_chapter_takes_max_plus_one', nowCreate, form({ chapter: 'Arithmétique', title: 'Cours de test fractions' }),
+  SETTINGS, 'C2 and C10 exist: next is C11 (max + 1, gaps are not filled)');
+createCase('chapter_match_ignores_case_and_spaces', nowCreate, form({ subjectId: 'francais', chapter: '  GRAMMAIRE ', title: '  Cours de test COD  ', description: '  notes  ' }),
+  SETTINGS, 'matches both "grammaire" (C1) and "Grammaire" (C3): C4; chapter and title stored trimmed, but listed as a third chapter group');
+createCase('chapter_match_does_not_fold_accents', nowCreate, form({ subjectId: 'physique-chimie', chapter: 'Energie', title: 'Cours de test' }));
+createCase('same_chapter_other_subject_is_independent', nowCreate, form({ subjectId: 'svt', chapter: 'Arithmétique', title: 'Cours de test' }));
+createCase('custom_intervals_and_empty_description', nowCreate, form({ subjectId: 'anglais', chapter: 'Vocabulary', title: 'Cours de test', date: '2026-12-30', description: '   ' }),
+  settingsWith({ intervals: [0, 2, 9] }), 'the toast still says 10 échéances');
+createCase('missing_title_is_rejected', nowCreate, form({ chapter: 'Arithmétique', title: '   ' }));
+createCase('missing_chapter_is_rejected_and_suggests_chapters', nowCreate, form({ chapter: '', title: 'Cours de test' }),
+  SETTINGS, 'suggestions: distinct chapters of the subject in course order, first three, only while the chapter field is empty');
+createCase('created_after_midnight', paris('2026-11-18', '00:10'), form({ chapter: 'Géométrie', title: 'Cours de test', date: '2026-11-17' }),
+  SETTINGS, 'createdAt is the local date of now; J0 may be in the past');
+
+const prefillCases = [
+  ['matched_event', planEvents.find((e) => e.id === 'pl-1'), SUBJECTS],
+  ['cancelled_event_has_no_button_but_prefill_rule_is_the_same', planEvents.find((e) => e.id === 'pl-2'), SUBJECTS],
+  ['unmatched_event_falls_back_to_first_subject', planEvents.find((e) => e.id === 'pl-3'), SUBJECTS],
+  ['unmatched_event_with_no_subject', planEvents.find((e) => e.id === 'pl-3'), []],
+].map(([name, ev, subjects]) => ({
+  name,
+  input: { event: clone(ev), subjects: subjects === SUBJECTS ? 'default' : 'empty' },
+  expected: { subjectId: ev.matchedSubjectId || subjects[0]?.id || null, date: ev.date, title: ev.subjectName },
+}));
+
+const courseDeleteCases = ['course-l-pc', 'course-l-fr-new', 'missing-course'].map((courseId) => ({
+  name: `delete_${courseId}`,
+  fixture: 'coursesList',
+  input: { courseId },
+  expected: {
+    courses: ids(listCourses.filter((c) => c.id !== courseId)),
+    revisions: ids(listRevisions.filter((r) => r.courseId !== courseId)),
+    toast: { title: 'Cours supprimé', message: 'Le cours et son calendrier ont été supprimés.', type: 'info' },
+  },
+}));
+
+// ---------------------------------------------------------------------------
+// Mes progrès (StatsView)
+// ---------------------------------------------------------------------------
+function stats({ courses, revisions, subjects }) {
+  const coursesMap = new Map(courses.map((c) => [c.id, c]));
+  const completedRevisions = revisions.filter((r) => r.status === 'completed');
+  const scoredRevisions = revisions.filter((r) => r.score !== undefined);
+  const overallAvgScore =
+    scoredRevisions.length > 0
+      ? Math.round(scoredRevisions.reduce((acc, r) => acc + (r.score ?? 0), 0) / scoredRevisions.length)
+      : 50;
+  const completionRate = revisions.length > 0 ? Math.round((completedRevisions.length / revisions.length) * 100) : 0;
+  const subjectStats = subjects
+    .map((subj) => {
+      const subjCourses = courses.filter((c) => c.subjectId === subj.id);
+      const subjRevs = revisions.filter((r) => coursesMap.get(r.courseId)?.subjectId === subj.id);
+      const subjCompleted = subjRevs.filter((r) => r.status === 'completed');
+      const subjScored = subjRevs.filter((r) => r.score !== undefined);
+      const avgScore =
+        subjScored.length > 0 ? Math.round(subjScored.reduce((a, b) => a + (b.score ?? 0), 0) / subjScored.length) : null;
+      return {
+        subjectId: subj.id,
+        coursesCount: subjCourses.length,
+        totalRevs: subjRevs.length,
+        completedRevs: subjCompleted.length,
+        rate: subjRevs.length > 0 ? Math.round((subjCompleted.length / subjRevs.length) * 100) : 0,
+        avgScore,
+      };
+    })
+    .filter((s) => s.coursesCount > 0);
+  const weakSubjects = subjectStats.filter((s) => s.avgScore !== null && s.avgScore < 50);
+  return {
+    completionRate,
+    completionLine: `${completedRevisions.length} sur ${revisions.length} faites`,
+    overallAvgScore,
+    balanceLabel: overallAvgScore >= 50 ? 'Au-dessus de l’équilibre' : 'Sous l’équilibre',
+    streakLabel: '5 j',
+    coursesCount: courses.length,
+    subjectsLine: `Sur ${subjectStats.length} matières`,
+    weakSubjects: weakSubjects.map((s) => s.subjectId),
+    subjects: subjectStats.map((s) => ({
+      ...s,
+      line: `(${s.coursesCount} cours • ${s.completedRevs}/${s.totalRevs} J)`,
+      averageTone: s.avgScore === null ? null : s.avgScore >= 50 ? 'good' : 'weak',
+    })),
+  };
+}
+const statsCases = [];
+function statsCase(name, input, note) {
+  statsCases.push({ name, ...(note ? { note } : {}), input: clone(input), expected: stats(input) });
+}
+statsCase('no_data', { courses: [], revisions: [], subjects: SUBJECTS }, 'average defaults to 50 with no score; rate 0');
+{
+  const c = course('course-s-late', 'svt', '2026-10-01');
+  statsCase('only_overdue_pending', { courses: [c], revisions: schedule(c, lib.DEFAULT_INTERVALS), subjects: SUBJECTS });
+}
+statsCase('courses_list_fixture', { courses: listCourses, revisions: listRevisions, subjects: SUBJECTS },
+  'the orphan-subject course counts in global rate, average and course count but has no subject row');
+{
+  const a = course('course-s-a', 'maths', '2026-11-01');
+  const b = course('course-s-b', 'anglais', '2026-11-01');
+  const revs = [
+    rev('s-1', 'course-s-a', '2026-11-01', { status: 'completed', completedDate: '2026-11-01', score: 49 }),
+    rev('s-2', 'course-s-a', '2026-11-02', { status: 'completed', completedDate: '2026-11-02', score: 50 }),
+    rev('s-3', 'course-s-b', '2026-11-01', { status: 'completed', completedDate: '2026-11-01', score: 45 }),
+    rev('s-4', 'course-s-b', '2026-11-02', { status: 'completed', completedDate: '2026-11-02', score: 54 }),
+    rev('s-5', 'course-s-b', '2026-11-03', { status: 'completed', completedDate: '2026-11-03', score: 0 }),
+    rev('s-6', 'course-s-b', '2026-11-04', { score: 100 }),
+    rev('s-7', 'course-s-b', '2026-11-05', { status: 'completed', completedDate: '2026-11-05' }),
+  ];
+  statsCase('rounding_and_weak_subjects', { courses: [a, b], revisions: revs, subjects: SUBJECTS },
+    'maths 49.5 rounds to 50 (not weak); a score on a pending revision counts in averages; a completed revision without score does not');
+  statsCase('subject_without_revisions_listed_with_null_average',
+    { courses: [a, b, course('course-s-c', 'techno', '2026-11-01')], revisions: revs, subjects: SUBJECTS });
+  statsCase('score_null_from_import_counts_as_zero',
+    { courses: [a], revisions: [rev('s-n', 'course-s-a', '2026-11-01', { status: 'completed', completedDate: '2026-11-01' }), { ...rev('s-m', 'course-s-a', '2026-11-02', { status: 'completed', completedDate: '2026-11-02' }), score: null }], subjects: SUBJECTS },
+    'JSON null is !== undefined in TS: it is counted as a score of 0 (probably accidental, see README)');
+}
+
+// ---------------------------------------------------------------------------
+// Réglages (SettingsView)
+// ---------------------------------------------------------------------------
+const addInterval = (intervals, raw) => {
+  const val = parseInt(raw, 10);
+  return !isNaN(val) && val >= 0 && !intervals.includes(val) ? [...intervals, val].sort((a, b) => a - b) : intervals;
+};
+const removeInterval = (intervals, val) => (intervals.length > 2 ? intervals.filter((i) => i !== val) : intervals);
+const settingsCases = [];
+for (const [intervals, raw] of [
+  [lib.DEFAULT_INTERVALS, '120'],
+  [lib.DEFAULT_INTERVALS, '3'],
+  [lib.DEFAULT_INTERVALS, '4'],
+  [lib.DEFAULT_INTERVALS, '-1'],
+  [lib.DEFAULT_INTERVALS, ''],
+  [lib.DEFAULT_INTERVALS, 'abc'],
+  [lib.DEFAULT_INTERVALS, '12abc'],
+  [lib.DEFAULT_INTERVALS, '1.9'],
+  [lib.DEFAULT_INTERVALS, ' 30'],
+  [lib.DEFAULT_INTERVALS, '+5'],
+  [lib.DEFAULT_INTERVALS, '-0'],
+  [lib.DEFAULT_INTERVALS, '1e3'],
+  [[0, 2, 9], '0'],
+]) {
+  settingsCases.push({
+    name: `add_interval_${JSON.stringify(raw)}`,
+    input: { action: 'addInterval', intervals: clone(intervals), value: raw },
+    expected: { intervals: addInterval(intervals, raw) },
+  });
+}
+for (const [intervals, val] of [
+  [lib.DEFAULT_INTERVALS, 45],
+  [lib.DEFAULT_INTERVALS, 13],
+  [[0, 7, 30], 7],
+  [[0, 7], 7],
+  [[0, 7, 30], 0],
+]) {
+  settingsCases.push({
+    name: `remove_interval_${val}_from_${intervals.length}`,
+    input: { action: 'removeInterval', intervals: clone(intervals), value: val },
+    expected: { intervals: removeInterval(intervals, val), removeButtonShown: val !== 0 },
+  });
+}
+settingsCases.push({
+  name: 'reset_intervals',
+  input: { action: 'resetIntervals', intervals: [0, 3] },
+  expected: { intervals: clone(lib.DEFAULT_INTERVALS) },
+});
+for (const [name, current, edit] of [
+  ['save_sorts_intervals_and_trims_url', SETTINGS, { icalUrl: '  https://example.invalid/agenda.ics  ', sensitivity: 0.65, emergencyThreshold: 15, intervals: [0, 30, 2, 9] }],
+  ['save_keeps_other_fields', { ...SETTINGS, lastPronoteSync: '2026-11-17T18:00:00.000Z', userName: 'Élève test', soundEnabled: false }, { icalUrl: '', sensitivity: 0.1, emergencyThreshold: 40, intervals: [0, 1] }],
+]) {
+  settingsCases.push({
+    name,
+    input: { action: 'save', settings: clone(current), edit },
+    expected: {
+      settings: { ...clone(current), pronoteIcalUrl: edit.icalUrl.trim(), sensitivity: edit.sensitivity, emergencyThreshold: edit.emergencyThreshold, intervals: [...edit.intervals].sort((a, b) => a - b) },
+    },
+  });
+}
+for (const sensitivity of [0.1, 0.15, 0.4, 0.45, 0.8]) {
+  settingsCases.push({
+    name: `sensitivity_label_${sensitivity}`,
+    input: { action: 'sensitivityLabel', sensitivity },
+    expected: { label: `Impact max : ±${Math.round(sensitivity * 100)}%`, valueText: String(sensitivity) },
+  });
+}
+for (const threshold of [10, 30, 40]) {
+  settingsCases.push({
+    name: `threshold_label_${threshold}`,
+    input: { action: 'thresholdLabel', emergencyThreshold: threshold },
+    expected: { label: `Seuil d'urgence (Rattrapage J+1) : < ${threshold}/100` },
+  });
+}
+settingsCases.push({
+  name: 'subject_color_change_keeps_order_and_other_fields',
+  input: { action: 'subjectColor', subjects: 'default', subjectId: 'svt', color: '#123abc' },
+  expected: { subjects: SUBJECTS.map((s) => (s.id === 'svt' ? { ...s, color: '#123abc' } : s)) },
+});
+assertSource('src/views/SettingsView.tsx', [
+  "Seuil d'urgence (Rattrapage J+1) :{' '}",
+  '<strong className="text-rose-700 font-mono">&lt; {emergencyThreshold}/100</strong>',
+]);
+
+// ---------------------------------------------------------------------------
+// Import / export (storage.ts, then a reload = initializeDefaultDataIfEmpty)
+// ---------------------------------------------------------------------------
+function seedStorage(state) {
+  memoryStorage.clear();
+  lib.saveCourses(state.courses);
+  lib.saveRevisions(state.revisions);
+  lib.saveSubjects(state.subjects);
+  lib.savePronoteEvents(state.pronoteEvents);
+  lib.saveSettings(state.settings);
+  localStorage.setItem('jmethod_initialized_v1', 'true');
+}
+const smallCourse = course('course-ie', 'maths', '2026-11-10', { chapter: 'Algèbre', title: 'Cours de test import' });
+fixtures.importBefore = {
+  courses: [smallCourse],
+  revisions: schedule(smallCourse, [0, 1, 3], 1, 70),
+  subjects: SUBJECTS.slice(0, 3),
+  pronoteEvents: planEvents.slice(0, 2),
+  settings: settingsWith({ sensitivity: 0.6, userName: 'Avant import' }),
+};
+const otherCourse = course('course-ie-2', 'svt', '2026-11-12', { chapter: 'Cellule', title: 'Cours de test exporté' });
+const exportedState = {
+  courses: [otherCourse],
+  revisions: schedule(otherCourse, [0, 2], 1, 55),
+  subjects: [...SUBJECTS.slice(5), { id: 'custom-latin', name: 'Latin', color: '#0EA5E9', isCustom: true }],
+  pronoteEvents: [],
+  settings: settingsWith({ intervals: [0, 2], emergencyThreshold: 20 }),
+};
+setNow(paris('2026-11-17', '19:30'));
+seedStorage(exportedState);
+const exportedText = lib.exportAllData();
+const importExportCases = [];
+function importCase(name, text, note) {
+  setNow(paris('2026-11-17', '20:00'));
+  seedStorage(fixtures.importBefore);
+  const accepted = lib.importAllData(text);
+  const reloaded = lib.initializeDefaultDataIfEmpty();
+  importExportCases.push({
+    name,
+    ...(note ? { note } : {}),
+    fixture: 'importBefore',
+    input: { json: text },
+    expected: {
+      accepted,
+      toast: accepted ? null : { title: 'Erreur d’importation', message: 'Le fichier fourni est invalide.', type: 'warning' },
+      reloadsPage: accepted,
+      stateAfterReload: clone(reloaded),
+    },
+  });
+}
+importExportCases.push({
+  name: 'export_format',
+  now: nowField(paris('2026-11-17', '19:30')),
+  input: { state: clone(exportedState) },
+  expected: { json: exportedText, parsed: JSON.parse(exportedText) },
+  note: 'JSON.stringify(data, null, 2); pronoteEvents are not exported; settings are the merged settings',
+});
+importCase('roundtrip_full_export', exportedText, 'pronoteEvents of the previous state are kept');
+importCase('invalid_json_rejected', '{ not json');
+importCase('json_null_rejected', 'null');
+importCase('missing_revisions_rejected', JSON.stringify({ courses: [] }));
+importCase('missing_courses_rejected', JSON.stringify({ revisions: [] }));
+importCase('empty_arrays_accepted', JSON.stringify({ courses: [], revisions: [] }), 'subjects and settings are kept when absent');
+importCase('partial_settings_merged_with_defaults_on_load', JSON.stringify({ courses: [], revisions: [], settings: { sensitivity: 0.25 } }),
+  'settings are stored as given and merged over DEFAULT_SETTINGS when loaded');
+importCase('empty_subjects_array_replaces_subjects', JSON.stringify({ courses: [], revisions: [], subjects: [] }));
+importCase('null_subjects_and_settings_are_ignored', JSON.stringify({ courses: [], revisions: [], subjects: null, settings: null }));
+importCase('extra_fields_ignored', JSON.stringify({ version: '9.9', courses: [], revisions: [], pronoteEvents: [{ id: 'x' }], other: 1 }));
+importCase('courses_object_is_accepted', JSON.stringify({ courses: {}, revisions: {} }),
+  'no shape validation: any truthy value passes (probably accidental)');
+importCase('wrong_shape_string_is_accepted', JSON.stringify({ courses: 'oops', revisions: 1 }),
+  'no shape validation: any truthy value passes (probably accidental)');
+
 // ---------------------------------------------------------------------------
 // Write files
 // ---------------------------------------------------------------------------
@@ -1332,6 +2241,7 @@ const header = {
 const vectors = {
   ...header,
   subjectSets,
+  fixtures,
   suites: {
     getPhaseForStep: phaseCases,
     generateInitialRevisions: generateCases,
@@ -1345,6 +2255,17 @@ const vectors = {
     todayScreen: todayCases,
     scoreSubmit: submitCases,
     scorePreview: previewCases,
+    planning: planningCases,
+    planningNavigate: navigateCases,
+    revisionDetail: revisionDetailCases,
+    coursesList: coursesListCases,
+    courseDetail: courseDetailCases,
+    courseCreate: courseCreateCases,
+    courseCreatePrefill: prefillCases,
+    courseDelete: courseDeleteCases,
+    stats: statsCases,
+    settingsUpdate: settingsCases,
+    importExport: importExportCases,
   },
 };
 
@@ -1363,6 +2284,12 @@ const constants = {
     { val: 100, label: '100', sub: 'Parfait' },
   ],
   SCORE_SLIDER: { min: 0, max: 100, step: 5, initial: 50 },
+  REVISION_PHASE_LABELS,
+  SETTINGS_SLIDERS: {
+    sensitivity: { min: 0.1, max: 0.8, step: 0.05 },
+    emergencyThreshold: { min: 10, max: 40, step: 5 },
+  },
+  INTERVALS_REMOVE_REQUIRES_MORE_THAN: 2,
 };
 assertSource('src/components/ScoreModal.tsx', [
   "{ val: 0, label: '0', sub: 'Pas encore' },",
