@@ -1,0 +1,478 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0C968916C6371CE7751BBF69 /* PronoteAutomation.js in Resources */ = {isa = PBXBuildFile; fileRef = 42F7BBEFC3EB307499A3826A /* PronoteAutomation.js */; };
+		4531D9CC38611DAD1B9AB102 /* protocol-vectors.json in Resources */ = {isa = PBXBuildFile; fileRef = 5833CEFAD821479C000304B0 /* protocol-vectors.json */; };
+		465B9B74F2A8CEB25E7F8F78 /* PronoteWebFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 343A9A097FCB61FAB6E5575C /* PronoteWebFlow.swift */; };
+		5FA9F483AFEBA9D1BE5280C6 /* ProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B250AB44D2224AE65EB81377 /* ProtocolTests.swift */; };
+		6D1FF7F0DC062FD2FFF92963 /* ProtocolCrypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFD75A5A580A931712531CAF /* ProtocolCrypto.swift */; };
+		ACA43602962F339517968F5F /* libz.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 7B3821B0EC2C997FF64987F5 /* libz.tbd */; };
+		BA688BFAF94C5CCE43D84FB9 /* JMethodApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BAE3A83AE2A8DD666C68A4C /* JMethodApp.swift */; };
+		C0E8C9F964DF501AC730DD56 /* PronoteClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACD6E305C59AF5877FF9C09A /* PronoteClient.swift */; };
+		CEF1559FE557B626BDA3D5C4 /* ConnectionModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DA9D599529F9C1115D7275D /* ConnectionModel.swift */; };
+		D938343AF9CEE67BD092CE0C /* SecureStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB7C97581F4C6C90F81F0D42 /* SecureStore.swift */; };
+		DFD0402570079D2C393004BC /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 754E4C47425A330C1199576C /* Models.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		29AAA3CDBB26AEFC437FC268 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 651597A722E5F04E31EBE28E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C8738138CE276279291E8EBD;
+			remoteInfo = JMethodConnectionPOC;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		0BAE3A83AE2A8DD666C68A4C /* JMethodApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JMethodApp.swift; sourceTree = "<group>"; };
+		19449A1C915AB069F44F1FED /* JMethodConnectionPOC.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = JMethodConnectionPOC.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		343A9A097FCB61FAB6E5575C /* PronoteWebFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PronoteWebFlow.swift; sourceTree = "<group>"; };
+		42F7BBEFC3EB307499A3826A /* PronoteAutomation.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = PronoteAutomation.js; sourceTree = "<group>"; };
+		5833CEFAD821479C000304B0 /* protocol-vectors.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "protocol-vectors.json"; sourceTree = "<group>"; };
+		5DA9D599529F9C1115D7275D /* ConnectionModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionModel.swift; sourceTree = "<group>"; };
+		754E4C47425A330C1199576C /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		7B3821B0EC2C997FF64987F5 /* libz.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libz.tbd; path = usr/lib/libz.tbd; sourceTree = SDKROOT; };
+		ACD6E305C59AF5877FF9C09A /* PronoteClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PronoteClient.swift; sourceTree = "<group>"; };
+		B250AB44D2224AE65EB81377 /* ProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolTests.swift; sourceTree = "<group>"; };
+		B3C65EF0908525D42A58431F /* JMethodConnectionPOCTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = JMethodConnectionPOCTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		EFD75A5A580A931712531CAF /* ProtocolCrypto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolCrypto.swift; sourceTree = "<group>"; };
+		FB7C97581F4C6C90F81F0D42 /* SecureStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureStore.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		BC82B32096D2BCB4920DEA9C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				ACA43602962F339517968F5F /* libz.tbd in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		0C005061E212651CD1403956 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				7B3821B0EC2C997FF64987F5 /* libz.tbd */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		19B7A79285D5479922B49899 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				19449A1C915AB069F44F1FED /* JMethodConnectionPOC.app */,
+				B3C65EF0908525D42A58431F /* JMethodConnectionPOCTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		5A25BCDF536BF276ADDEF320 /* shared */ = {
+			isa = PBXGroup;
+			children = (
+				42F7BBEFC3EB307499A3826A /* PronoteAutomation.js */,
+				5833CEFAD821479C000304B0 /* protocol-vectors.json */,
+			);
+			name = shared;
+			path = ../shared;
+			sourceTree = "<group>";
+		};
+		9D812E343FA8FAFE2490ED0D /* Tests */ = {
+			isa = PBXGroup;
+			children = (
+				B250AB44D2224AE65EB81377 /* ProtocolTests.swift */,
+			);
+			path = Tests;
+			sourceTree = "<group>";
+		};
+		B40C65F334C77C233334B96D /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				5DA9D599529F9C1115D7275D /* ConnectionModel.swift */,
+				0BAE3A83AE2A8DD666C68A4C /* JMethodApp.swift */,
+				754E4C47425A330C1199576C /* Models.swift */,
+				ACD6E305C59AF5877FF9C09A /* PronoteClient.swift */,
+				343A9A097FCB61FAB6E5575C /* PronoteWebFlow.swift */,
+				EFD75A5A580A931712531CAF /* ProtocolCrypto.swift */,
+				FB7C97581F4C6C90F81F0D42 /* SecureStore.swift */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		C9EEB729302E177B352BC969 = {
+			isa = PBXGroup;
+			children = (
+				5A25BCDF536BF276ADDEF320 /* shared */,
+				B40C65F334C77C233334B96D /* Sources */,
+				9D812E343FA8FAFE2490ED0D /* Tests */,
+				0C005061E212651CD1403956 /* Frameworks */,
+				19B7A79285D5479922B49899 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		1DC05DE926E3B6D38B78D863 /* JMethodConnectionPOCTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 50EECFEC158CCF7A9C1EDE59 /* Build configuration list for PBXNativeTarget "JMethodConnectionPOCTests" */;
+			buildPhases = (
+				FC7D889498CFAD372E25E93D /* Sources */,
+				E964FEAAFD0F1D574D865EC0 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B2A376B974CE9F1BC52B5EFC /* PBXTargetDependency */,
+			);
+			name = JMethodConnectionPOCTests;
+			packageProductDependencies = (
+			);
+			productName = JMethodConnectionPOCTests;
+			productReference = B3C65EF0908525D42A58431F /* JMethodConnectionPOCTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		C8738138CE276279291E8EBD /* JMethodConnectionPOC */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DD804C1EEC1032808819EB2C /* Build configuration list for PBXNativeTarget "JMethodConnectionPOC" */;
+			buildPhases = (
+				2E2311760421CD1B6B0442AF /* Sources */,
+				4688FBAC2091853898E4A2AB /* Resources */,
+				BC82B32096D2BCB4920DEA9C /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = JMethodConnectionPOC;
+			packageProductDependencies = (
+			);
+			productName = JMethodConnectionPOC;
+			productReference = 19449A1C915AB069F44F1FED /* JMethodConnectionPOC.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		651597A722E5F04E31EBE28E /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					1DC05DE926E3B6D38B78D863 = {
+						ProvisioningStyle = Automatic;
+					};
+					C8738138CE276279291E8EBD = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = F4BE888BA660F3C0E81B8DD3 /* Build configuration list for PBXProject "JMethodConnectionPOC" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = C9EEB729302E177B352BC969;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 19B7A79285D5479922B49899 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				C8738138CE276279291E8EBD /* JMethodConnectionPOC */,
+				1DC05DE926E3B6D38B78D863 /* JMethodConnectionPOCTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		4688FBAC2091853898E4A2AB /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0C968916C6371CE7751BBF69 /* PronoteAutomation.js in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E964FEAAFD0F1D574D865EC0 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4531D9CC38611DAD1B9AB102 /* protocol-vectors.json in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		2E2311760421CD1B6B0442AF /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CEF1559FE557B626BDA3D5C4 /* ConnectionModel.swift in Sources */,
+				BA688BFAF94C5CCE43D84FB9 /* JMethodApp.swift in Sources */,
+				DFD0402570079D2C393004BC /* Models.swift in Sources */,
+				C0E8C9F964DF501AC730DD56 /* PronoteClient.swift in Sources */,
+				465B9B74F2A8CEB25E7F8F78 /* PronoteWebFlow.swift in Sources */,
+				6D1FF7F0DC062FD2FFF92963 /* ProtocolCrypto.swift in Sources */,
+				D938343AF9CEE67BD092CE0C /* SecureStore.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FC7D889498CFAD372E25E93D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5FA9F483AFEBA9D1BE5280C6 /* ProtocolTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		B2A376B974CE9F1BC52B5EFC /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C8738138CE276279291E8EBD /* JMethodConnectionPOC */;
+			targetProxy = 29AAA3CDBB26AEFC437FC268 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		37025D894F972975D6539672 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = fr.jmethod.connectionpoc.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/JMethodConnectionPOC.app/JMethodConnectionPOC";
+			};
+			name = Release;
+		};
+		45ACEBB8B3D1331396675D7A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		5834AC81ED8F19516A6E9F28 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = fr.jmethod.connectionpoc.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/JMethodConnectionPOC.app/JMethodConnectionPOC";
+			};
+			name = Debug;
+		};
+		5B71201C47C9195FC20DE7EF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = fr.jmethod.connectionpoc;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A54EEB670871442072C2D193 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		E39BAE10A3E477A9F45F440D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = fr.jmethod.connectionpoc;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		50EECFEC158CCF7A9C1EDE59 /* Build configuration list for PBXNativeTarget "JMethodConnectionPOCTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5834AC81ED8F19516A6E9F28 /* Debug */,
+				37025D894F972975D6539672 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		DD804C1EEC1032808819EB2C /* Build configuration list for PBXNativeTarget "JMethodConnectionPOC" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5B71201C47C9195FC20DE7EF /* Debug */,
+				E39BAE10A3E477A9F45F440D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		F4BE888BA660F3C0E81B8DD3 /* Build configuration list for PBXProject "JMethodConnectionPOC" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				45ACEBB8B3D1331396675D7A /* Debug */,
+				A54EEB670871442072C2D193 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 651597A722E5F04E31EBE28E /* Project object */;
+}

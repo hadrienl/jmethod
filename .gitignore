@@ -14,3 +14,13 @@ __pycache__/
 *.pyc
 
 .venv/
+
+# Native POC build outputs and local platform config
+native/artifacts/
+native/ios/build/
+native/ios/DerivedData/
+native/ios/.build/
+**/xcuserdata/
+**/local.properties
+**/.gradle/
+native/android/**/build/
