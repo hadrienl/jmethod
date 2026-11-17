@@ -10,6 +10,11 @@ export function matchSubject(rawSummary: string, subjects: Subject[]): Subject |
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '');
 
+  // Physical education is a distinct subject, not physics/chemistry.
+  if (/\beps\b|sport|ed\.?\s*physique|education physique/.test(normalizedSummary)) {
+    return subjects.find(subj => subj.id === 'eps');
+  }
+
   return subjects.find((subj) => {
     const normalizedSubj = subj.name
       .toLowerCase()
@@ -19,12 +24,12 @@ export function matchSubject(rawSummary: string, subjects: Subject[]): Subject |
     // Direct include or aliases
     if (normalizedSummary.includes(normalizedSubj)) return true;
     if (subj.id === 'maths' && (normalizedSummary.includes('math') || normalizedSummary.includes('mathematiques'))) return true;
-    if (subj.id === 'svt' && (normalizedSummary.includes('s.v.t') || normalizedSummary.includes('svt') || normalizedSummary.includes('sciences de la vie'))) return true;
+    if (subj.id === 'svt' && (normalizedSummary.includes('s.v.t') || normalizedSummary.includes('svt') || normalizedSummary.includes('sciences de la vie') || normalizedSummary.includes('sciences vie'))) return true;
     if (subj.id === 'physique-chimie' && (normalizedSummary.includes('physique') || normalizedSummary.includes('chimie') || normalizedSummary.includes('spc'))) return true;
     if (subj.id === 'histoire-geo' && (normalizedSummary.includes('histoire') || normalizedSummary.includes('geo') || normalizedSummary.includes('emc') || normalizedSummary.includes('h-g'))) return true;
     if (subj.id === 'francais' && normalizedSummary.includes('francais')) return true;
-    if (subj.id === 'anglais' && (normalizedSummary.includes('anglais') || normalizedSummary.includes('lv1'))) return true;
-    if (subj.id === 'espagnol' && (normalizedSummary.includes('espagnol') || normalizedSummary.includes('lv2'))) return true;
+    if (subj.id === 'anglais' && normalizedSummary.includes('anglais')) return true;
+    if (subj.id === 'espagnol' && normalizedSummary.includes('espagnol')) return true;
     if (subj.id === 'techno' && (normalizedSummary.includes('techno') || normalizedSummary.includes('technologie'))) return true;
     if (subj.id === 'arts-plastiques' && (normalizedSummary.includes('arts') || normalizedSummary.includes('plastique'))) return true;
     if (subj.id === 'musique' && (normalizedSummary.includes('musique') || normalizedSummary.includes('chant'))) return true;

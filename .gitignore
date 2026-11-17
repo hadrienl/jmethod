@@ -12,3 +12,5 @@ dist/
 .pronote-local/
 __pycache__/
 *.pyc
+
+.venv/

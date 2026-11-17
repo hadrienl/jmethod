@@ -11,7 +11,8 @@ import {
   CheckCircle2,
   AlertCircle,
 } from 'lucide-react';
-import { AppSettings, Subject } from '../types';
+import { AppSettings, Subject, PronoteEvent } from '../types';
+import { PronoteConnection } from '../components/PronoteConnection';
 import { DEFAULT_INTERVALS } from '../lib/constants';
 
 interface SettingsViewProps {
@@ -21,6 +22,7 @@ interface SettingsViewProps {
   onUpdateSubjects: (newSubjects: Subject[]) => void;
   onOpenPronoteTutorial: () => void;
   onSyncPronote: (url: string) => void;
+  onPronoteSynced: (events: PronoteEvent[], syncedAt: string) => void;
   onExportData: () => void;
   onImportData: (jsonStr: string) => void;
   onResetDemoData: () => void;
@@ -33,6 +35,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onUpdateSubjects,
   onOpenPronoteTutorial,
   onSyncPronote,
+  onPronoteSynced,
   onExportData,
   onImportData,
   onResetDemoData,
@@ -118,6 +121,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       )}
 
+      <PronoteConnection onSynced={onPronoteSynced}/>
+
+      <details className="rounded-2xl border border-slate-200 p-4 bg-white"><summary className="cursor-pointer font-semibold py-2">Autre méthode : lien iCal</summary>
       {/* 1. PRONOTE SYNCHRONIZATION VIA ICAL */}
       <div className="rounded-2xl border border-slate-200 bg-white/80 p-6 space-y-4">
         <div className="flex items-center justify-between">
@@ -167,6 +173,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </p>
         </div>
       </div>
+
+      </details>
 
       {/* 2. ADAPTIVE ALGORITHM SETTINGS */}
       <div className="rounded-2xl border border-slate-200 bg-white/80 p-6 space-y-5">

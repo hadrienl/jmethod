@@ -23,7 +23,7 @@ import {
 } from './lib/storage';
 import { getEveningProgramme } from './lib/eveningProgramme';
 import { applyAdaptiveReview, generateInitialRevisions } from './lib/adaptiveAlgorithm';
-import { parseICalFeed, generateSamplePronoteFeed } from './lib/icalParser';
+import { parseICalFeed, generateSamplePronoteFeed, matchSubject } from './lib/icalParser';
 import { Course, Revision, Subject, PronoteEvent, AppSettings } from './types';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 
@@ -334,6 +334,15 @@ export const App: React.FC = () => {
             }}
             onOpenPronoteTutorial={() => setIsPronoteTutorialOpen(true)}
             onSyncPronote={handleSyncPronote}
+            onPronoteSynced={(events, syncedAt) => {
+              const matched = events.map(event => ({ ...event, matchedSubjectId: matchSubject(event.subjectName, subjects)?.id }));
+              setPronoteEvents(matched);
+              savePronoteEvents(matched);
+              const newSettings = { ...settings, lastPronoteSync: syncedAt };
+              setSettings(newSettings);
+              saveSettings(newSettings);
+              showToast('Pronote synchronisé', `${matched.length} créneaux importés dans ton planning.`, 'success');
+            }}
             onExportData={handleExportData}
             onImportData={handleImportData}
             onResetDemoData={handleResetDemoData}

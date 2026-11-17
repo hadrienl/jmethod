@@ -48,8 +48,7 @@ def normalize_lessons(lessons):
     return sorted(unique.values(), key=lambda event: (event['date'], event['startTime'], event['id']))
 
 
-def load_qr(path):
-    raw = json.loads(path.read_text())
+def validate_qr(raw):
     if not isinstance(raw, dict) or not all(isinstance(raw.get(k), str) and raw[k] for k in ('url', 'login', 'jeton')):
         raise ValueError('Invalid QR JSON')
     url = urlparse(raw['url'])
@@ -63,6 +62,10 @@ def load_qr(path):
         if not decoded or len(decoded) % 16:
             raise ValueError('Invalid QR ciphertext')
     return raw
+
+
+def load_qr(path):
+    return validate_qr(json.loads(path.read_text()))
 
 
 def main():
