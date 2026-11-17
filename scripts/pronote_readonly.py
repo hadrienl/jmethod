@@ -13,7 +13,7 @@ import uuid
 
 READ_FUNCTIONS = frozenset({
     'Identification', 'Authentification', 'ParametresUtilisateur',
-    'PageInfosPerso', 'PageEmploiDuTemps', 'Navigation', 'Presence',
+    'PageInfosPerso', 'PageEmploiDuTemps', 'PageCahierDeTexte', 'Navigation', 'Presence',
 })
 
 

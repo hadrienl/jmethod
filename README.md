@@ -36,6 +36,7 @@ npm run preview
 - Réglages : intervalles, adaptation, matières et sauvegarde JSON.
 - Autoévaluation de 0 à 100 : adaptation des intervalles autour du pivot 50, séance de rattrapage sous le seuil configuré.
 - Connexion Pronote par QR dans la version locale, synchronisation de l’emploi du temps en lecture seule et sélection de l’enfant pour les comptes parents.
+- Aperçu du cahier de textes réel : contenus publiés, devoirs et pièces jointes téléchargeables, sans création automatique de fiches de révision.
 - Emploi du temps iCal du lendemain et jeu de démonstration.
 
 Le premier lancement installe des **données de démonstration**. Les données restent dans le stockage local du navigateur ; aucun compte ou serveur de synchronisation n’est implémenté.

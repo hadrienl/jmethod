@@ -70,6 +70,17 @@ class ServerTests(unittest.TestCase):
         self.assertFalse(self.request('POST','disconnect',{},cookie=cookie)[1]['connected'])
         self.assertEqual(self.request('POST','sync',{},cookie=cookie)[0],401)
 
+    def test_notebook_requires_session_and_retains_private_attachment_lookup(self):
+        self.assertEqual(self.request('POST','notebook',{})[0],401)
+        server.SESSIONS['test']=self.fake_entry()
+        with patch.object(server,'fetch_notebook',return_value={'contents':[], 'homework':[], 'attachmentCount':0}):
+            status,data,_,cache=self.request('POST','notebook',{},cookie='jmethod_pronote=test')
+        self.assertEqual(status,200)
+        self.assertEqual(cache,'no-store')
+        self.assertEqual(data['contents'],[])
+        self.assertEqual(self.request('GET','attachment/missing',cookie='jmethod_pronote=test')[0],404)
+        self.assertEqual(self.request('GET','attachment/missing')[0],401)
+
     def test_expired_session_removed_and_unavailable_sync_keeps_session(self):
         entry=self.fake_entry()
         server.SESSIONS['test']=entry

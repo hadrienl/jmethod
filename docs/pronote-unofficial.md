@@ -32,7 +32,6 @@ Les tests vérifient le refus des opérations d’écriture, le refus de modific
 
 Le 17 novembre 2026, le test sur le serveur de démonstration public d’Index Éducation a réussi : authentification puis lecture de 22 créneaux sur sept jours. Cette vérification ne valide pas à elle seule la connexion QR sur un compte réel.
 
-Le test QR sur le compte réel autorisé a ensuite réussi avec PRONOTE 2026.2.8 : lecture de l’emploi du temps sur sept jours et récupération des statuts d’annulation. Le contenu de cet emploi du temps et les identifiants du compte ne figurent pas dans ce dépôt.
 
 ## Connexion depuis J-Method
 
@@ -44,4 +43,14 @@ Le service limite les requêtes aux instances HTTPS hébergées sous `*.index-ed
 
 Une synchronisation charge les 14 prochains jours. Les comptes parents peuvent sélectionner un enfant parmi ceux associés au compte. Déconnecter supprime la session locale et son cookie, sans effacer les créneaux déjà importés du navigateur. Les erreurs de connexion conservent le dernier emploi du temps importé.
 
-Vérifications : six tests Python couvrent les appels refusés, les hôtes et origines autorisés, le cookie, l’isolation des sessions, leur expiration et les échecs réseau. Un scénario Chrome isolé à 390 px couvre le décodage QR, les codes incorrects, la connexion, le choix d’enfant, la synchronisation, l’affichage du lendemain et la déconnexion. Le parcours a également été exécuté avec succès dans l’interface locale sur le compte réel autorisé : connexion QR, import de 48 créneaux sur 14 jours, nouvelle synchronisation et affichage de demain. Aucune donnée personnelle n’est intégrée au dépôt.
+Vérifications : six tests Python couvrent les appels refusés, les hôtes et origines autorisés, le cookie, l’isolation des sessions, leur expiration et les échecs réseau. Un scénario Chrome isolé à 390 px couvre le décodage QR, les codes incorrects, la connexion, le choix d’enfant, la synchronisation, l’affichage du lendemain et la déconnexion. Aucune donnée de compte personnel n’est intégrée à la documentation ou aux jeux de tests.
+
+## Validation du cahier de textes
+
+Dans la connexion locale, **Vérifier les cours disponibles → Lire le cahier de textes** charge un aperçu de 28 jours (14 jours précédents, jour courant et 13 jours suivants). Il distingue les contenus de séance, les devoirs avec leurs échéances et les documents/liens joints. Aucune fiche J-Method n’est créée automatiquement et aucun devoir n’est marqué fait dans Pronote.
+
+Le connecteur autorise uniquement la lecture supplémentaire `PageCahierDeTexte`. Les dates sont celles de chaque entrée publiée (`Date`), et non la dernière occurrence d’un cours récurrent dans l’emploi du temps. Toutes les descriptions d’une séance sont conservées. Les entrées sans date exploitable sont comptées comme non affichées.
+
+Les documents passent par un téléchargement local authentifié : le navigateur reçoit un identifiant opaque et un nom de fichier, jamais l’URL Pronote contenant la session. Le téléchargement est limité à 20 Mo et les liens sont limités aux schémas HTTP/HTTPS. Les descriptions sont affichées comme du texte.
+
+Dix tests Python couvrent désormais aussi la séparation contenus/devoirs, les cours récurrents, les métadonnées de pièces jointes et l’accès authentifié. Le parcours d’aperçu, les volets repliables, un téléchargement, l’échec d’actualisation sans perte de l’aperçu et l’affichage à 390 px ont été vérifiés dans Chrome avec des données fictives.

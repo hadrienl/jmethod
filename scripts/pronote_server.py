@@ -5,14 +5,17 @@ from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import logging
+import mimetypes
+from pathlib import Path
 import secrets
 import threading
 import time
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote
 import uuid
 
 import pronotepy
 import requests
+from pronote_notebook import fetch_notebook
 from pronote_readonly import normalize_lessons, readonly_client_class, validate_qr
 
 COOKIE = 'jmethod_pronote'
@@ -91,6 +94,7 @@ def fetch_timetable(entry, child_id=None):
         if child is None:
             raise ValueError('Unknown child')
         client.set_child(child)
+        entry.pop('attachments', None)
     today = dt.date.today()
     start = dt.datetime.combine(today, dt.time.min)
     end = dt.datetime.combine(today + dt.timedelta(days=13), dt.time.max)
@@ -151,6 +155,35 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             return None
 
+    def download_attachment(self, entry, attachment_id):
+        if not entry:
+            self.respond(401, {'error': 'Reconnecte Pronote pour ouvrir ce document.'})
+            return
+        with entry['lock']:
+            file = entry.get('attachments', {}).get(attachment_id)
+            if file is None:
+                self.respond(404, {'error': 'Actualise le cahier de textes pour retrouver ce document.'})
+                return
+            validate_remote_url(file.url)
+            with entry['client'].communication.session.get(file.url, stream=True) as response:
+                response.raise_for_status()
+                content = bytearray()
+                for chunk in response.iter_content(65536):
+                    content.extend(chunk)
+                    if len(content) > 20 * 1024 * 1024:
+                        self.respond(413, {'error': 'Ce document dépasse la limite de 20 Mo du POC.'})
+                        return
+            name = Path(file.name or 'document').name
+            content_type = mimetypes.guess_type(name)[0] or 'application/octet-stream'
+            self.send_response(200)
+            self.send_header('Content-Type', content_type)
+            self.send_header('Content-Length', str(len(content)))
+            self.send_header('Content-Disposition', "attachment; filename*=UTF-8''" + quote(name, safe=''))
+            self.send_header('Cache-Control', 'no-store')
+            self.send_header('X-Content-Type-Options', 'nosniff')
+            self.end_headers()
+            self.wfile.write(content)
+
     def do_GET(self):
         self.dispatch()
 
@@ -168,7 +201,13 @@ class Handler(BaseHTTPRequestHandler):
         if self.command == 'GET' and self.path == '/api/pronote/status':
             self.respond(200, snapshot(entry) if entry else {'connected': False})
             return
-        if self.command != 'POST' or self.path not in ('/api/pronote/connect', '/api/pronote/sync', '/api/pronote/disconnect'):
+        if self.command == 'GET' and self.path.startswith('/api/pronote/attachment/'):
+            try:
+                self.download_attachment(entry, self.path.rsplit('/', 1)[-1])
+            except Exception:
+                self.respond(502, {'error': 'Le document est indisponible. Actualise le cahier de textes puis réessaie.'})
+            return
+        if self.command != 'POST' or self.path not in ('/api/pronote/connect', '/api/pronote/sync', '/api/pronote/disconnect', '/api/pronote/notebook'):
             self.respond(404, {'error': 'Opération inconnue.'})
             return
         try:
@@ -200,7 +239,7 @@ class Handler(BaseHTTPRequestHandler):
                     self.respond(401, {'error': 'La session a expiré. Reconnecte Pronote avec un nouveau QR code.'}, cookie='')
                     return
                 with entry['lock']:
-                    result = fetch_timetable(entry, payload.get('childId'))
+                    result = fetch_notebook(entry) if self.path.endswith('/notebook') else fetch_timetable(entry, payload.get('childId'))
                 self.respond(200, result)
         except (ValueError, TypeError, KeyError):
             self.respond(400, {'error': 'Vérifie le QR code et son code temporaire à quatre chiffres. Seuls les comptes hébergés sur index-education.net sont pris en charge dans ce POC.'})

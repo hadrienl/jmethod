@@ -15,7 +15,7 @@ class ReadOnlyTests(unittest.TestCase):
             def post(self, name, *args, **kwargs):
                 return name
         client = connector.readonly_client_class(Base)()
-        for name in ('SaisieMessage', 'SaisieTravailAFaire', 'SecurisationCompteDoubleAuth', 'JetonAppliMobile'):
+        for name in ('SaisieMessage', 'SaisieTravailAFaire', 'SaisieTAFFaitEleve', 'SecurisationCompteDoubleAuth', 'JetonAppliMobile'):
             with self.assertRaises(PermissionError):
                 client.post(name)
         self.assertEqual(client.post('PageEmploiDuTemps'), 'PageEmploiDuTemps')

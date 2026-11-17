@@ -6,6 +6,8 @@ import {
   RefreshCw,
   Unplug,
 } from "lucide-react";
+import { PronoteNotebookPreview } from "./PronoteNotebookPreview";
+import { pronoteApi } from "../lib/pronoteApi";
 import { PronoteEvent } from "../types";
 
 type QR = { url: string; login: string; jeton: string };
@@ -17,45 +19,6 @@ interface Connection {
   children?: { id: string; name: string }[];
   selectedChildId?: string;
   events?: PronoteEvent[];
-}
-
-async function api(
-  path: string,
-  payload?: unknown,
-  signal?: AbortSignal,
-): Promise<Connection> {
-  let response: Response;
-  try {
-    response = await fetch(`/api/pronote/${path}`, {
-      method: payload === undefined ? "GET" : "POST",
-      headers: {
-        "X-JMethod-Client": "local-poc",
-        ...(payload !== undefined
-          ? { "Content-Type": "application/json" }
-          : {}),
-      },
-      credentials: "same-origin",
-      body: payload === undefined ? undefined : JSON.stringify(payload),
-      signal,
-    });
-  } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError")
-      throw error;
-    throw new Error(
-      "Le service de connexion local est indisponible. Relance le POC, puis réessaie.",
-    );
-  }
-  let data: Connection & { error?: string };
-  try {
-    data = await response.json();
-  } catch {
-    throw new Error(
-      "Le service de connexion local est indisponible. Relance le POC, puis réessaie.",
-    );
-  }
-  if (!response.ok)
-    throw new Error(data.error ?? "La connexion Pronote a échoué.");
-  return data;
 }
 
 export async function decodeQrImage(file: File): Promise<QR> {
@@ -145,7 +108,7 @@ export function PronoteConnection({
   useEffect(() => {
     if (!local) return;
     const controller = new AbortController();
-    api("status", undefined, controller.signal)
+    pronoteApi<Connection>("status", undefined, controller.signal)
       .then(setConnection)
       .catch((error) => {
         if (error.name !== "AbortError") setError(error.message);
@@ -183,7 +146,7 @@ export function PronoteConnection({
     const submittedPin = pin;
     if (action === "connect") setPin("");
     try {
-      const result = await api(
+      const result = await pronoteApi<Connection>(
         action,
         action === "connect"
           ? { qr, pin: submittedPin }
@@ -213,7 +176,7 @@ export function PronoteConnection({
       );
       if (action === "sync") {
         try {
-          setConnection(await api("status"));
+          setConnection(await pronoteApi<Connection>("status"));
         } catch {
           /* Preserve the current state and cached courses. */
         }
@@ -315,6 +278,13 @@ export function PronoteConnection({
                   <Unplug size={18} /> Déconnecter Pronote
                 </button>
               </div>
+              <PronoteNotebookPreview
+                key={
+                  connection.selectedChildId ??
+                  connection.accountName ??
+                  "student"
+                }
+              />
             </>
           ) : (
             <form
