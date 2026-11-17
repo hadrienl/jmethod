@@ -53,7 +53,8 @@ export function applyAdaptiveReview(
   revisionId: string,
   score: number,
   settings: AppSettings,
-  actualCompletionDate: string = format(new Date(), 'yyyy-MM-dd')
+  actualCompletionDate: string = format(new Date(), 'yyyy-MM-dd'),
+  schedulingReferenceDate: string = actualCompletionDate
 ): AdaptationResult {
   const revisions = [...allRevisionsForCourse].sort((a, b) => a.stepIndex - b.stepIndex);
   const targetIndex = revisions.findIndex((r) => r.id === revisionId);
@@ -84,7 +85,9 @@ export function applyAdaptiveReview(
   let message = '';
   let nextDateStr: string | undefined;
 
-  const completionDateObj = parseISO(actualCompletionDate);
+  // Evening sessions prepare tomorrow. Anchor future target dates to that day,
+  // while completedDate remains the actual date on which the student studied.
+  const completionDateObj = parseISO(schedulingReferenceDate);
 
   // 2. Check for emergency session if score < emergencyThreshold (default 30)
   if (score < settings.emergencyThreshold) {

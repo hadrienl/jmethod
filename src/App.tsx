@@ -21,6 +21,7 @@ import {
   exportAllData,
   importAllData,
 } from './lib/storage';
+import { getEveningProgramme } from './lib/eveningProgramme';
 import { applyAdaptiveReview, generateInitialRevisions } from './lib/adaptiveAlgorithm';
 import { parseICalFeed, generateSamplePronoteFeed } from './lib/icalParser';
 import { Course, Revision, Subject, PronoteEvent, AppSettings } from './types';
@@ -70,15 +71,15 @@ export const App: React.FC = () => {
     setSettings(data.settings);
   }, []);
 
-  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const [todayStr, setTodayStr] = useState(() => format(new Date(), 'yyyy-MM-dd'));
+  useEffect(() => {
+    const timer = window.setInterval(() => setTodayStr(format(new Date(), 'yyyy-MM-dd')), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
-  // Count pending & overdue
-  const pendingCountToday = revisions.filter(
-    (r) => r.scheduledDate === todayStr && r.status === 'pending'
-  ).length;
-  const overdueCount = revisions.filter(
-    (r) => r.scheduledDate < todayStr && r.status === 'pending'
-  ).length;
+  const eveningProgramme = getEveningProgramme(revisions, courses, todayStr);
+  const pendingCountToday = eveningProgramme.due.length - eveningProgramme.overdue.length;
+  const overdueCount = eveningProgramme.overdue.length;
 
   // HANDLER: Submit score and run adaptive algorithm
   const handleScoreSubmit = (revisionId: string, score: number) => {
@@ -88,15 +89,15 @@ export const App: React.FC = () => {
     if (!targetRev || targetRev.status === 'completed') return;
 
     const courseRevs = revisions.filter((r) => r.courseId === targetRev.courseId);
-    const result = applyAdaptiveReview(courseRevs, revisionId, score, settings, todayStr);
+    const result = applyAdaptiveReview(courseRevs, revisionId, score, settings, todayStr, eveningProgramme.preparationDate);
 
     const otherRevisions = revisions.filter((r) => r.courseId !== targetRev.courseId);
 
     // Collect all updated plus newly inserted (like emergency revisions)
     const newGlobalRevisions = [...otherRevisions, ...result.updatedRevisions];
 
-    const isDue = (r: Revision) => r.scheduledDate <= todayStr && r.status !== 'completed' && courses.some(c => c.id === r.courseId);
-    if (revisions.some(isDue) && !newGlobalRevisions.some(isDue)) {
+    const remainingProgramme = getEveningProgramme(newGlobalRevisions, courses, todayStr);
+    if (eveningProgramme.due.length > 0 && remainingProgramme.due.length === 0) {
       setCelebration(value => value + 1);
     }
     setRevisions(newGlobalRevisions);

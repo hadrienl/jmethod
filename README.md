@@ -24,13 +24,13 @@ npm run preview
 
 ## Prototype
 
-- Aujourd’hui : prochaine séance, progression du jour et séances regroupées par matière.
+- Aujourd’hui : révisions du lendemain à préparer ce soir, progression de la soirée et séances regroupées par matière. Les séances antérieures non terminées restent visibles.
 - Planning : jour, semaine et mois avec filtres.
 - Mes cours : création, détail, historique et suppression.
 - Mes progrès : indicateurs de suivi.
 - Réglages : intervalles, adaptation, matières et sauvegarde JSON.
 - Autoévaluation de 0 à 100 : adaptation des intervalles autour du pivot 50, séance de rattrapage sous le seuil configuré.
-- Import d’emploi du temps iCal et jeu de démonstration.
+- Emploi du temps iCal du lendemain et jeu de démonstration.
 
 Le premier lancement installe des **données de démonstration**. Les données restent dans le stockage local du navigateur ; aucun compte ou serveur de synchronisation n’est implémenté.
 

@@ -1,4 +1,4 @@
-import { format, parseISO } from 'date-fns';
+import { addDays, format, parseISO } from 'date-fns';
 import { PronoteEvent, Subject } from '../types';
 
 /**
@@ -193,10 +193,11 @@ function parseICalDateTime(str: string): Date | null {
  * Realistic Pronote timetable sample for quick demo testing without waiting for ENT login
  */
 export function generateSamplePronoteFeed(): string {
-  const today = new Date();
-  const yyyy = today.getFullYear();
-  const mm = String(today.getMonth() + 1).padStart(2, '0');
-  const dd = String(today.getDate()).padStart(2, '0');
+  // The demo follows the evening workflow and provides tomorrow’s timetable.
+  const tomorrow = addDays(new Date(), 1);
+  const yyyy = tomorrow.getFullYear();
+  const mm = String(tomorrow.getMonth() + 1).padStart(2, '0');
+  const dd = String(tomorrow.getDate()).padStart(2, '0');
   const dateBase = `${yyyy}${mm}${dd}`;
 
   return `BEGIN:VCALENDAR
