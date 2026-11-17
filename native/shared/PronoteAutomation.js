@@ -119,7 +119,8 @@
     var fields = loginFields();
     if (loginSubmittedAt) {
       if (rejectionShown()) { fail('LOGIN_REJECTED'); return; }
-      if (Date.now() - loginSubmittedAt > 25000) fail(fields ? 'LOGIN_REJECTED' : 'LOGIN_STALLED');
+      // A slow answer is not a rejection: only a visible rejection message may erase a stored password.
+      if (Date.now() - loginSubmittedAt > 25000) fail('LOGIN_STALLED');
       return;
     }
     if (!fields) {
