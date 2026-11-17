@@ -57,11 +57,11 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import fr.jmethod.app.domain.RevisionDetailModel
 import fr.jmethod.app.domain.ScorePreview
 import fr.jmethod.app.model.AppSettings
 import fr.jmethod.app.model.Course
 import fr.jmethod.app.model.Revision
-import fr.jmethod.app.model.RevisionStatus
 import fr.jmethod.app.model.SCORE_INITIAL
 import fr.jmethod.app.model.SCORE_MAX
 import fr.jmethod.app.model.SCORE_MIN
@@ -70,8 +70,6 @@ import fr.jmethod.app.model.SCORE_STEP
 import fr.jmethod.app.model.Subject
 import fr.jmethod.app.model.info
 import fr.jmethod.app.ui.theme.JColors
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -212,41 +210,28 @@ fun ScoreSheet(
     }
 }
 
-private val longDate = DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.FRENCH)
-private val shortDate = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.FRENCH)
-private fun formatDate(value: String, formatter: DateTimeFormatter) = runCatching { LocalDate.parse(value).format(formatter) }.getOrDefault(value)
-
-/** Détail d’une séance (Jn, étape, séances précédentes, validation), port de `RevisionDetailModal`. */
+/**
+ * Détail d’une séance (Jn, étape, séances précédentes, validation), port de `RevisionDetailModal`
+ * à partir de [RevisionDetailModel] (suite `revisionDetail`). Utilisé par Aujourd’hui et le Planning.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RevisionDetailSheet(
-    revision: Revision,
-    course: Course,
-    subject: Subject?,
-    revisions: List<Revision>,
+    model: RevisionDetailModel,
     onDismiss: () -> Unit,
     onValidate: (Int) -> Unit,
 ) {
+    val revision = model.revision
     var score by rememberSaveable(revision.id) { mutableIntStateOf(SCORE_INITIAL) }
     var confirming by rememberSaveable(revision.id) { mutableStateOf(false) }
     var historyOpen by rememberSaveable(revision.id) { mutableStateOf(false) }
-    val completed = revision.status == RevisionStatus.COMPLETED
-    val history = revisions
-        .filter {
-            it.courseId == course.id && it.id != revision.id && it.status == RevisionStatus.COMPLETED &&
-                (!completed || (it.completedDate ?: it.scheduledDate) <= (revision.completedDate ?: revision.scheduledDate))
-        }
-        .sortedWith { a, b ->
-            val byDate = (b.completedDate ?: b.scheduledDate).compareTo(a.completedDate ?: a.scheduledDate)
-            if (byDate != 0) byDate else b.stepIndex - a.stepIndex
-        }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = Color.White) {
         Column(
             Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp).navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            SheetHeader(subject, null, "C${course.courseNumber} · ${course.title}", course.chapter, "Fermer le détail de la séance", onDismiss)
+            SheetHeader(model.subject, null, model.title, model.course.chapter, "Fermer le détail de la séance", onDismiss)
             val (phaseBackground, phaseForeground) = phaseColors(revision.phase)
             Column(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(JColors.Slate50)
@@ -254,17 +239,17 @@ fun RevisionDetailSheet(
                     .semantics(mergeDescendants = true) {},
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(revision.stepLabel, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
+                    Text(model.stepLabel, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
                     Spacer(Modifier.width(12.dp))
                     Text(
-                        revision.phase.info.label, color = phaseForeground, fontWeight = FontWeight.SemiBold,
+                        model.phaseLabel, color = phaseForeground, fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(phaseBackground).padding(horizontal = 10.dp, vertical = 4.dp),
                     )
                 }
                 Spacer(Modifier.height(6.dp))
-                Text("Prévue le ${formatDate(revision.scheduledDate, longDate)}", style = MaterialTheme.typography.bodyMedium, color = JColors.Slate600)
+                Text(model.plannedLine, style = MaterialTheme.typography.bodyMedium, color = JColors.Slate600)
             }
-            course.description?.takeIf { it.isNotBlank() }?.let { description ->
+            model.description?.let { description ->
                 Column {
                     Text("À revoir", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() })
                     Spacer(Modifier.height(6.dp))
@@ -278,19 +263,19 @@ fun RevisionDetailSheet(
                         .padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("Sessions précédentes (${history.size})", fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                    Text(model.historyTitle, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                     Icon(if (historyOpen) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown, contentDescription = null)
                 }
                 if (historyOpen) {
                     Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 12.dp)) {
-                        if (history.isEmpty()) {
-                            Text("Aucune session terminée avant celle-ci.", style = MaterialTheme.typography.bodyMedium, color = JColors.Slate600)
+                        if (model.historyEmpty != null) {
+                            Text(model.historyEmpty, style = MaterialTheme.typography.bodyMedium, color = JColors.Slate600)
                         }
-                        history.forEach { past ->
+                        model.history.forEach { past ->
                             Row(Modifier.fillMaxWidth().padding(vertical = 8.dp).semantics(mergeDescendants = true) {}) {
-                                Text("${past.stepLabel} · ${past.phase.info.label}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                                Text(past.label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                                 Text(
-                                    "${formatDate(past.completedDate ?: past.scheduledDate, shortDate)} · ${past.score?.let { "$it/100" } ?: "Sans note"}",
+                                    past.detail,
                                     style = MaterialTheme.typography.bodyMedium, color = JColors.Slate600,
                                 )
                             }
@@ -298,15 +283,14 @@ fun RevisionDetailSheet(
                     }
                 }
             }
-            if (completed) {
+            if (model.completedLine != null) {
                 Row(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(JColors.Emerald50).padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = JColors.Emerald800)
                     Spacer(Modifier.width(8.dp))
-                    val date = revision.completedDate?.let { " le ${formatDate(it, shortDate)}" }.orEmpty()
-                    Text("Séance terminée$date · ${revision.score ?: "—"}/100", color = JColors.Emerald950)
+                    Text(model.completedLine, color = JColors.Emerald950)
                 }
             } else {
                 Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(JColors.Slate50).padding(16.dp)) {

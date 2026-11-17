@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -22,6 +24,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DateRange
@@ -58,6 +61,7 @@ import androidx.compose.ui.unit.sp
 import fr.jmethod.app.domain.TodayModel
 import fr.jmethod.app.model.PHASE_CONFIG
 import fr.jmethod.app.model.Phase
+import fr.jmethod.app.model.PronoteEvent
 import fr.jmethod.app.ui.theme.JColors
 import java.util.Locale
 
@@ -74,8 +78,20 @@ internal fun subjectColor(hex: String): Color = runCatching {
     Color(android.graphics.Color.parseColor(hex))
 }.getOrDefault(JColors.Slate500)
 
+/** Marges d’un écran à onglet : 16 dp plus les encarts du Scaffold, y compris latéraux en paysage. */
 @Composable
-private fun SurfaceCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+internal fun screenPadding(contentPadding: PaddingValues, bottomExtra: androidx.compose.ui.unit.Dp = 24.dp): PaddingValues {
+    val direction = androidx.compose.ui.platform.LocalLayoutDirection.current
+    return PaddingValues(
+        start = contentPadding.calculateStartPadding(direction) + 16.dp,
+        end = contentPadding.calculateEndPadding(direction) + 16.dp,
+        top = contentPadding.calculateTopPadding() + 16.dp,
+        bottom = contentPadding.calculateBottomPadding() + bottomExtra,
+    )
+}
+
+@Composable
+internal fun SurfaceCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = CardShape,
@@ -90,14 +106,11 @@ fun TodayScreen(
     contentPadding: PaddingValues,
     onScore: (String) -> Unit,
     onDetail: (String) -> Unit,
+    onAddCourse: (PronoteEvent) -> Unit,
 ) {
     val model = state.model
     LazyColumn(
-        contentPadding = PaddingValues(
-            start = 16.dp, end = 16.dp,
-            top = contentPadding.calculateTopPadding() + 16.dp,
-            bottom = contentPadding.calculateBottomPadding() + 24.dp,
-        ),
+        contentPadding = screenPadding(contentPadding, 24.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
         if (model.allDoneBanner) item(key = "done") { AllDoneBanner() }
@@ -122,7 +135,9 @@ fun TodayScreen(
         } else {
             items(model.groups, key = { "group-" + it.subject.id }) { group -> SubjectGroup(group, onScore, onDetail) }
         }
-        item(key = "tomorrow") { TomorrowClasses(model) }
+        item(key = "tomorrow") {
+            TomorrowClasses(model) { id -> state.document.pronoteEvents.firstOrNull { it.id == id }?.let(onAddCourse) }
+        }
         item(key = "footer") {
             Text(
                 "Pas besoin de tout apprendre en un jour. Juste un peu, chaque jour.",
@@ -212,7 +227,7 @@ private fun Hero(model: TodayModel, hasCourses: Boolean, onScore: (String) -> Un
             Text("Tes révisions pour demain sont à jour. Bonne soirée !", color = JColors.Violet100, style = MaterialTheme.typography.bodyMedium)
         } else {
             Text(
-                "Aucune séance de révision n’est enregistrée sur ce téléphone. Ton emploi du temps de demain est juste en dessous.",
+                "Aucun cours n’est enregistré sur ce téléphone. Ajoute ton premier cours depuis ton emploi du temps de demain, juste en dessous, ou depuis Mes cours.",
                 color = JColors.Violet100, style = MaterialTheme.typography.bodyMedium,
             )
         }
@@ -303,7 +318,7 @@ private fun EmptyProgramme() {
             Spacer(Modifier.height(12.dp))
             Text("Tout est à jour", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(8.dp))
-            Text("Aucune séance à préparer pour demain.", style = MaterialTheme.typography.bodyMedium, color = JColors.Slate600, textAlign = TextAlign.Center)
+            Text("Tu peux ajouter un cours depuis ton emploi du temps ci-dessous.", style = MaterialTheme.typography.bodyMedium, color = JColors.Slate600, textAlign = TextAlign.Center)
         }
     }
 }
@@ -381,7 +396,7 @@ private fun RevisionRow(row: TodayModel.Row, onScore: (String) -> Unit, onDetail
 }
 
 @Composable
-private fun TomorrowClasses(model: TodayModel) {
+private fun TomorrowClasses(model: TodayModel, onAddCourse: (String) -> Unit) {
     SurfaceCard {
         Column(Modifier.padding(20.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.semantics(mergeDescendants = true) {}) {
@@ -397,7 +412,7 @@ private fun TomorrowClasses(model: TodayModel) {
                 Text("Aucun cours importé pour demain.", style = MaterialTheme.typography.bodyMedium, color = JColors.Slate600)
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    model.tomorrowEvents.forEach { event -> TomorrowEventCard(event) }
+                    model.tomorrowEvents.forEach { event -> TomorrowEventCard(event, onAddCourse) }
                 }
             }
         }
@@ -405,16 +420,15 @@ private fun TomorrowClasses(model: TodayModel) {
 }
 
 @Composable
-private fun TomorrowEventCard(event: TodayModel.TomorrowEvent) {
+private fun TomorrowEventCard(event: TodayModel.TomorrowEvent, onAddCourse: (String) -> Unit) {
     val shape = RoundedCornerShape(12.dp)
     Column(
         Modifier.fillMaxWidth().clip(shape)
             .background(if (event.cancelled) JColors.Slate50 else Color.White)
             .border(1.dp, if (event.cancelled) JColors.Slate300 else JColors.Slate200, shape)
-            .padding(16.dp)
-            .semantics(mergeDescendants = true) {},
+            .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = if (event.canAddCourse) 4.dp else 16.dp),
     ) {
-        Row {
+        Row(Modifier.semantics(mergeDescendants = true) {}) {
             Text(
                 event.timeRange.removeSuffix(" – "),
                 style = MaterialTheme.typography.bodySmall,
@@ -436,5 +450,21 @@ private fun TomorrowEventCard(event: TodayModel.TomorrowEvent) {
             Spacer(Modifier.height(4.dp))
             Text(event.teacher, style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
         }
+        if (event.canAddCourse) AddCourseButton(event.subjectName) { onAddCourse(event.id) }
+    }
+}
+
+/** « Ajouter ce cours » : ouvre la création préremplie depuis un créneau Pronote maintenu. */
+@Composable
+internal fun AddCourseButton(subjectName: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    androidx.compose.material3.TextButton(
+        onClick = onClick,
+        contentPadding = PaddingValues(horizontal = 0.dp, vertical = 8.dp),
+        modifier = modifier.fillMaxWidth().heightIn(min = 48.dp).semantics { contentDescription = "Ajouter ce cours : $subjectName" },
+    ) {
+        Icon(Icons.Filled.Add, contentDescription = null, tint = JColors.Violet800, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text("Ajouter ce cours", color = JColors.Violet800, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = JColors.Violet800, modifier = Modifier.size(16.dp))
     }
 }

@@ -17,10 +17,10 @@ Java 21 est requis (le JBR Java 25 échoue avec le Kotlin DSL de Gradle 8.13). `
 ## Organisation
 
 - `model/` : schéma du web (`src/types`) en kotlinx.serialization, constantes (`src/lib/constants.ts`).
-- `domain/` : algorithme adaptatif, programme du soir, appariement des matières, modèle d’Aujourd’hui, validation et aperçu de score. Portés à l’identique, particularités du TypeScript comprises.
+- `domain/` : algorithme adaptatif, programme du soir, appariement des matières, modèles d’Aujourd’hui, du Planning (`PlanningModel`, `RevisionDetailModel`) et de Mes cours (`CoursesListModel`, `CourseDetailModel`, `CourseEditing` : création, préremplissage depuis un créneau, suppression), validation et aperçu de score. Portés à l’identique, particularités du TypeScript comprises, sauf les écarts volontaires de `native/shared/domain/DEVIATIONS.md` (D1, D2, D7 à D12 ici), appliqués et testés nommément dans `PlanningCoursesVectorsTest` / `Deviations`.
 - `data/` : document JSON unique écrit atomiquement (`files/jmethod-data.json`), vide au premier lancement (réglages et matières par défaut), migrations (`DataMigrations` : la v1 retire la démo des installations du jalon 1), export compatible `exportAllData`.
 - `pronote/` : protocole mobile, client HTTPS en lecture seule, contrôle du bridge, coffre Keystore, contrôleur de connexion (formulaire natif, page officielle masquée, QR automatique, reprise par jeton, synchronisation des 14 prochains jours).
-- `ui/` : écran de connexion (code d’établissement ou adresse, Élève/Parent), chargement pendant la reprise, bandeau hors ligne, Aujourd’hui, Réglages (compte Pronote), feu d’artifice Canvas, thème clair violet et citron.
+- `ui/` : écran de connexion (code d’établissement ou adresse, Élève/Parent), chargement pendant la reprise, bandeau hors ligne, Aujourd’hui, Planning (jour, semaine, mois en grille compacte, filtres, détail de séance), Mes cours (liste, recherche, fiche, création plein écran avec DatePicker, suppression confirmée), Réglages (compte Pronote), feu d’artifice Canvas, thème clair violet et citron. Chaque onglet a son ViewModel (StateFlow) ; le retour système ramène d’abord à Aujourd’hui.
 
 L’app exige une connexion Pronote : sans jeton (ou jeton refusé), seul l’écran de connexion est affiché ; avec un jeton et sans réseau, l’app s’ouvre sur les données locales avec un bouton Réessayer.
 

@@ -138,7 +138,7 @@ class DomainVectorsTest {
         val explanation = expected.getValue("explanation").jsonObject
         assertEquals(label, explanation.getValue("score").jsonPrimitive.int, result.explanation.score)
         assertEquals(label, explanation.getValue("factor").jsonPrimitive.double, result.explanation.factor, 1e-12)
-        assertEquals(label, explanation.str("message"), result.explanation.message)
+        assertEquals(label, Deviations.d7Days(explanation.str("message")), result.explanation.message)
         assertEquals(label, explanation.str("actionType"), result.explanation.actionType.wire)
         assertEquals(label, explanation.str("nextDate"), result.explanation.nextDate)
     }
@@ -363,7 +363,7 @@ class DomainVectorsTest {
                 assertEquals(label, null, outcome.toast)
             } else {
                 assertEquals(label, toast.str("title"), outcome.toast?.title)
-                assertEquals(label, toast.str("message"), outcome.toast?.message)
+                assertEquals(label, Deviations.d7Days(toast.str("message")), outcome.toast?.message)
                 assertEquals(label, toast.str("type"), outcome.toast?.type?.wire)
             }
         }

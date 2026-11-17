@@ -1,6 +1,19 @@
 package fr.jmethod.app.ui
 
 import androidx.compose.foundation.layout.Box
+import androidx.activity.compose.BackHandler
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material3.ExtendedFloatingActionButton
+import fr.jmethod.app.domain.RevisionDetailModel
+import fr.jmethod.app.ui.courses.CourseDetailSheet
+import fr.jmethod.app.ui.courses.CourseFormScreen
+import fr.jmethod.app.ui.courses.CoursesEvent
+import fr.jmethod.app.ui.courses.CoursesScreen
+import fr.jmethod.app.ui.courses.CoursesViewModel
+import fr.jmethod.app.ui.planning.PlanningScreen
+import fr.jmethod.app.ui.planning.PlanningViewModel
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
@@ -56,13 +69,20 @@ import fr.jmethod.app.ui.today.TodayEvent
 import fr.jmethod.app.ui.today.TodayScreen
 import fr.jmethod.app.ui.today.TodayViewModel
 
-/** Onglets livrés au jalon 1 uniquement. */
-private enum class Tab { TODAY, SETTINGS }
+/** Onglets des jalons livrés (1 à 3). */
+private enum class Tab { TODAY, PLANNING, COURSES, SETTINGS }
 
-private class ToastVisuals(val title: String, override val message: String, val warning: Boolean) : SnackbarVisuals {
+private enum class ToastTone { SUCCESS, WARNING, INFO }
+
+private class ToastVisuals(val title: String, override val message: String, val tone: ToastTone) : SnackbarVisuals {
     override val actionLabel: String? = null
     override val withDismissAction: Boolean = true
     override val duration: SnackbarDuration = SnackbarDuration.Long
+}
+
+@Composable
+private fun Loading() {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
 }
 
 @Composable
@@ -71,10 +91,14 @@ fun JMethodApp() {
     val container = application.container
     val todayViewModel: TodayViewModel = viewModel(factory = viewModelFactory { initializer { TodayViewModel(container.repository, container.clock) } })
     val pronoteViewModel: PronoteViewModel = viewModel(factory = viewModelFactory { initializer { PronoteViewModel(application, container) } })
+    val planningViewModel: PlanningViewModel = viewModel(factory = viewModelFactory { initializer { PlanningViewModel(container.repository, container.clock) } })
+    val coursesViewModel: CoursesViewModel = viewModel(factory = viewModelFactory { initializer { CoursesViewModel(container.repository, container.clock) } })
 
     val today by todayViewModel.uiState.collectAsStateWithLifecycle()
     val pronote by pronoteViewModel.controller.uiState.collectAsStateWithLifecycle()
     val syncInfo by pronoteViewModel.syncInfo.collectAsStateWithLifecycle()
+    val planning by planningViewModel.uiState.collectAsStateWithLifecycle()
+    val courses by coursesViewModel.uiState.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableStateOf(Tab.TODAY) }
     val snackbar = remember { SnackbarHostState() }
     val celebration = remember { CelebrationState() }
@@ -86,11 +110,24 @@ fun JMethodApp() {
                 TodayEvent.Fireworks -> celebration.fireworks()
                 is TodayEvent.Toast -> {
                     snackbar.currentSnackbarData?.dismiss()
-                    snackbar.showSnackbar(ToastVisuals(event.title, event.message, event.warning))
+                    snackbar.showSnackbar(ToastVisuals(event.title, event.message, if (event.warning) ToastTone.WARNING else ToastTone.SUCCESS))
                 }
             }
         }
     }
+    LaunchedEffect(coursesViewModel) {
+        coursesViewModel.eventFlow.collect { event ->
+            when (event) {
+                is CoursesEvent.Toast -> {
+                    snackbar.currentSnackbarData?.dismiss()
+                    snackbar.showSnackbar(ToastVisuals(event.title, event.message, if (event.info) ToastTone.INFO else ToastTone.SUCCESS))
+                }
+            }
+        }
+    }
+
+    // Retour système : depuis un autre onglet, revient d’abord à Aujourd’hui.
+    BackHandler(enabled = tab != Tab.TODAY && (pronote.access == AccessPhase.CONNECTED || pronote.access == AccessPhase.OFFLINE)) { tab = Tab.TODAY }
 
     // Retour au premier plan : reconnexion ou synchronisation si la dernière date de plus de 6 h.
     LifecycleEventEffect(Lifecycle.Event.ON_START) { pronoteViewModel.controller.onForeground() }
@@ -122,7 +159,15 @@ fun JMethodApp() {
                             ) {
                                 Column {
                                     if (visuals != null) {
-                                        Text(visuals.title, fontWeight = FontWeight.Bold, color = if (visuals.warning) JColors.Amber900 else JColors.Emerald800)
+                                        Text(
+                                            visuals.title,
+                                            fontWeight = FontWeight.Bold,
+                                            color = when (visuals.tone) {
+                                                ToastTone.WARNING -> JColors.Amber900
+                                                ToastTone.SUCCESS -> JColors.Emerald800
+                                                ToastTone.INFO -> JColors.Violet800
+                                            },
+                                        )
                                     }
                                     Text(data.visuals.message)
                                 }
@@ -156,6 +201,20 @@ fun JMethodApp() {
                                 },
                             )
                             NavigationBarItem(
+                                selected = tab == Tab.PLANNING,
+                                onClick = { tab = Tab.PLANNING },
+                                icon = { Icon(Icons.Filled.DateRange, contentDescription = null) },
+                                label = { Text("Planning") },
+                                colors = colors,
+                            )
+                            NavigationBarItem(
+                                selected = tab == Tab.COURSES,
+                                onClick = { tab = Tab.COURSES },
+                                icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) },
+                                label = { Text("Mes cours") },
+                                colors = colors,
+                            )
+                            NavigationBarItem(
                                 selected = tab == Tab.SETTINGS,
                                 onClick = { tab = Tab.SETTINGS },
                                 icon = { Icon(Icons.Filled.Settings, contentDescription = null) },
@@ -164,43 +223,108 @@ fun JMethodApp() {
                             )
                         }
                     },
+                    floatingActionButton = {
+                        if (tab == Tab.COURSES && courses?.hasCourses == true) {
+                            ExtendedFloatingActionButton(
+                                onClick = { coursesViewModel.openCreate() },
+                                icon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                                text = { Text("Nouveau cours", fontWeight = FontWeight.Bold) },
+                                containerColor = JColors.Violet700,
+                                contentColor = androidx.compose.ui.graphics.Color.White,
+                            )
+                        }
+                    },
                 ) { padding ->
                     when (tab) {
                         Tab.TODAY -> {
                             val state = today
                             if (state == null) {
-                                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                                Loading()
                             } else {
-                                TodayScreen(state, padding, onScore = todayViewModel::openScore, onDetail = todayViewModel::openDetail)
-                                val document = state.document
-                                state.scoringRevisionId?.let { id ->
-                                    val revision = document.revisions.firstOrNull { it.id == id }
-                                    val course = revision?.let { r -> document.courses.firstOrNull { it.id == r.courseId } }
-                                    if (revision != null && course != null) {
-                                        ScoreSheet(
-                                            revision, course, document.subjects.firstOrNull { it.id == course.subjectId }, document.settings,
-                                            onDismiss = todayViewModel::closeSheets,
-                                            onSubmit = { score -> todayViewModel.submitScore(revision.id, score, withConfetti = true) },
-                                        )
-                                    }
+                                TodayScreen(
+                                    state, padding,
+                                    onScore = todayViewModel::openScore,
+                                    onDetail = todayViewModel::openDetail,
+                                    onAddCourse = coursesViewModel::openCreateFrom,
+                                )
+                            }
+                        }
+                        Tab.PLANNING -> {
+                            val state = planning
+                            if (state == null) {
+                                Loading()
+                            } else {
+                                PlanningScreen(
+                                    state, planningViewModel, padding,
+                                    onAddCourseFrom = coursesViewModel::openCreateFrom,
+                                    onCreateCourse = { coursesViewModel.openCreate() },
+                                )
+                                state.detail?.let { detail ->
+                                    RevisionDetailSheet(
+                                        detail,
+                                        onDismiss = planningViewModel::closeDetail,
+                                        onValidate = { score ->
+                                            planningViewModel.closeDetail()
+                                            todayViewModel.submitScore(detail.revision.id, score, withConfetti = false)
+                                        },
+                                    )
                                 }
-                                state.detailRevisionId?.let { id ->
-                                    val revision = document.revisions.firstOrNull { it.id == id }
-                                    val course = revision?.let { r -> document.courses.firstOrNull { it.id == r.courseId } }
-                                    if (revision != null && course != null) {
-                                        RevisionDetailSheet(
-                                            revision, course, document.subjects.firstOrNull { it.id == course.subjectId }, document.revisions,
-                                            onDismiss = todayViewModel::closeSheets,
-                                            onValidate = { score -> todayViewModel.submitScore(revision.id, score, withConfetti = false) },
-                                        )
-                                    }
+                            }
+                        }
+                        Tab.COURSES -> {
+                            val state = courses
+                            if (state == null) {
+                                Loading()
+                            } else {
+                                CoursesScreen(state, coursesViewModel, padding, onShowPlanning = { tab = Tab.PLANNING })
+                                state.detail?.let { detail ->
+                                    CourseDetailSheet(
+                                        detail,
+                                        onDismiss = coursesViewModel::closeDetail,
+                                        // Comme le web : la fiche se ferme et l’autoévaluation s’ouvre.
+                                        onValidate = { revisionId ->
+                                            coursesViewModel.closeDetail()
+                                            todayViewModel.openScore(revisionId)
+                                        },
+                                        onDelete = { coursesViewModel.delete(detail.course.id) },
+                                    )
                                 }
                             }
                         }
                         Tab.SETTINGS -> SettingsScreen(pronoteViewModel, pronote, syncInfo, padding)
                     }
+
+                    // Feuilles d’Aujourd’hui ouvertes depuis n’importe quel onglet (validation depuis la fiche d’un cours).
+                    today?.let { state ->
+                        val document = state.document
+                        state.scoringRevisionId?.let { id ->
+                            val revision = document.revisions.firstOrNull { it.id == id }
+                            val course = revision?.let { r -> document.courses.firstOrNull { it.id == r.courseId } }
+                            if (revision != null && course != null) {
+                                ScoreSheet(
+                                    revision, course, document.subjects.firstOrNull { it.id == course.subjectId }, document.settings,
+                                    onDismiss = todayViewModel::closeSheets,
+                                    onSubmit = { score -> todayViewModel.submitScore(revision.id, score, withConfetti = true) },
+                                )
+                            }
+                        }
+                        state.detailRevisionId?.let { id ->
+                            RevisionDetailModel.build(id, document.courses, document.revisions, document.subjects)?.let { detail ->
+                                RevisionDetailSheet(
+                                    detail,
+                                    onDismiss = todayViewModel::closeSheets,
+                                    onValidate = { score -> todayViewModel.submitScore(detail.revision.id, score, withConfetti = false) },
+                                )
+                            }
+                        }
+                    }
                 }
             }
+        }
+        // Création d’un cours : plein écran au-dessus de l’app, sous la page officielle Pronote.
+        val form = courses
+        if (form != null && form.form.open && pronote.access != AccessPhase.SIGNED_OUT && pronote.access != AccessPhase.CHECKING) {
+            CourseFormScreen(form, coursesViewModel, Modifier.zIndex(1f))
         }
         CelebrationOverlay(celebration, Modifier.zIndex(3f))
     }
