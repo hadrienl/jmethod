@@ -174,6 +174,15 @@ final class PronoteSession {
         }
     }
 
+    #if DEBUG
+    /// Vérification visuelle sur simulateur (argument de lancement `-JMethodOfflinePreview`, builds Debug seulement) :
+    /// ouvre l'app hors ligne sur les données locales, sans connexion ni requête Pronote.
+    func enterOfflinePreview() {
+        resumed = true
+        access = .offline
+    }
+    #endif
+
     /// Ouvre l'app sur les données locales sans attendre la fin de la reprise, qui continue en arrière-plan
     /// (elle n'est pas annulée, pour ne pas perdre un jeton déjà renouvelé par Pronote).
     func openWithoutWaiting() {

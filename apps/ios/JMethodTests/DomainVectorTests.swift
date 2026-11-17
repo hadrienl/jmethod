@@ -141,7 +141,13 @@ final class DomainVectorTests: XCTestCase {
         check(result.explanation.score, explanation["score"] as? Int, name)
         let factor = try XCTUnwrap((explanation["factor"] as? NSNumber)?.doubleValue)
         if abs(result.explanation.factor - factor) > 1e-12 { problems.append("\(name) factor : \(result.explanation.factor) ≠ \(factor)") }
-        check(result.explanation.message, explanation["message"] as? String, name)
+        // D7 (`Deviation.d7Cases`) : « 1 jour » au singulier ; le reste du message est identique au web.
+        let message = try XCTUnwrap(explanation["message"] as? String)
+        if let expectedMessage = Deviation.expectedMessage(message, caseName: name) {
+            check(result.explanation.message, expectedMessage, name)
+        } else {
+            problems.append("\(name) : « 1 jours » hors de la liste D7")
+        }
         check(result.explanation.actionType.rawValue, explanation["actionType"] as? String, name)
         check(result.explanation.nextDate, explanation["nextDate"] as? String, name)
     }
@@ -296,6 +302,15 @@ final class DomainVectorTests: XCTestCase {
             if let preparation = outcome.preparationDate { actual["preparationDate"] = preparation }
             var comparable = expected
             comparable.removeValue(forKey: "revisions")
+            if var toast = comparable["toast"] as? [String: Any], let message = toast["message"] as? String {
+                // D7 (`Deviation.d7Cases`).
+                guard let corrected = Deviation.expectedMessage(message, caseName: name) else {
+                    problems.append("\(name) : « 1 jours » hors de la liste D7")
+                    continue
+                }
+                toast["message"] = corrected
+                comparable["toast"] = toast
+            }
             checkJSON(actual, comparable, name)
         }
     }

@@ -6,7 +6,7 @@ struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var tab: Tab = .today
 
-    enum Tab: Hashable { case today, settings }
+    enum Tab: Hashable { case today, planning, courses, settings }
 
     private var route: AppRoute { AppRoute.resolve(load: app.loadState, access: pronote.access) }
 
@@ -22,6 +22,13 @@ struct RootView: View {
         .tint(Theme.violet)
         .task {
             await app.load()
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("-JMethodOfflinePreview") {
+                pronote.enterOfflinePreview()
+                applyPreviewArguments()
+                return
+            }
+            #endif
             if app.loadState == .ready { pronote.resumeAtLaunch() }
         }
         .task {
@@ -46,8 +53,33 @@ struct RootView: View {
         .onChange(of: pronote.access) { old, new in
             // Après une connexion réussie, l'app s'ouvre sur Aujourd'hui.
             if new == .connected && old != .connected { tab = .today }
+            // Retour à l'écran de connexion : aucune feuille ne reste ouverte.
+            if new == .signedOut { app.presented = nil }
         }
     }
+
+    #if DEBUG
+    /// Vérification visuelle (Debug) : `-JMethodPreviewTab planning|courses|settings`,
+    /// `-JMethodPreviewSheet addCourse|course:<id>|revision:<id>|score:<id>`.
+    private func applyPreviewArguments() {
+        let defaults = UserDefaults.standard
+        switch defaults.string(forKey: "JMethodPreviewTab") {
+        case "planning": tab = .planning
+        case "courses": tab = .courses
+        case "settings": tab = .settings
+        default: break
+        }
+        guard let sheet = defaults.string(forKey: "JMethodPreviewSheet") else { return }
+        let parts = sheet.split(separator: ":", maxSplits: 1).map(String.init)
+        switch (parts.first, parts.count > 1 ? parts[1] : "") {
+        case ("addCourse", _): app.openAddCourse()
+        case ("course", let id): app.presented = .course(courseId: id)
+        case ("revision", let id): app.presented = .revision(revisionId: id)
+        case ("score", let id): app.presented = .score(revisionId: id)
+        default: break
+        }
+    }
+    #endif
 
     @ViewBuilder private var content: some View {
         switch route {
@@ -62,20 +94,35 @@ struct RootView: View {
         case .signIn:
             SignInView(pronote: pronote)
         case .app(let offline):
-            TabView(selection: $tab) {
-                TodayView(app: app)
-                    .tabItem { Label("Aujourd’hui", systemImage: "checklist") }
-                    .badge(app.programme.due.count)
-                    .tag(Tab.today)
-                SettingsView(app: app, pronote: pronote)
-                    .tabItem { Label("Réglages", systemImage: "gearshape") }
-                    .tag(Tab.settings)
-            }
-            .safeAreaInset(edge: .top, spacing: 0) {
+            // Bandeau au-dessus des onglets (et non en marge de sécurité) : les barres de navigation restent visibles.
+            VStack(spacing: 0) {
                 if pronote.silentRelogin {
                     ReconnectingBanner()
                 } else if offline {
                     OfflineBanner(pronote: pronote)
+                }
+                TabView(selection: $tab) {
+                    TodayView(app: app)
+                        .tabItem { Label("Aujourd’hui", systemImage: "checklist") }
+                        .badge(app.programme.due.count)
+                        .tag(Tab.today)
+                    PlanningView(app: app)
+                        .tabItem { Label("Planning", systemImage: "calendar") }
+                        .tag(Tab.planning)
+                    CoursesView(app: app, onShowPlanning: { tab = .planning })
+                        .tabItem { Label("Mes cours", systemImage: "books.vertical") }
+                        .tag(Tab.courses)
+                    SettingsView(app: app, pronote: pronote)
+                        .tabItem { Label("Réglages", systemImage: "gearshape") }
+                        .tag(Tab.settings)
+                }
+                .sheet(item: Binding(get: { app.presented }, set: { app.presented = $0 })) { sheet in
+                    switch sheet {
+                    case .score(let id): ScoreSheet(app: app, revisionId: id)
+                    case .revision(let id): RevisionDetailSheet(app: app, revisionId: id)
+                    case .course(let id): CourseDetailSheet(app: app, courseId: id)
+                    case .addCourse: AddCourseSheet(app: app)
+                    }
                 }
             }
         }
@@ -117,7 +164,7 @@ private struct ReconnectingBanner: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(Theme.violetSoft)
+        .background(Theme.violetSoft.ignoresSafeArea(edges: .top))
         .overlay(alignment: .bottom) { Divider() }
         .accessibilityElement(children: .combine)
     }
@@ -147,7 +194,7 @@ private struct OfflineBanner: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
-        .background(Theme.warningSoft)
+        .background(Theme.warningSoft.ignoresSafeArea(edges: .top))
         .overlay(alignment: .bottom) { Divider() }
     }
 }

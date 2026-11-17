@@ -135,15 +135,15 @@ enum AdaptiveAlgorithm {
 
             if score == 50 {
                 actionType = .exact
-                message = "Niveau idéal (50/100) : Intervalle d'origine parfaitement conservé (\(adaptedGap) jours). Prochaine révision le \(scheduled)."
+                message = "Niveau idéal (50/100) : Intervalle d'origine parfaitement conservé (\(dayCount(adaptedGap))). Prochaine révision le \(scheduled)."
             } else if score > 50 {
                 actionType = .expanded
                 let percent = jsRound((factor - 1) * 100)
-                message = "Excellente maîtrise (\(score)/100) : Intervalle espacé de +\(percent)% (\(adaptedGap) jours au lieu de \(defaultStepGap)j). Prochaine révision le \(scheduled)."
+                message = "Excellente maîtrise (\(score)/100) : Intervalle espacé de +\(percent)% (\(dayCount(adaptedGap)) au lieu de \(defaultStepGap)j). Prochaine révision le \(scheduled)."
             } else {
                 actionType = .shortened
                 let percent = jsRound((1 - factor) * 100)
-                message = "Difficultés constatées (\(score)/100) : Intervalle rapproché de -\(percent)% (\(adaptedGap) jours au lieu de \(defaultStepGap)j). Prochaine révision le \(scheduled)."
+                message = "Difficultés constatées (\(score)/100) : Intervalle rapproché de -\(percent)% (\(dayCount(adaptedGap)) au lieu de \(defaultStepGap)j). Prochaine révision le \(scheduled)."
             }
         } else {
             message = "Bravo ! Tu as validé le cycle complet de révisions de ce cours avec la note de \(score)/100 !"
@@ -154,6 +154,9 @@ enum AdaptiveAlgorithm {
             explanation: .init(score: score, factor: factor, message: message, actionType: actionType, nextDate: nextDate)
         )
     }
+
+    /// Écart D7 (`DEVIATIONS.md`) : accord du pluriel, « 1 jour » au lieu de « 1 jours » du web.
+    static func dayCount(_ days: Int) -> String { "\(days) jour\(abs(days) > 1 ? "s" : "")" }
 
     static func epochMilliseconds(_ date: Date) -> Int64 {
         Int64((date.timeIntervalSince1970 * 1000).rounded())

@@ -3,8 +3,6 @@ import SwiftUI
 /// Onglet Aujourd'hui : le soir prépare le lendemain (`docs/evening-workflow.md`), l'en-tête garde la date réelle.
 struct TodayView: View {
     let app: AppModel
-    @State private var scoring: Revision?
-    @State private var detail: Revision?
 
     var body: some View {
         let document = app.document
@@ -15,11 +13,12 @@ struct TodayView: View {
                 VStack(alignment: .leading, spacing: 24) {
                     if screen.allDoneBanner { AllDoneBanner() }
                     TodayHeader(date: screen.headerDate)
-                    HeroCard(hero: screen.hero) { if let revision = screen.hero.revision { scoring = revision } }
+                    HeroCard(hero: screen.hero) { if let revision = screen.hero.revision { app.presented = .score(revisionId: revision.id) } }
                     ProgressCard(screen: screen)
                     PhaseGuide()
-                    ProgrammeSection(screen: screen, hasCourses: !document.courses.isEmpty, onScore: { scoring = $0 }, onDetail: { detail = $0 })
-                    TomorrowSection(screen: screen)
+                    ProgrammeSection(screen: screen, hasCourses: !document.courses.isEmpty, onScore: { app.presented = .score(revisionId: $0.id) },
+                                     onDetail: { app.presented = .revision(revisionId: $0.id) })
+                    TomorrowSection(screen: screen) { app.openAddCourse(from: $0) }
                     Text("Pas besoin de tout apprendre en un jour. Juste un peu, chaque jour.")
                         .font(.footnote)
                         .foregroundStyle(Theme.textMuted)
@@ -34,12 +33,6 @@ struct TodayView: View {
             }
             .background(Theme.background)
             .toolbar(.hidden, for: .navigationBar)
-        }
-        .sheet(item: $scoring) { revision in
-            ScoreSheet(app: app, revisionId: revision.id)
-        }
-        .sheet(item: $detail) { revision in
-            RevisionDetailSheet(app: app, revisionId: revision.id)
         }
     }
 }
@@ -352,6 +345,7 @@ private struct RevisionRow: View {
 
 private struct TomorrowSection: View {
     let screen: TodayScreen
+    let onAddCourse: (PronoteEvent) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -366,7 +360,7 @@ private struct TomorrowSection: View {
                 Text("Aucun cours importé pour demain.").font(.subheadline).foregroundStyle(Theme.textSecondary)
             } else {
                 ForEach(screen.tomorrowEvents) { item in
-                    TomorrowEventCard(item: item)
+                    TomorrowEventCard(item: item, onAddCourse: onAddCourse)
                 }
             }
         }
@@ -376,27 +370,34 @@ private struct TomorrowSection: View {
 
 private struct TomorrowEventCard: View {
     let item: TodayScreen.TomorrowEvent
+    let onAddCourse: (PronoteEvent) -> Void
 
     private var time: String {
         item.event.endTime.isEmpty ? item.event.startTime : item.timeRange
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(time).font(.caption).foregroundStyle(Theme.textSecondary)
-                Spacer()
-                if item.cancelled {
-                    Label("Annulé", systemImage: "xmark.circle").font(.caption.weight(.semibold)).foregroundStyle(Theme.danger)
-                } else if let room = item.trailing, !room.isEmpty {
-                    Text(room).font(.caption).foregroundStyle(Theme.textSecondary)
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(time).font(.caption).foregroundStyle(Theme.textSecondary)
+                    Spacer()
+                    if item.cancelled {
+                        Label("Annulé", systemImage: "xmark.circle").font(.caption.weight(.semibold)).foregroundStyle(Theme.danger)
+                    } else if let room = item.trailing, !room.isEmpty {
+                        Text(room).font(.caption).foregroundStyle(Theme.textSecondary)
+                    }
+                }
+                Text(item.subjectName)
+                    .font(.subheadline.weight(.bold))
+                    .strikethrough(item.cancelled)
+                if let teacher = item.teacher {
+                    Text(teacher).font(.caption).foregroundStyle(Theme.textSecondary)
                 }
             }
-            Text(item.subjectName)
-                .font(.subheadline.weight(.bold))
-                .strikethrough(item.cancelled)
-            if let teacher = item.teacher {
-                Text(teacher).font(.caption).foregroundStyle(Theme.textSecondary)
+            .accessibilityElement(children: .combine)
+            if item.canAddCourse {
+                AddCourseFromSlotButton(subjectName: item.subjectName) { onAddCourse(item.event) }
             }
         }
         .padding(16)
@@ -406,6 +407,6 @@ private struct TomorrowEventCard: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(item.cancelled ? Color(hex: "#CBD5E1") : Theme.border, style: StrokeStyle(lineWidth: 1, dash: item.cancelled ? [5, 4] : []))
         )
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
     }
 }

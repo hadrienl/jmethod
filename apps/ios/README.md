@@ -12,10 +12,10 @@ La signature se règle localement dans Xcode (équipe personnelle non versionné
 
 ## Organisation
 
-- `JMethod/Domain` : modèle au schéma du web (`src/types`), algorithme adaptatif, programme du soir, appariement des matières, modèles purs de l'écran Aujourd'hui, de l'aperçu de score et de la validation, migration qui retire l'ancien jeu de démonstration.
+- `JMethod/Domain` : modèle au schéma du web (`src/types`), algorithme adaptatif, programme du soir, appariement des matières, modèles purs des écrans Aujourd'hui, Planning (jour, semaine, mois, navigation), détail de séance, Mes cours (liste, fiche, création, suppression), de l'aperçu de score et de la validation, migration qui retire l'ancien jeu de démonstration. Les écarts volontaires avec le web sont ceux de `native/shared/domain/DEVIATIONS.md`.
 - `JMethod/Storage` : document JSON unique écrit atomiquement dans Application Support (`jmethod-data.json`), relisible depuis un export du web.
 - `JMethod/Pronote` : connexion reprise du POC `native/ios` (formulaire natif, page officielle masquée et affichée seulement pour un ENT ou une vérification, QR automatique, protocole HTTPS natif en lecture seule, jeton dans le trousseau).
-- `JMethod/UI` : écran de connexion, Aujourd'hui, autoévaluation, détail d'une séance, feu d'artifice, Réglages (Pronote).
+- `JMethod/UI` : écran de connexion, Aujourd'hui, Planning (semaine en jours empilés, mois en calendrier puis séances du jour choisi), Mes cours (fiche, création, y compris depuis un créneau Pronote), autoévaluation, détail d'une séance, feu d'artifice, Réglages (Pronote). Une seule feuille à la fois, pilotée par `AppModel.presented`.
 
 Accès : sans connexion active, seul l'écran de connexion s'affiche. Avec un jeton enregistré, l'app reprend la connexion au lancement ; si Pronote est injoignable, elle s'ouvre hors ligne sur les données locales.
 
@@ -23,3 +23,5 @@ Accès : sans connexion active, seul l'écran de connexion s'affiche. Avec un je
 - `JMethodTests` : vecteurs partagés `native/shared/domain/*.json` et `native/shared/protocol-vectors.json` (référencés, jamais copiés), stockage, modèle.
 
 Le script `native/shared/PronoteAutomation.js` est intégré tel quel au bundle.
+
+Vérification visuelle sur simulateur : en build Debug seulement, l'argument de lancement `-JMethodOfflinePreview` ouvre l'app hors ligne sur les données locales (aucune connexion ni requête Pronote). Les données d'essai se déposent dans le conteneur de l'app (`xcrun simctl get_app_container booted fr.jmethod.app data`, fichier `Library/Application Support/jmethod-data.json`) ; elles restent fictives et hors du dépôt.

@@ -28,6 +28,27 @@ final class AppModel {
     /// Incrémenté pour une séance validée avec au moins 75/100 (petite gerbe, comme le web).
     private(set) var confetti = 0
     var toast: Toast?
+    /// Feuille ouverte (une seule à la fois) : autoévaluation, détail de séance, fiche de cours, création de cours.
+    var presented: Sheet?
+    /// État du formulaire de création, conservé d'une ouverture à l'autre comme sur le web : le chapitre reste,
+    /// la matière et la date ne changent que par un préremplissage, le titre et les notes sont vidés à chaque ouverture.
+    var courseDraft: CourseDraft
+
+    enum Sheet: Identifiable, Equatable {
+        case score(revisionId: String)
+        case revision(revisionId: String)
+        case course(courseId: String)
+        case addCourse
+
+        var id: String {
+            switch self {
+            case .score(let id): "score-\(id)"
+            case .revision(let id): "revision-\(id)"
+            case .course(let id): "course-\(id)"
+            case .addCourse: "add-course"
+            }
+        }
+    }
 
     @ObservationIgnored private let store: DocumentStore?
     @ObservationIgnored private let now: () -> Date
@@ -47,8 +68,11 @@ final class AppModel {
         self.store = store
         self.now = now
         self.preferences = preferences
-        self.today = SchoolDay.today(now: now())
+        let launchDay = SchoolDay.today(now: now())
+        self.today = launchDay
         self.document = Self.emptyDocument
+        // Date initiale du formulaire : le jour du lancement de l'app, comme le web.
+        self.courseDraft = CourseDraft(date: launchDay)
     }
 
     static func live() -> AppModel {
@@ -163,6 +187,54 @@ final class AppModel {
             toast = .init(title: message.title, message: message.message, kind: message.kind == .warning ? .warning : .success)
         }
         return outcome.explanation
+    }
+
+    // MARK: Cours
+
+    /// Ouvre le formulaire de création ; un créneau Pronote préremplit la matière, la date et le titre.
+    func openAddCourse(from event: PronoteEvent? = nil) {
+        if let event {
+            let prefill = CourseCreation.prefill(event: event, subjects: document.subjects)
+            if let subjectId = prefill.subjectId { courseDraft.subjectId = subjectId }
+            courseDraft.date = prefill.date
+            courseDraft.title = prefill.title
+        } else {
+            courseDraft.title = ""
+        }
+        courseDraft.description = ""
+        if courseDraft.subjectId.map({ id in !document.subjects.contains { $0.id == id } }) ?? true {
+            courseDraft.subjectId = document.subjects.first?.id
+        }
+        presented = .addCourse
+    }
+
+    /// Crée le cours du formulaire avec ses révisions initiales. Retourne false si le formulaire est refusé.
+    @discardableResult
+    func createCourse() -> Bool {
+        refreshDay()
+        let outcome: CourseCreation.Outcome?
+        do {
+            outcome = try CourseCreation.create(courseDraft, courses: document.courses, revisions: document.revisions,
+                                                settings: document.settings, now: now())
+        } catch {
+            toast = .init(title: "Cours non créé", message: "La date du cours est invalide.", kind: .warning)
+            return false
+        }
+        guard let outcome else { return false }
+        document.courses = outcome.courses
+        document.revisions = outcome.revisions
+        persist()
+        toast = .init(title: outcome.toast.title, message: outcome.toast.message, kind: .success)
+        return true
+    }
+
+    /// Supprime le cours et toutes ses révisions ; les créneaux Pronote ne changent pas.
+    func deleteCourse(id: String) {
+        let result = CourseDeletion.apply(courseId: id, courses: document.courses, revisions: document.revisions)
+        document.courses = result.courses
+        document.revisions = result.revisions
+        persist()
+        toast = .init(title: CourseDeletion.toastTitle, message: CourseDeletion.toastMessage, kind: .info)
     }
 
     // MARK: Pronote
