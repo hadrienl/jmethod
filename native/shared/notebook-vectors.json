@@ -1,0 +1,2081 @@
+{
+  "schemaVersion": 1,
+  "provenance": {
+    "generator": "native/shared/notebook-vectors.py (executes scripts/pronote_notebook.py and pronotepy)",
+    "pronotepyVersion": "2.15.7",
+    "host": "school.index-education.net",
+    "containsRealCredentials": false,
+    "containsPersonalData": false,
+    "sources": {
+      "scripts/pronote_notebook.py": "b5ff05e7343f178c1eb0e581789b2d9820064f30885fe08604b4f71f8e9daefd",
+      "pronotepy/clients.py": "db0f7e6768812086c6b5e739f28fc70de3b96acf4b89a64421a2dc402010a99f",
+      "pronotepy/dataClasses.py": "b6412be18b9b367aef9c8dfd052b2660501700c5e634afb06ef2808acfe70037"
+    }
+  },
+  "encodings": {
+    "dates": "ISO calendar dates (YYYY-MM-DD) in school wall time, no time zone conversion",
+    "Hex": "lowercase hexadecimal of raw bytes",
+    "text": "strings compare exactly, as Unicode code point sequences"
+  },
+  "window": {
+    "today": "2026-11-18",
+    "from": "2026-11-04",
+    "to": "2026-12-01",
+    "days": 28,
+    "firstWeek": 10,
+    "lastWeek": 14,
+    "domaine": {
+      "_T": 8,
+      "V": "[10..14]"
+    }
+  },
+  "weeks": [
+    {
+      "today": "2026-09-02",
+      "premierLundi": "2026-08-31",
+      "pronotepyFirstWeek": 0,
+      "pronotepyLastWeek": 3,
+      "expected": {
+        "today": "2026-09-02",
+        "from": "2026-08-19",
+        "to": "2026-09-15",
+        "days": 28,
+        "firstWeek": 1,
+        "lastWeek": 3,
+        "domaine": {
+          "_T": 8,
+          "V": "[1..3]"
+        }
+      }
+    },
+    {
+      "today": "2026-09-14",
+      "premierLundi": "2026-08-31",
+      "pronotepyFirstWeek": 1,
+      "pronotepyLastWeek": 4,
+      "expected": {
+        "today": "2026-09-14",
+        "from": "2026-08-31",
+        "to": "2026-09-27",
+        "days": 28,
+        "firstWeek": 1,
+        "lastWeek": 4,
+        "domaine": {
+          "_T": 8,
+          "V": "[1..4]"
+        }
+      }
+    },
+    {
+      "today": "2026-11-18",
+      "premierLundi": "2026-08-31",
+      "pronotepyFirstWeek": 10,
+      "pronotepyLastWeek": 14,
+      "expected": {
+        "today": "2026-11-18",
+        "from": "2026-11-04",
+        "to": "2026-12-01",
+        "days": 28,
+        "firstWeek": 10,
+        "lastWeek": 14,
+        "domaine": {
+          "_T": 8,
+          "V": "[10..14]"
+        }
+      }
+    },
+    {
+      "today": "2026-11-23",
+      "premierLundi": "2026-08-31",
+      "pronotepyFirstWeek": 11,
+      "pronotepyLastWeek": 14,
+      "expected": {
+        "today": "2026-11-23",
+        "from": "2026-11-09",
+        "to": "2026-12-06",
+        "days": 28,
+        "firstWeek": 11,
+        "lastWeek": 14,
+        "domaine": {
+          "_T": 8,
+          "V": "[11..14]"
+        }
+      }
+    },
+    {
+      "today": "2027-01-04",
+      "premierLundi": "2026-08-31",
+      "pronotepyFirstWeek": 17,
+      "pronotepyLastWeek": 20,
+      "expected": {
+        "today": "2027-01-04",
+        "from": "2026-12-21",
+        "to": "2027-01-17",
+        "days": 28,
+        "firstWeek": 17,
+        "lastWeek": 20,
+        "domaine": {
+          "_T": 8,
+          "V": "[17..20]"
+        }
+      }
+    }
+  ],
+  "requests": {
+    "note": "Inner payload before compression/encryption (see protocol-reference.md envelopes). Send 89 then 88, serialized, after ParametresUtilisateur; one HTTP request each.",
+    "student": [
+      {
+        "id": "PageCahierDeTexte",
+        "inner": {
+          "Signature": {
+            "onglet": 89
+          },
+          "data": {
+            "domaine": {
+              "_T": 8,
+              "V": "[10..14]"
+            }
+          }
+        }
+      },
+      {
+        "id": "PageCahierDeTexte",
+        "inner": {
+          "Signature": {
+            "onglet": 88
+          },
+          "data": {
+            "domaine": {
+              "_T": 8,
+              "V": "[10..14]"
+            }
+          }
+        }
+      }
+    ],
+    "parent": {
+      "selectedChildId": "synthetic-child-b",
+      "calls": [
+        {
+          "id": "PageCahierDeTexte",
+          "inner": {
+            "Signature": {
+              "onglet": 89,
+              "membre": {
+                "N": "synthetic-child-b",
+                "G": 4
+              }
+            },
+            "data": {
+              "domaine": {
+                "_T": 8,
+                "V": "[10..14]"
+              }
+            }
+          }
+        },
+        {
+          "id": "PageCahierDeTexte",
+          "inner": {
+            "Signature": {
+              "onglet": 88,
+              "membre": {
+                "N": "synthetic-child-b",
+                "G": 4
+              }
+            },
+            "data": {
+              "domaine": {
+                "_T": 8,
+                "V": "[10..14]"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "unauthorizedOngletIsRefusedLocally": true
+  },
+  "safety": {
+    "readOnlyFunctionIds": [
+      "FonctionParametres",
+      "Identification",
+      "Authentification",
+      "ParametresUtilisateur",
+      "PageInfosPerso",
+      "Navigation",
+      "PageEmploiDuTemps",
+      "PageCahierDeTexte"
+    ],
+    "pageCahierDeTexte": {
+      "allowedOnglets": [
+        88,
+        89
+      ],
+      "allowedDataKeys": [
+        "domaine"
+      ],
+      "domaineType": 8,
+      "maxWeekSpan": 5
+    },
+    "rejectedFunctionExamples": [
+      "SaisieTAFFaitEleve",
+      "SaisieActualites",
+      "SaisieMessage",
+      "SaisiePublicMessage",
+      "SecurisationCompteDoubleAuth",
+      "JetonAppliMobile"
+    ],
+    "rejectedFunctionPrefixes": [
+      "Saisie"
+    ],
+    "download": {
+      "method": "GET",
+      "scheme": "https",
+      "sameHostAsSession": true,
+      "pathPrefix": "/FichiersExternes/",
+      "maxBytes": 20971520
+    }
+  },
+  "dates": [
+    {
+      "raw": "18/11/2026 08:30:00",
+      "expectedDate": "2026-11-18",
+      "pronotepyDatetimeParse": "2026-11-18",
+      "pronotepyDateParse": "2026-11-18"
+    },
+    {
+      "raw": "18/11/2026",
+      "expectedDate": "2026-11-18",
+      "pronotepyDatetimeParse": "2026-11-18",
+      "pronotepyDateParse": "2026-11-18"
+    },
+    {
+      "raw": "18/11/26 08h30",
+      "expectedDate": "2026-11-18",
+      "pronotepyDatetimeParse": "2026-11-18",
+      "pronotepyDateParse": "2026-11-18"
+    },
+    {
+      "raw": "18/11/26",
+      "expectedDate": "2026-11-18",
+      "pronotepyDatetimeParse": null,
+      "pronotepyDateParse": "2026-11-18"
+    },
+    {
+      "raw": "31/02/2026",
+      "expectedDate": null,
+      "pronotepyDatetimeParse": null,
+      "pronotepyDateParse": null
+    },
+    {
+      "raw": "18/11/2026 24:00:00",
+      "expectedDate": null,
+      "pronotepyDatetimeParse": null,
+      "pronotepyDateParse": null
+    },
+    {
+      "raw": "2026-11-18",
+      "expectedDate": null,
+      "pronotepyDatetimeParse": null,
+      "pronotepyDateParse": null
+    },
+    {
+      "raw": "18/11",
+      "expectedDate": null,
+      "pronotepyDatetimeParse": null,
+      "pronotepyDateParse": "2026-11-18"
+    },
+    {
+      "raw": "0830",
+      "expectedDate": null,
+      "pronotepyDatetimeParse": null,
+      "pronotepyDateParse": "2026-11-18"
+    },
+    {
+      "raw": "1/11/2026",
+      "expectedDate": null,
+      "pronotepyDatetimeParse": null,
+      "pronotepyDateParse": null
+    },
+    {
+      "raw": "",
+      "expectedDate": null,
+      "pronotepyDatetimeParse": null,
+      "pronotepyDateParse": null
+    },
+    {
+      "raw": null,
+      "expectedDate": null,
+      "pronotepyDatetimeParse": null,
+      "pronotepyDateParse": null
+    }
+  ],
+  "html": {
+    "rules": {
+      "rawTextElementsDroppedWithContent": [
+        "head",
+        "iframe",
+        "math",
+        "noembed",
+        "noframes",
+        "noscript",
+        "object",
+        "script",
+        "style",
+        "svg",
+        "template",
+        "textarea",
+        "title",
+        "xmp"
+      ],
+      "blockElementsSoftBreak": [
+        "address",
+        "article",
+        "aside",
+        "blockquote",
+        "dd",
+        "div",
+        "dl",
+        "dt",
+        "figcaption",
+        "figure",
+        "footer",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "header",
+        "hr",
+        "li",
+        "main",
+        "nav",
+        "ol",
+        "p",
+        "pre",
+        "section",
+        "table",
+        "tbody",
+        "tfoot",
+        "thead",
+        "tr",
+        "ul"
+      ],
+      "cellElementsSpace": [
+        "td",
+        "th"
+      ],
+      "hardBreak": [
+        "br"
+      ],
+      "listItemPrefix": "• ",
+      "whitespaceMappedToSpace": [
+        "U+0009",
+        "U+000A",
+        "U+000B",
+        "U+000C",
+        "U+000D",
+        "U+0020",
+        "U+00A0"
+      ],
+      "removedCodePoints": [
+        "U+0000..U+001F (after whitespace mapping)",
+        "U+007F..U+009F",
+        "U+202A..U+202E",
+        "U+2066..U+2069",
+        "U+FEFF"
+      ],
+      "entityPattern": "&(?:#([0-9]{1,7})|#[xX]([0-9A-Fa-f]{1,6})|([A-Za-z][A-Za-z0-9]{0,31}));"
+    },
+    "entityTable": {
+      "AElig": 198,
+      "Aacute": 193,
+      "Acirc": 194,
+      "Agrave": 192,
+      "Alpha": 913,
+      "Aring": 197,
+      "Atilde": 195,
+      "Auml": 196,
+      "Beta": 914,
+      "Ccedil": 199,
+      "Chi": 935,
+      "Dagger": 8225,
+      "Delta": 916,
+      "ETH": 208,
+      "Eacute": 201,
+      "Ecirc": 202,
+      "Egrave": 200,
+      "Epsilon": 917,
+      "Eta": 919,
+      "Euml": 203,
+      "Gamma": 915,
+      "Iacute": 205,
+      "Icirc": 206,
+      "Igrave": 204,
+      "Iota": 921,
+      "Iuml": 207,
+      "Kappa": 922,
+      "Lambda": 923,
+      "Mu": 924,
+      "Ntilde": 209,
+      "Nu": 925,
+      "OElig": 338,
+      "Oacute": 211,
+      "Ocirc": 212,
+      "Ograve": 210,
+      "Omega": 937,
+      "Omicron": 927,
+      "Oslash": 216,
+      "Otilde": 213,
+      "Ouml": 214,
+      "Phi": 934,
+      "Pi": 928,
+      "Prime": 8243,
+      "Psi": 936,
+      "Rho": 929,
+      "Scaron": 352,
+      "Sigma": 931,
+      "THORN": 222,
+      "Tau": 932,
+      "Theta": 920,
+      "Uacute": 218,
+      "Ucirc": 219,
+      "Ugrave": 217,
+      "Upsilon": 933,
+      "Uuml": 220,
+      "Xi": 926,
+      "Yacute": 221,
+      "Yuml": 376,
+      "Zeta": 918,
+      "aacute": 225,
+      "acirc": 226,
+      "acute": 180,
+      "aelig": 230,
+      "agrave": 224,
+      "alefsym": 8501,
+      "alpha": 945,
+      "amp": 38,
+      "and": 8743,
+      "ang": 8736,
+      "apos": 39,
+      "aring": 229,
+      "asymp": 8776,
+      "atilde": 227,
+      "auml": 228,
+      "bdquo": 8222,
+      "beta": 946,
+      "brvbar": 166,
+      "bull": 8226,
+      "cap": 8745,
+      "ccedil": 231,
+      "cedil": 184,
+      "cent": 162,
+      "chi": 967,
+      "circ": 710,
+      "clubs": 9827,
+      "cong": 8773,
+      "copy": 169,
+      "crarr": 8629,
+      "cup": 8746,
+      "curren": 164,
+      "dArr": 8659,
+      "dagger": 8224,
+      "darr": 8595,
+      "deg": 176,
+      "delta": 948,
+      "diams": 9830,
+      "divide": 247,
+      "eacute": 233,
+      "ecirc": 234,
+      "egrave": 232,
+      "empty": 8709,
+      "emsp": 8195,
+      "ensp": 8194,
+      "epsilon": 949,
+      "equiv": 8801,
+      "eta": 951,
+      "eth": 240,
+      "euml": 235,
+      "euro": 8364,
+      "exist": 8707,
+      "fnof": 402,
+      "forall": 8704,
+      "frac12": 189,
+      "frac14": 188,
+      "frac34": 190,
+      "frasl": 8260,
+      "gamma": 947,
+      "ge": 8805,
+      "gt": 62,
+      "hArr": 8660,
+      "harr": 8596,
+      "hearts": 9829,
+      "hellip": 8230,
+      "iacute": 237,
+      "icirc": 238,
+      "iexcl": 161,
+      "igrave": 236,
+      "image": 8465,
+      "infin": 8734,
+      "int": 8747,
+      "iota": 953,
+      "iquest": 191,
+      "isin": 8712,
+      "iuml": 239,
+      "kappa": 954,
+      "lArr": 8656,
+      "lambda": 955,
+      "lang": 9001,
+      "laquo": 171,
+      "larr": 8592,
+      "lceil": 8968,
+      "ldquo": 8220,
+      "le": 8804,
+      "lfloor": 8970,
+      "lowast": 8727,
+      "loz": 9674,
+      "lrm": 8206,
+      "lsaquo": 8249,
+      "lsquo": 8216,
+      "lt": 60,
+      "macr": 175,
+      "mdash": 8212,
+      "micro": 181,
+      "middot": 183,
+      "minus": 8722,
+      "mu": 956,
+      "nabla": 8711,
+      "nbsp": 160,
+      "ndash": 8211,
+      "ne": 8800,
+      "ni": 8715,
+      "not": 172,
+      "notin": 8713,
+      "nsub": 8836,
+      "ntilde": 241,
+      "nu": 957,
+      "oacute": 243,
+      "ocirc": 244,
+      "oelig": 339,
+      "ograve": 242,
+      "oline": 8254,
+      "omega": 969,
+      "omicron": 959,
+      "oplus": 8853,
+      "or": 8744,
+      "ordf": 170,
+      "ordm": 186,
+      "oslash": 248,
+      "otilde": 245,
+      "otimes": 8855,
+      "ouml": 246,
+      "para": 182,
+      "part": 8706,
+      "permil": 8240,
+      "perp": 8869,
+      "phi": 966,
+      "pi": 960,
+      "piv": 982,
+      "plusmn": 177,
+      "pound": 163,
+      "prime": 8242,
+      "prod": 8719,
+      "prop": 8733,
+      "psi": 968,
+      "quot": 34,
+      "rArr": 8658,
+      "radic": 8730,
+      "rang": 9002,
+      "raquo": 187,
+      "rarr": 8594,
+      "rceil": 8969,
+      "rdquo": 8221,
+      "real": 8476,
+      "reg": 174,
+      "rfloor": 8971,
+      "rho": 961,
+      "rlm": 8207,
+      "rsaquo": 8250,
+      "rsquo": 8217,
+      "sbquo": 8218,
+      "scaron": 353,
+      "sdot": 8901,
+      "sect": 167,
+      "shy": 173,
+      "sigma": 963,
+      "sigmaf": 962,
+      "sim": 8764,
+      "spades": 9824,
+      "sub": 8834,
+      "sube": 8838,
+      "sum": 8721,
+      "sup": 8835,
+      "sup1": 185,
+      "sup2": 178,
+      "sup3": 179,
+      "supe": 8839,
+      "szlig": 223,
+      "tau": 964,
+      "there4": 8756,
+      "theta": 952,
+      "thetasym": 977,
+      "thinsp": 8201,
+      "thorn": 254,
+      "tilde": 732,
+      "times": 215,
+      "trade": 8482,
+      "uArr": 8657,
+      "uacute": 250,
+      "uarr": 8593,
+      "ucirc": 251,
+      "ugrave": 249,
+      "uml": 168,
+      "upsih": 978,
+      "upsilon": 965,
+      "uuml": 252,
+      "weierp": 8472,
+      "xi": 958,
+      "yacute": 253,
+      "yen": 165,
+      "yuml": 255,
+      "zeta": 950,
+      "zwj": 8205,
+      "zwnj": 8204
+    },
+    "cases": [
+      {
+        "name": "accents_utf8",
+        "html": "<p>Révision : fonctions affines, côté «&nbsp;élève&nbsp;» — 𝑥 ∈ ℝ</p>",
+        "expected": {
+          "text": "Révision : fonctions affines, côté « élève » — 𝑥 ∈ ℝ",
+          "links": []
+        },
+        "pronotepyHtmlParse": "Révision : fonctions affines, côté « élève » — 𝑥 ∈ ℝ"
+      },
+      {
+        "name": "blocks_and_breaks",
+        "html": "<div>Ligne 1<br/>Ligne 2</div>\n<div>Ligne 3</div><p></p><p>Ligne 4<br><br>Ligne 6</p>",
+        "expected": {
+          "text": "Ligne 1\nLigne 2\nLigne 3\nLigne 4\n\nLigne 6",
+          "links": []
+        },
+        "pronotepyHtmlParse": "Ligne 1Ligne 2\nLigne 3Ligne 4Ligne 6"
+      },
+      {
+        "name": "named_numeric_entities",
+        "html": "R&eacute;sum&eacute; &amp; synth&egrave;se &lt;important&gt; &quot;cit&eacute;&quot; &apos;ok&apos; &#39;a&#39; &#x20AC; 5&nbsp;&euro; &OElig;uvre",
+        "expected": {
+          "text": "Résumé & synthèse <important> \"cité\" 'ok' 'a' € 5 € Œuvre",
+          "links": []
+        },
+        "pronotepyHtmlParse": "Résumé & synthèse <important> \"cité\" 'ok' 'a' € 5 € Œuvre"
+      },
+      {
+        "name": "unknown_or_unterminated_entities",
+        "html": "A &unknown; B &amp C &ampx; D &#; E &#xZZ;",
+        "expected": {
+          "text": "A &unknown; B &amp C &ampx; D &#; E &#xZZ;",
+          "links": []
+        },
+        "pronotepyHtmlParse": "A &unknown; B & C &x; D &#; E &#xZZ;"
+      },
+      {
+        "name": "invalid_numeric_entities",
+        "html": "a&#0;b&#xD800;c&#1114112;d&#128;e&#7;f",
+        "expected": {
+          "text": "a�b�c�def",
+          "links": []
+        },
+        "pronotepyHtmlParse": "a�b�c�d€ef"
+      },
+      {
+        "name": "script_removed",
+        "html": "<p>Avant</p><script type=\"text/javascript\">alert(\"x\");</script><p>Après</p>",
+        "expected": {
+          "text": "Avant\nAprès",
+          "links": []
+        },
+        "pronotepyHtmlParse": "Avantalert(\"x\");Après"
+      },
+      {
+        "name": "script_uppercase_unterminated",
+        "html": "<p>Début</p><SCRIPT>alert(1)</scriptx> encore caché",
+        "expected": {
+          "text": "Début",
+          "links": []
+        },
+        "pronotepyHtmlParse": "Débutalert(1) encore caché"
+      },
+      {
+        "name": "style_comment_removed",
+        "html": "<style>p{color:red}</style><!-- note privée --><p>Visible</p>",
+        "expected": {
+          "text": "Visible",
+          "links": []
+        },
+        "pronotepyHtmlParse": "p{color:red}Visible"
+      },
+      {
+        "name": "event_handlers_and_images",
+        "html": "<p onclick=\"alert(1)\" style=\"color:red\">Clique</p><img src=\"https://tracker.exemple.org/x.png\" onerror=\"alert(2)\">",
+        "expected": {
+          "text": "Clique",
+          "links": []
+        },
+        "pronotepyHtmlParse": "Clique"
+      },
+      {
+        "name": "links_filtered",
+        "html": "<a href=\"javascript:alert(1)\">piège</a> <a href=\"https://exemple.fr/cours?id=1&amp;p=2\">Cours <b>en ligne</b></a> <a href=\"HTTP://Exemple.fr/\">majuscules</a> <a href=\"data:text/html,x\">data</a> <a href=\"https://user:pw@exemple.fr/\">identifiants</a> <a href=//exemple.fr>relatif</a> <a href=\" https://espace.exemple.fr \">espaces</a> <a href=\"jav&#x09;ascript:alert(1)\">tab</a> <a href=\"https://exemple.fr\"></a>",
+        "expected": {
+          "text": "piège Cours en ligne majuscules data identifiants relatif espaces tab",
+          "links": [
+            {
+              "label": "Cours en ligne",
+              "url": "https://exemple.fr/cours?id=1&p=2"
+            },
+            {
+              "label": "majuscules",
+              "url": "HTTP://Exemple.fr/"
+            },
+            {
+              "label": "espaces",
+              "url": "https://espace.exemple.fr"
+            },
+            {
+              "label": "https://exemple.fr",
+              "url": "https://exemple.fr"
+            }
+          ]
+        },
+        "pronotepyHtmlParse": "piège Cours en ligne majuscules data identifiants relatif espaces tab "
+      },
+      {
+        "name": "multiline_tag",
+        "html": "<a\nhref=\"javascript:alert(1)\"\nonclick=\"x()\">Lien</a> et\n<b\nclass=\"g\">gras</b>",
+        "expected": {
+          "text": "Lien et gras",
+          "links": []
+        },
+        "pronotepyHtmlParse": "<a\nhref=\"javascript:alert(1)\"\nonclick=\"x()\">Lien et\n<b\nclass=\"g\">gras"
+      },
+      {
+        "name": "quoted_gt_in_attribute",
+        "html": "<a href=\"https://exemple.fr/?q=a>b\" title='x>y'>Lien</a> fin",
+        "expected": {
+          "text": "Lien fin",
+          "links": [
+            {
+              "label": "Lien",
+              "url": "https://exemple.fr/?q=a>b"
+            }
+          ]
+        },
+        "pronotepyHtmlParse": "b\" title='x>y'>Lien fin"
+      },
+      {
+        "name": "escaped_markup_is_text",
+        "html": "&lt;script&gt;alert(1)&lt;/script&gt; &lt;a href=&quot;javascript:x&quot;&gt;",
+        "expected": {
+          "text": "<script>alert(1)</script> <a href=\"javascript:x\">",
+          "links": []
+        },
+        "pronotepyHtmlParse": "<script>alert(1)</script> <a href=\"javascript:x\">"
+      },
+      {
+        "name": "literal_angle_brackets",
+        "html": "3 < 5 et 5 > 3, <3, a<b",
+        "expected": {
+          "text": "3 < 5 et 5 > 3, <3, a",
+          "links": []
+        },
+        "pronotepyHtmlParse": "3  3, <3, a<b"
+      },
+      {
+        "name": "svg_iframe_removed",
+        "html": "<svg><script>alert(1)</script><text>T</text></svg>OK<iframe src=\"https://exemple.fr\">fallback</iframe> fin",
+        "expected": {
+          "text": "OK fin",
+          "links": []
+        },
+        "pronotepyHtmlParse": "alert(1)TOKfallback fin"
+      },
+      {
+        "name": "list_and_table",
+        "html": "<ul><li>Exercice 1</li><li> Exercice 2 p.&nbsp;45 </li></ul><table><tr><td>A</td><td>B</td></tr><tr><td>C</td><td>D</td></tr></table>",
+        "expected": {
+          "text": "• Exercice 1\n• Exercice 2 p. 45\nA B\nC D",
+          "links": []
+        },
+        "pronotepyHtmlParse": "Exercice 1 Exercice 2 p. 45 ABCD"
+      },
+      {
+        "name": "controls_and_bidi",
+        "html": "a&#8238;b\u0007c‮d﻿e",
+        "expected": {
+          "text": "abcde",
+          "links": []
+        },
+        "pronotepyHtmlParse": "a‮b\u0007c‮d﻿e"
+      },
+      {
+        "name": "whitespace_only",
+        "html": "<p>&nbsp;</p><p> </p>\n\t",
+        "expected": {
+          "text": "",
+          "links": []
+        },
+        "pronotepyHtmlParse": "  \n\t"
+      },
+      {
+        "name": "unterminated_tag",
+        "html": "Texte <a href=\"https://exemple.fr\" visible",
+        "expected": {
+          "text": "Texte",
+          "links": []
+        },
+        "pronotepyHtmlParse": "Texte <a href=\"https://exemple.fr\" visible"
+      },
+      {
+        "name": "nested_anchor_closes_previous",
+        "html": "<a href=\"https://a.exemple.fr\">un <a href=\"https://b.exemple.fr\">deux</a> trois",
+        "expected": {
+          "text": "un deux trois",
+          "links": [
+            {
+              "label": "un",
+              "url": "https://a.exemple.fr"
+            },
+            {
+              "label": "deux",
+              "url": "https://b.exemple.fr"
+            }
+          ]
+        },
+        "pronotepyHtmlParse": "un deux trois"
+      },
+      {
+        "name": "empty",
+        "html": "",
+        "expected": {
+          "text": "",
+          "links": []
+        },
+        "pronotepyHtmlParse": ""
+      }
+    ]
+  },
+  "linkUrls": [
+    {
+      "url": "https://exemple.fr/cours",
+      "accepted": "https://exemple.fr/cours",
+      "webConnectorAccepted": true
+    },
+    {
+      "url": "http://exemple.fr",
+      "accepted": "http://exemple.fr",
+      "webConnectorAccepted": true
+    },
+    {
+      "url": "HTTPS://Exemple.FR/Page",
+      "accepted": "HTTPS://Exemple.FR/Page",
+      "webConnectorAccepted": true
+    },
+    {
+      "url": "https://exemple.fr:8443/x",
+      "accepted": "https://exemple.fr:8443/x",
+      "webConnectorAccepted": true
+    },
+    {
+      "url": "https://[2001:db8::1]/x",
+      "accepted": "https://[2001:db8::1]/x",
+      "webConnectorAccepted": true
+    },
+    {
+      "url": "javascript:alert(1)",
+      "accepted": null,
+      "webConnectorAccepted": false
+    },
+    {
+      "url": "data:text/html,x",
+      "accepted": null,
+      "webConnectorAccepted": false
+    },
+    {
+      "url": "file:///etc/passwd",
+      "accepted": null,
+      "webConnectorAccepted": false
+    },
+    {
+      "url": "https://user:pw@exemple.fr/",
+      "accepted": null,
+      "webConnectorAccepted": false
+    },
+    {
+      "url": "https://exemple.fr\\@evil.exemple/",
+      "accepted": null,
+      "webConnectorAccepted": false
+    },
+    {
+      "url": "//exemple.fr/x",
+      "accepted": null,
+      "webConnectorAccepted": false
+    },
+    {
+      "url": "https://",
+      "accepted": null,
+      "webConnectorAccepted": false
+    },
+    {
+      "url": "https:///chemin",
+      "accepted": null,
+      "webConnectorAccepted": false
+    },
+    {
+      "url": "ftp://exemple.fr/f",
+      "accepted": null,
+      "webConnectorAccepted": false
+    },
+    {
+      "url": "https://exemple.fr:99999/",
+      "accepted": null,
+      "webConnectorAccepted": true
+    },
+    {
+      "url": "https://exemple .fr/",
+      "accepted": null,
+      "webConnectorAccepted": true
+    },
+    {
+      "url": " https://exemple.fr/ ",
+      "accepted": "https://exemple.fr/",
+      "webConnectorAccepted": true
+    },
+    {
+      "url": "https://exemple.fr/a b",
+      "accepted": null,
+      "webConnectorAccepted": true
+    },
+    {
+      "url": "https://éducation.exemple.fr/",
+      "accepted": null,
+      "webConnectorAccepted": true
+    }
+  ],
+  "notebook": {
+    "today": "2026-11-18",
+    "timetableSubjects": {
+      "cours-svt": "SVT"
+    },
+    "responses": {
+      "PageCahierDeTexte89": {
+        "dataSec": {
+          "data": {
+            "ListeCahierDeTextes": {
+              "_T": 24,
+              "V": [
+                {
+                  "N": "cdt-01",
+                  "cours": {
+                    "_T": 24,
+                    "V": {
+                      "N": "cours-maths"
+                    }
+                  },
+                  "Date": {
+                    "_T": 7,
+                    "V": "16/11/2026 08:30:00"
+                  },
+                  "Matiere": {
+                    "_T": 24,
+                    "V": {
+                      "N": "mat-maths",
+                      "L": "MATHÉMATIQUES"
+                    }
+                  },
+                  "listeContenus": {
+                    "_T": 24,
+                    "V": [
+                      {
+                        "N": "cnt-01a",
+                        "L": "Fonctions affines",
+                        "descriptif": {
+                          "_T": 21,
+                          "V": "<div>Définition, coefficient directeur et ordonnée à l&#39;origine.</div><ul><li>Représentation graphique</li><li>Lecture du coefficient&nbsp;<i>a</i></li></ul>"
+                        },
+                        "ListePieceJointe": {
+                          "_T": 24,
+                          "V": [
+                            {
+                              "N": "pj-file-01",
+                              "L": "Fiche d’exercices (1) – été.pdf",
+                              "G": 1
+                            }
+                          ]
+                        },
+                        "categorie": {
+                          "_T": 24,
+                          "V": {
+                            "N": "cat-Cours",
+                            "L": "Cours",
+                            "G": 1
+                          }
+                        }
+                      },
+                      {
+                        "N": "cnt-01b",
+                        "L": "Exercices",
+                        "descriptif": {
+                          "_T": 21,
+                          "V": "<p>Ex. 12 &amp; 13 p.&nbsp;45</p>"
+                        },
+                        "ListePieceJointe": {
+                          "_T": 24,
+                          "V": [
+                            {
+                              "N": "pj-link-01",
+                              "L": "Vidéo du cours",
+                              "G": 0,
+                              "url": "https://video.exemple.fr/watch?v=abc&t=10"
+                            }
+                          ]
+                        },
+                        "categorie": {
+                          "_T": 24,
+                          "V": {
+                            "N": "cat-Exercices",
+                            "L": "Exercices",
+                            "G": 1
+                          }
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "N": "cdt-02",
+                  "cours": {
+                    "_T": 24,
+                    "V": {
+                      "N": "cours-hg"
+                    }
+                  },
+                  "Date": {
+                    "_T": 7,
+                    "V": "13/11/2026 10:00:00"
+                  },
+                  "Matiere": {
+                    "_T": 24,
+                    "V": {
+                      "N": "mat-hg",
+                      "L": "HISTOIRE-GÉOGRAPHIE"
+                    }
+                  },
+                  "listeContenus": {
+                    "_T": 24,
+                    "V": [
+                      {
+                        "N": "cnt-02a",
+                        "L": "La Révolution française",
+                        "descriptif": {
+                          "_T": 21,
+                          "V": "<p onclick=\"alert(1)\">Lire le document&nbsp;2.</p><script>alert(\"cdt\")</script><p><a href=\"javascript:alert(2)\">Ressource piégée</a> puis <a href=\"https://manuel.exemple.fr/chapitre-3?page=12&amp;ligne=4\">manuel en ligne</a>.</p><img src=\"https://tracker.exemple.org/pixel.png\" onerror=\"alert(3)\">"
+                        },
+                        "ListePieceJointe": {
+                          "_T": 24,
+                          "V": [
+                            {
+                              "N": "pj-link-js",
+                              "L": "Ouvrir",
+                              "G": 0,
+                              "url": "javascript:alert(4)"
+                            },
+                            {
+                              "N": "pj-link-data",
+                              "L": "Données",
+                              "G": 0,
+                              "url": "data:text/html,<b>x</b>"
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "N": "cdt-03",
+                  "cours": {
+                    "_T": 24,
+                    "V": {
+                      "N": "cours-fr"
+                    }
+                  },
+                  "Matiere": {
+                    "_T": 24,
+                    "V": {
+                      "N": "mat-fr",
+                      "L": "FRANÇAIS"
+                    }
+                  },
+                  "listeContenus": {
+                    "_T": 24,
+                    "V": [
+                      {
+                        "N": "cnt-03a",
+                        "L": "Sans date",
+                        "descriptif": {
+                          "_T": 21,
+                          "V": "<p>Texte</p>"
+                        },
+                        "ListePieceJointe": {
+                          "_T": 24,
+                          "V": []
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "N": "cdt-04",
+                  "cours": {
+                    "_T": 24,
+                    "V": {
+                      "N": "cours-fr"
+                    }
+                  },
+                  "Date": {
+                    "_T": 7,
+                    "V": "31/02/2026 08:00:00"
+                  },
+                  "Matiere": {
+                    "_T": 24,
+                    "V": {
+                      "N": "mat-fr",
+                      "L": "FRANÇAIS"
+                    }
+                  },
+                  "listeContenus": {
+                    "_T": 24,
+                    "V": [
+                      {
+                        "N": "cnt-04a",
+                        "L": "Date impossible",
+                        "descriptif": {
+                          "_T": 21,
+                          "V": "<p>Texte</p>"
+                        },
+                        "ListePieceJointe": {
+                          "_T": 24,
+                          "V": []
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "N": "cdt-05",
+                  "cours": {
+                    "_T": 24,
+                    "V": {
+                      "N": "cours-fr"
+                    }
+                  },
+                  "Date": {
+                    "_T": 7,
+                    "V": "01/10/2026 08:00:00"
+                  },
+                  "Matiere": {
+                    "_T": 24,
+                    "V": {
+                      "N": "mat-fr",
+                      "L": "FRANÇAIS"
+                    }
+                  },
+                  "listeContenus": {
+                    "_T": 24,
+                    "V": [
+                      {
+                        "N": "cnt-05a",
+                        "L": "Trop ancien",
+                        "descriptif": {
+                          "_T": 21,
+                          "V": "<p>Hors fenêtre</p>"
+                        },
+                        "ListePieceJointe": {
+                          "_T": 24,
+                          "V": []
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "N": "cdt-06",
+                  "cours": {
+                    "_T": 24,
+                    "V": {
+                      "N": "cours-svt"
+                    }
+                  },
+                  "Date": {
+                    "_T": 7,
+                    "V": "20/11/2026"
+                  },
+                  "listeContenus": {
+                    "_T": 24,
+                    "V": [
+                      {
+                        "N": "cnt-06a",
+                        "L": "",
+                        "descriptif": {
+                          "_T": 21,
+                          "V": ""
+                        },
+                        "ListePieceJointe": {
+                          "_T": 24,
+                          "V": [
+                            {
+                              "N": "pj-file-02",
+                              "G": 1
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "N": "cdt-07",
+                  "cours": {
+                    "_T": 24,
+                    "V": {
+                      "N": "cours-ang"
+                    }
+                  },
+                  "Date": {
+                    "_T": 7,
+                    "V": "18/11/2026 14:00:00"
+                  },
+                  "Matiere": {
+                    "_T": 24,
+                    "V": {
+                      "N": "mat-ang",
+                      "L": "ANGLAIS LV1"
+                    }
+                  },
+                  "listeContenus": {
+                    "_T": 24,
+                    "V": [
+                      {
+                        "N": "cnt-07a",
+                        "L": "",
+                        "descriptif": {
+                          "_T": 21,
+                          "V": "<p>&nbsp;</p>"
+                        },
+                        "ListePieceJointe": {
+                          "_T": 24,
+                          "V": []
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "N": "cdt-08",
+                  "cours": {
+                    "_T": 24,
+                    "V": {
+                      "N": "cours-maths"
+                    }
+                  },
+                  "Date": {
+                    "_T": 7,
+                    "V": "09/11/2026 08:30:00"
+                  },
+                  "Matiere": {
+                    "_T": 24,
+                    "V": {
+                      "N": "mat-maths",
+                      "L": "MATHÉMATIQUES"
+                    }
+                  },
+                  "listeContenus": {
+                    "_T": 24,
+                    "V": [
+                      {
+                        "N": "cnt-08a",
+                        "L": "Équations",
+                        "descriptif": {
+                          "_T": 21,
+                          "V": "R&eacute;solution d&rsquo;&eacute;quations &laquo;&nbsp;produit nul&nbsp;&raquo;<br>Cas&nbsp;: &lt;script&gt; reste du texte &#x2192; &#8364;"
+                        },
+                        "ListePieceJointe": {
+                          "_T": 24,
+                          "V": []
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "N": "cdt-09",
+                  "cours": {
+                    "_T": 24,
+                    "V": {
+                      "N": "cours-fr"
+                    }
+                  },
+                  "Date": {
+                    "_T": 7,
+                    "V": "04/11/2026 08:00:00"
+                  },
+                  "Matiere": {
+                    "_T": 24,
+                    "V": {
+                      "N": "mat-fr",
+                      "L": "FRANÇAIS"
+                    }
+                  },
+                  "listeContenus": {
+                    "_T": 24,
+                    "V": [
+                      {
+                        "N": "cnt-09a",
+                        "L": "Premier jour de la fenêtre",
+                        "descriptif": {
+                          "_T": 21,
+                          "V": "<p>Inclus</p>"
+                        },
+                        "ListePieceJointe": {
+                          "_T": 24,
+                          "V": [
+                            {
+                              "N": "pj-unknown",
+                              "L": "Type inconnu",
+                              "G": 2
+                            }
+                          ]
+                        },
+                        "categorie": {
+                          "_T": 24,
+                          "V": {
+                            "N": "cat-Cours",
+                            "L": "Cours",
+                            "G": 1
+                          }
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "N": "cdt-10",
+                  "cours": {
+                    "_T": 24,
+                    "V": {
+                      "N": "cours-fr"
+                    }
+                  },
+                  "Date": {
+                    "_T": 7,
+                    "V": "02/12/2026 08:00:00"
+                  },
+                  "Matiere": {
+                    "_T": 24,
+                    "V": {
+                      "N": "mat-fr",
+                      "L": "FRANÇAIS"
+                    }
+                  },
+                  "listeContenus": {
+                    "_T": 24,
+                    "V": [
+                      {
+                        "N": "cnt-10a",
+                        "L": "Lendemain de la fenêtre",
+                        "descriptif": {
+                          "_T": 21,
+                          "V": "<p>Exclu</p>"
+                        },
+                        "ListePieceJointe": {
+                          "_T": 24,
+                          "V": []
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
+      "PageCahierDeTexte88": {
+        "dataSec": {
+          "data": {
+            "ListeTravauxAFaire": {
+              "_T": 24,
+              "V": [
+                {
+                  "N": "taf-01",
+                  "descriptif": {
+                    "_T": 21,
+                    "V": "<p>Exercices 12 à 15 p.&nbsp;45</p>"
+                  },
+                  "PourLe": {
+                    "_T": 7,
+                    "V": "19/11/2026"
+                  },
+                  "DonneLe": {
+                    "_T": 7,
+                    "V": "16/11/2026"
+                  },
+                  "TAFFait": false,
+                  "Matiere": {
+                    "_T": 24,
+                    "V": {
+                      "N": "mat-maths",
+                      "L": "MATHÉMATIQUES"
+                    }
+                  },
+                  "CouleurFond": "#B4D2E6",
+                  "ListePieceJointe": {
+                    "_T": 24,
+                    "V": [
+                      {
+                        "N": "pj-file-03",
+                        "L": "Énoncé.pdf",
+                        "G": 1
+                      }
+                    ]
+                  }
+                },
+                {
+                  "N": "taf-02",
+                  "descriptif": {
+                    "_T": 21,
+                    "V": "<div>Écouter le <a href=\"https://podcast.exemple.fr/episode-7\" onclick=\"track()\">podcast</a><br/>et noter 5&nbsp;mots.</div>"
+                  },
+                  "PourLe": {
+                    "_T": 7,
+                    "V": "25/11/2026"
+                  },
+                  "DonneLe": {
+                    "_T": 7,
+                    "V": "16/11/2026"
+                  },
+                  "TAFFait": true,
+                  "Matiere": {
+                    "_T": 24,
+                    "V": {
+                      "N": "mat-ang",
+                      "L": "ANGLAIS LV1"
+                    }
+                  },
+                  "CouleurFond": "#B4D2E6",
+                  "ListePieceJointe": {
+                    "_T": 24,
+                    "V": [
+                      {
+                        "N": "pj-link-02",
+                        "L": "https://podcast.exemple.fr/episode-7",
+                        "G": 0
+                      }
+                    ]
+                  }
+                },
+                {
+                  "N": "taf-03",
+                  "descriptif": {
+                    "_T": 21,
+                    "V": "<p>Apprendre la frise</p>"
+                  },
+                  "PourLe": {
+                    "_T": 7,
+                    "V": "10/11/2026"
+                  },
+                  "DonneLe": {
+                    "_T": 7,
+                    "V": "16/11/2026"
+                  },
+                  "TAFFait": true,
+                  "Matiere": {
+                    "_T": 24,
+                    "V": {
+                      "N": "mat-hg",
+                      "L": "HISTOIRE-GÉOGRAPHIE"
+                    }
+                  },
+                  "CouleurFond": "#B4D2E6",
+                  "ListePieceJointe": {
+                    "_T": 24,
+                    "V": []
+                  }
+                },
+                {
+                  "N": "taf-04",
+                  "descriptif": {
+                    "_T": 21,
+                    "V": "<p>Hors fenêtre</p>"
+                  },
+                  "PourLe": {
+                    "_T": 7,
+                    "V": "15/12/2026"
+                  },
+                  "DonneLe": {
+                    "_T": 7,
+                    "V": "16/11/2026"
+                  },
+                  "TAFFait": false,
+                  "Matiere": {
+                    "_T": 24,
+                    "V": {
+                      "N": "mat-maths",
+                      "L": "MATHÉMATIQUES"
+                    }
+                  },
+                  "CouleurFond": "#B4D2E6",
+                  "ListePieceJointe": {
+                    "_T": 24,
+                    "V": []
+                  }
+                },
+                {
+                  "N": "taf-05",
+                  "descriptif": {
+                    "_T": 21,
+                    "V": "<p>Date illisible</p>"
+                  },
+                  "PourLe": {
+                    "_T": 7,
+                    "V": "pas de date"
+                  },
+                  "DonneLe": {
+                    "_T": 7,
+                    "V": "16/11/2026"
+                  },
+                  "TAFFait": false,
+                  "Matiere": {
+                    "_T": 24,
+                    "V": {
+                      "N": "mat-maths",
+                      "L": "MATHÉMATIQUES"
+                    }
+                  },
+                  "CouleurFond": "#B4D2E6",
+                  "ListePieceJointe": {
+                    "_T": 24,
+                    "V": []
+                  }
+                },
+                {
+                  "N": "taf-06",
+                  "descriptif": {
+                    "_T": 21,
+                    "V": "<p>Relire la scène&nbsp;3</p>"
+                  },
+                  "PourLe": {
+                    "_T": 7,
+                    "V": "19/11/2026"
+                  },
+                  "DonneLe": {
+                    "_T": 7,
+                    "V": "16/11/2026"
+                  },
+                  "TAFFait": false,
+                  "Matiere": {
+                    "_T": 24,
+                    "V": {
+                      "N": "mat-fr",
+                      "L": "FRANÇAIS"
+                    }
+                  },
+                  "CouleurFond": "#B4D2E6",
+                  "ListePieceJointe": {
+                    "_T": 24,
+                    "V": []
+                  }
+                },
+                {
+                  "N": "taf-07",
+                  "descriptif": {
+                    "_T": 21,
+                    "V": "<p>Sans matière ni couleur</p>"
+                  },
+                  "PourLe": {
+                    "_T": 7,
+                    "V": "20/11/2026"
+                  },
+                  "DonneLe": {
+                    "_T": 7,
+                    "V": "16/11/2026"
+                  },
+                  "TAFFait": false
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "expected": {
+      "from": "2026-11-04",
+      "to": "2026-12-01",
+      "sessions": [
+        {
+          "id": "cdt-06",
+          "lessonId": "cours-svt",
+          "date": "2026-11-20",
+          "subject": "SVT",
+          "contents": [
+            {
+              "title": "",
+              "description": "",
+              "links": [],
+              "category": "",
+              "attachments": [
+                {
+                  "kind": "file",
+                  "id": "pj-file-02",
+                  "name": "Document"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "cdt-01",
+          "lessonId": "cours-maths",
+          "date": "2026-11-16",
+          "subject": "MATHÉMATIQUES",
+          "contents": [
+            {
+              "title": "Fonctions affines",
+              "description": "Définition, coefficient directeur et ordonnée à l'origine.\n• Représentation graphique\n• Lecture du coefficient a",
+              "links": [],
+              "category": "Cours",
+              "attachments": [
+                {
+                  "kind": "file",
+                  "id": "pj-file-01",
+                  "name": "Fiche d’exercices (1) – été.pdf"
+                }
+              ]
+            },
+            {
+              "title": "Exercices",
+              "description": "Ex. 12 & 13 p. 45",
+              "links": [],
+              "category": "Exercices",
+              "attachments": [
+                {
+                  "kind": "link",
+                  "id": "pj-link-01",
+                  "name": "Vidéo du cours",
+                  "url": "https://video.exemple.fr/watch?v=abc&t=10"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "cdt-02",
+          "lessonId": "cours-hg",
+          "date": "2026-11-13",
+          "subject": "HISTOIRE-GÉOGRAPHIE",
+          "contents": [
+            {
+              "title": "La Révolution française",
+              "description": "Lire le document 2.\nRessource piégée puis manuel en ligne.",
+              "links": [
+                {
+                  "label": "manuel en ligne",
+                  "url": "https://manuel.exemple.fr/chapitre-3?page=12&ligne=4"
+                }
+              ],
+              "category": "",
+              "attachments": []
+            }
+          ]
+        },
+        {
+          "id": "cdt-08",
+          "lessonId": "cours-maths",
+          "date": "2026-11-09",
+          "subject": "MATHÉMATIQUES",
+          "contents": [
+            {
+              "title": "Équations",
+              "description": "Résolution d’équations « produit nul »\nCas : <script> reste du texte → €",
+              "links": [],
+              "category": "",
+              "attachments": []
+            }
+          ]
+        },
+        {
+          "id": "cdt-09",
+          "lessonId": "cours-fr",
+          "date": "2026-11-04",
+          "subject": "FRANÇAIS",
+          "contents": [
+            {
+              "title": "Premier jour de la fenêtre",
+              "description": "Inclus",
+              "links": [],
+              "category": "Cours",
+              "attachments": []
+            }
+          ]
+        }
+      ],
+      "homework": [
+        {
+          "id": "taf-03",
+          "dueDate": "2026-11-10",
+          "subject": "HISTOIRE-GÉOGRAPHIE",
+          "description": "Apprendre la frise",
+          "links": [],
+          "done": true,
+          "attachments": []
+        },
+        {
+          "id": "taf-01",
+          "dueDate": "2026-11-19",
+          "subject": "MATHÉMATIQUES",
+          "description": "Exercices 12 à 15 p. 45",
+          "links": [],
+          "done": false,
+          "attachments": [
+            {
+              "kind": "file",
+              "id": "pj-file-03",
+              "name": "Énoncé.pdf"
+            }
+          ]
+        },
+        {
+          "id": "taf-06",
+          "dueDate": "2026-11-19",
+          "subject": "FRANÇAIS",
+          "description": "Relire la scène 3",
+          "links": [],
+          "done": false,
+          "attachments": []
+        },
+        {
+          "id": "taf-07",
+          "dueDate": "2026-11-20",
+          "subject": "Cours",
+          "description": "Sans matière ni couleur",
+          "links": [],
+          "done": false,
+          "attachments": []
+        },
+        {
+          "id": "taf-02",
+          "dueDate": "2026-11-25",
+          "subject": "ANGLAIS LV1",
+          "description": "Écouter le podcast\net noter 5 mots.",
+          "links": [
+            {
+              "label": "podcast",
+              "url": "https://podcast.exemple.fr/episode-7"
+            }
+          ],
+          "done": true,
+          "attachments": [
+            {
+              "kind": "link",
+              "id": "pj-link-02",
+              "name": "https://podcast.exemple.fr/episode-7",
+              "url": "https://podcast.exemple.fr/episode-7"
+            }
+          ]
+        }
+      ],
+      "skippedEntries": 3,
+      "attachmentCount": 5
+    },
+    "webParity": {
+      "note": "scripts/pronote_notebook.py executed on the same responses minus the excluded items; dates, subjects, titles, categories, attachments, done, skippedEntries and attachmentCount are asserted equal (order-insensitive: the web sorts by (date, subject) descending). Descriptions differ by design: the web uses pronotepy Util.html_parse.",
+      "excluded": {
+        "rows": [
+          "cdt-07"
+        ],
+        "attachments": [
+          "pj-unknown"
+        ],
+        "homework": [
+          "taf-05",
+          "taf-07"
+        ]
+      },
+      "webOutput": {
+        "from": "2026-11-04",
+        "to": "2026-12-01",
+        "lessonCount": 1,
+        "contents": [
+          {
+            "id": "cdt-06-2026-11-20-0-3",
+            "subjectName": "SVT",
+            "date": "2026-11-20",
+            "title": "",
+            "description": "",
+            "category": "",
+            "attachments": [
+              {
+                "id": "opaque-2",
+                "name": "Document",
+                "kind": "file"
+              }
+            ]
+          },
+          {
+            "id": "cdt-01-2026-11-16-0-0",
+            "subjectName": "MATHÉMATIQUES",
+            "date": "2026-11-16",
+            "title": "Fonctions affines",
+            "description": "Définition, coefficient directeur et ordonnée à l'origine.Représentation graphiqueLecture du coefficient a",
+            "category": "Cours",
+            "attachments": [
+              {
+                "id": "opaque-1",
+                "name": "Fiche d’exercices (1) – été.pdf",
+                "kind": "file"
+              }
+            ]
+          },
+          {
+            "id": "cdt-01-2026-11-16-1-1",
+            "subjectName": "MATHÉMATIQUES",
+            "date": "2026-11-16",
+            "title": "Exercices",
+            "description": "Ex. 12 & 13 p. 45",
+            "category": "Exercices",
+            "attachments": [
+              {
+                "name": "Vidéo du cours",
+                "kind": "link",
+                "url": "https://video.exemple.fr/watch?v=abc&t=10"
+              }
+            ]
+          },
+          {
+            "id": "cdt-02-2026-11-13-0-2",
+            "subjectName": "HISTOIRE-GÉOGRAPHIE",
+            "date": "2026-11-13",
+            "title": "La Révolution française",
+            "description": "Lire le document 2.alert(\"cdt\")Ressource piégée puis manuel en ligne.",
+            "category": "",
+            "attachments": []
+          },
+          {
+            "id": "cdt-08-2026-11-09-0-4",
+            "subjectName": "MATHÉMATIQUES",
+            "date": "2026-11-09",
+            "title": "Équations",
+            "description": "Résolution d’équations « produit nul »Cas : <script> reste du texte → €",
+            "category": "",
+            "attachments": []
+          },
+          {
+            "id": "cdt-09-2026-11-04-0-5",
+            "subjectName": "FRANÇAIS",
+            "date": "2026-11-04",
+            "title": "Premier jour de la fenêtre",
+            "description": "Inclus",
+            "category": "Cours",
+            "attachments": []
+          }
+        ],
+        "homework": [
+          {
+            "id": "taf-03",
+            "subjectName": "HISTOIRE-GÉOGRAPHIE",
+            "dueDate": "2026-11-10",
+            "description": "Apprendre la frise",
+            "done": true,
+            "attachments": []
+          },
+          {
+            "id": "taf-06",
+            "subjectName": "FRANÇAIS",
+            "dueDate": "2026-11-19",
+            "description": "Relire la scène 3",
+            "done": false,
+            "attachments": []
+          },
+          {
+            "id": "taf-01",
+            "subjectName": "MATHÉMATIQUES",
+            "dueDate": "2026-11-19",
+            "description": "Exercices 12 à 15 p. 45",
+            "done": false,
+            "attachments": [
+              {
+                "id": "opaque-3",
+                "name": "Énoncé.pdf",
+                "kind": "file"
+              }
+            ]
+          },
+          {
+            "id": "taf-02",
+            "subjectName": "ANGLAIS LV1",
+            "dueDate": "2026-11-25",
+            "description": "Écouter le podcastet noter 5 mots.",
+            "done": true,
+            "attachments": [
+              {
+                "name": "https://podcast.exemple.fr/episode-7",
+                "kind": "link",
+                "url": "https://podcast.exemple.fr/episode-7"
+              }
+            ]
+          }
+        ],
+        "skippedEntries": 2,
+        "attachmentCount": 5
+      }
+    }
+  },
+  "download": {
+    "sessionKeyHex": "0f0e0d0c0b0a09080706050403020100",
+    "ivHex": "1ac1ef01e96caf1be0d329331a4fc2a8",
+    "pronoteRoot": "https://school.index-education.net/pronote",
+    "pageURL": "https://school.index-education.net/pronote/mobile.eleve.html",
+    "sessionH": 424242,
+    "note": "pronotepy pads the JSON with PKCS#7 itself, then aes_encrypt pads again: ciphertext = AES-CBC(sessionKey, sessionIV, PKCS7(PKCS7(plaintext))). Lowercase hex. The URL embeds the session: keep it inside the transport layer, never log, display, persist or share it.",
+    "cases": [
+      {
+        "name": "scenario_lesson_file",
+        "attachment": {
+          "N": "pj-file-01",
+          "L": "Fiche d’exercices (1) – été.pdf",
+          "G": 1
+        },
+        "plaintextUtf8": "{\"N\":\"pj-file-01\",\"Actif\":true}",
+        "padded1Hex": "7b224e223a22706a2d66696c652d3031222c224163746966223a747275657d01",
+        "padded2Hex": "7b224e223a22706a2d66696c652d3031222c224163746966223a747275657d0110101010101010101010101010101010",
+        "ciphertextHex": "d40201804686c9b570517a0f8917f1b8b87e4a3e4c96c706338f13261b75f30cf6e263e8a99168f59a91dc208aba2429",
+        "singlePaddingVariantCiphertextHex": "d40201804686c9b570517a0f8917f1b8b87e4a3e4c96c706338f13261b75f30c",
+        "encodedName": "Fiche%20d%E2%80%99exercices%20(1)%20%E2%80%93%20%C3%A9t%C3%A9.pdf",
+        "expectedURL": "https://school.index-education.net/pronote/FichiersExternes/d40201804686c9b570517a0f8917f1b8b87e4a3e4c96c706338f13261b75f30cf6e263e8a99168f59a91dc208aba2429/Fiche%20d%E2%80%99exercices%20(1)%20%E2%80%93%20%C3%A9t%C3%A9.pdf?Session=424242",
+        "saveAsName": "Fiche d’exercices (1) – été.pdf"
+      },
+      {
+        "name": "scenario_unnamed_file",
+        "attachment": {
+          "N": "pj-file-02",
+          "L": "",
+          "G": 1
+        },
+        "plaintextUtf8": "{\"N\":\"pj-file-02\",\"Actif\":true}",
+        "padded1Hex": "7b224e223a22706a2d66696c652d3032222c224163746966223a747275657d01",
+        "padded2Hex": "7b224e223a22706a2d66696c652d3032222c224163746966223a747275657d0110101010101010101010101010101010",
+        "ciphertextHex": "b277f3613bca724a6de7824878a5c9fd04425833ef9c6a69ab0baf586075b946d38f1430bb259c509717b3b070e9aac8",
+        "singlePaddingVariantCiphertextHex": "b277f3613bca724a6de7824878a5c9fd04425833ef9c6a69ab0baf586075b946",
+        "encodedName": "",
+        "expectedURL": "https://school.index-education.net/pronote/FichiersExternes/b277f3613bca724a6de7824878a5c9fd04425833ef9c6a69ab0baf586075b946d38f1430bb259c509717b3b070e9aac8/?Session=424242",
+        "saveAsName": "Document"
+      },
+      {
+        "name": "scenario_homework_file",
+        "attachment": {
+          "N": "pj-file-03",
+          "L": "Énoncé.pdf",
+          "G": 1
+        },
+        "plaintextUtf8": "{\"N\":\"pj-file-03\",\"Actif\":true}",
+        "padded1Hex": "7b224e223a22706a2d66696c652d3033222c224163746966223a747275657d01",
+        "padded2Hex": "7b224e223a22706a2d66696c652d3033222c224163746966223a747275657d0110101010101010101010101010101010",
+        "ciphertextHex": "e1ef7fb1bad986ec342b95ef43f353040b0bf24bf86b549b145e7ed8aa453b4ebca13ed700be169b8a855871de043afc",
+        "singlePaddingVariantCiphertextHex": "e1ef7fb1bad986ec342b95ef43f353040b0bf24bf86b549b145e7ed8aa453b4e",
+        "encodedName": "%C3%89nonc%C3%A9.pdf",
+        "expectedURL": "https://school.index-education.net/pronote/FichiersExternes/e1ef7fb1bad986ec342b95ef43f353040b0bf24bf86b549b145e7ed8aa453b4ebca13ed700be169b8a855871de043afc/%C3%89nonc%C3%A9.pdf?Session=424242",
+        "saveAsName": "Énoncé.pdf"
+      },
+      {
+        "name": "reserved_characters",
+        "attachment": {
+          "N": "27#AbCdEfGh_-.1",
+          "L": "cours/partie 2?#&%.docx",
+          "G": 1
+        },
+        "plaintextUtf8": "{\"N\":\"27#AbCdEfGh_-.1\",\"Actif\":true}",
+        "padded1Hex": "7b224e223a2232372341624364456647685f2d2e31222c224163746966223a747275657d0c0c0c0c0c0c0c0c0c0c0c0c",
+        "padded2Hex": "7b224e223a2232372341624364456647685f2d2e31222c224163746966223a747275657d0c0c0c0c0c0c0c0c0c0c0c0c10101010101010101010101010101010",
+        "ciphertextHex": "9756a06d61590145f263a7739ff2ed9dcef6b60a62661972d0f168901fafe4e36aa1d8ba24abc2304baada5ac8d00c0c5fc1223f827e40dac9482c20dbea9ec4",
+        "singlePaddingVariantCiphertextHex": "9756a06d61590145f263a7739ff2ed9dcef6b60a62661972d0f168901fafe4e36aa1d8ba24abc2304baada5ac8d00c0c",
+        "encodedName": "cours%2Fpartie%202%3F%23%26%25.docx",
+        "expectedURL": "https://school.index-education.net/pronote/FichiersExternes/9756a06d61590145f263a7739ff2ed9dcef6b60a62661972d0f168901fafe4e36aa1d8ba24abc2304baada5ac8d00c0c5fc1223f827e40dac9482c20dbea9ec4/cours%2Fpartie%202%3F%23%26%25.docx?Session=424242",
+        "saveAsName": "partie 2_#&%.docx"
+      },
+      {
+        "name": "long_id_two_blocks",
+        "attachment": {
+          "N": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+          "L": "a.txt",
+          "G": 1
+        },
+        "plaintextUtf8": "{\"N\":\"XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\",\"Actif\":true}",
+        "padded1Hex": "7b224e223a2258585858585858585858585858585858585858585858585858585858585858585858585858585858222c224163746966223a747275657d030303",
+        "padded2Hex": "7b224e223a2258585858585858585858585858585858585858585858585858585858585858585858585858585858222c224163746966223a747275657d03030310101010101010101010101010101010",
+        "ciphertextHex": "2b107642b248a98716d225cf96077d1e60227e08aa8cdecec38d4b66233e0690459986e4cf78e8bd7056761b51f5cdf9bc77e196e2ca506f191e84ab04171a21d262b0561c0c7dc0fff780f1cc1ad3cc",
+        "singlePaddingVariantCiphertextHex": "2b107642b248a98716d225cf96077d1e60227e08aa8cdecec38d4b66233e0690459986e4cf78e8bd7056761b51f5cdf9bc77e196e2ca506f191e84ab04171a21",
+        "encodedName": "a.txt",
+        "expectedURL": "https://school.index-education.net/pronote/FichiersExternes/2b107642b248a98716d225cf96077d1e60227e08aa8cdecec38d4b66233e0690459986e4cf78e8bd7056761b51f5cdf9bc77e196e2ca506f191e84ab04171a21d262b0561c0c7dc0fff780f1cc1ad3cc/a.txt?Session=424242",
+        "saveAsName": "a.txt"
+      }
+    ],
+    "rejectedIds": [
+      "",
+      "a b",
+      "a\"b",
+      "a\\b",
+      "é1",
+      "\u00002"
+    ],
+    "maxBytes": 20971520,
+    "sizeCases": [
+      {
+        "bytes": 20971520,
+        "accepted": true
+      },
+      {
+        "bytes": 20971521,
+        "accepted": false
+      }
+    ],
+    "saveAsNames": [
+      {
+        "name": "../../secret.pdf",
+        "expected": "secret.pdf"
+      },
+      {
+        "name": "C:\\Users\\x\\note.txt",
+        "expected": "note.txt"
+      },
+      {
+        "name": "a<b>:c\"d|e?f*.pdf",
+        "expected": "a_b__c_d_e_f_.pdf"
+      },
+      {
+        "name": "  .cache. ",
+        "expected": "cache"
+      },
+      {
+        "name": "Énoncé‮gnp.exe",
+        "expected": "Énoncégnp.exe"
+      },
+      {
+        "name": "",
+        "expected": "Document"
+      }
+    ]
+  }
+}

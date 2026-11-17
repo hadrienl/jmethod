@@ -91,3 +91,5 @@ If the end date is absent, use `General.ListeHeuresFin.V`: calculate `endPlace =
 ## Read-only POC boundary
 
 The native HTTPS allowlist is `FonctionParametres`, `Identification`, `Authentification`, `ParametresUtilisateur`, `PageInfosPerso`, `Navigation`, `PageEmploiDuTemps`. POST transport alone does not imply a school-data write. Official UI QR generation is the separately authorized connection step; it does not authorize arbitrary API writes. Reject unknown functions and school mutations such as `SaisieTAFFaitEleve`, `SaisieMessage`, security mutation `SecurisationCompteDoubleAuth`, and direct QR-generation API `JetonAppliMobile`.
+
+Milestone 5 adds `PageCahierDeTexte` as a READ call (tabs 88 and 89 only, `data` limited to `domaine`) and a same-host `GET /FichiersExternes/…` attachment download capped at 20 MB; see `notebook-reference.md`. Any `Saisie*` function, including `SaisieTAFFaitEleve` (mark homework done), stays refused.
