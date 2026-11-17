@@ -19,7 +19,6 @@ import kotlinx.coroutines.withContext
  */
 class AppRepository(
     private val store: AppDocumentStore,
-    private val clock: AppClock,
     scope: CoroutineScope,
     private val io: CoroutineDispatcher,
 ) {
@@ -34,9 +33,10 @@ class AppRepository(
             mutex.withLock {
                 val loaded = (store.read() as? AppDocumentStore.ReadResult.Loaded)?.document
                 val document = if (loaded == null || !loaded.initialized) {
-                    DemoData.create(clock.today()).also { store.write(it) }
+                    // Premier lancement : aucune donnée fictive, seulement la configuration par défaut.
+                    DataMigrations.emptyDocument().also { store.write(it) }
                 } else {
-                    loaded
+                    DataMigrations.migrate(loaded).also { if (it != loaded) store.write(it) }
                 }
                 state.value = document
             }

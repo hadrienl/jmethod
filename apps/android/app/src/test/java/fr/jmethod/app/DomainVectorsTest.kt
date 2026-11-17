@@ -1,7 +1,8 @@
 package fr.jmethod.app
 
 import fr.jmethod.app.data.AppDocumentCodec
-import fr.jmethod.app.data.DemoData
+import fr.jmethod.app.data.DataMigrations
+import fr.jmethod.app.model.AppDocument
 import fr.jmethod.app.domain.AdaptiveAlgorithm
 import fr.jmethod.app.domain.EveningProgramme
 import fr.jmethod.app.domain.ScorePreview
@@ -219,31 +220,50 @@ class DomainVectorsTest {
         assertEquals(53, cases.size)
     }
 
-    /** Le jeu de démonstration natif reproduit `parseICalFeed(generateSamplePronoteFeed())` sans parseur iCal. */
+    /**
+     * L’app ne crée plus de données de démonstration : le vecteur `initializeDefaultData` sert de
+     * sauvegarde web réaliste (export) et d’installation héritée du jalon 1 (migration).
+     */
     @Test
-    fun samplePronoteFeedEvents() {
-        for (case in suite("generateSamplePronoteFeed")) {
-            val tomorrow = now(case).atZone(paris).toLocalDate().plusDays(1)
-            assertEquals(name(case), events(case.getValue("expectedEvents")), DemoData.samplePronoteEvents(tomorrow, DEFAULT_SUBJECTS))
-        }
-    }
-
-    @Test
-    fun initializeDefaultData() {
+    fun webExportOfDemoDataIsReadableAndMigratedAway() {
         for (case in suite("initializeDefaultData")) {
-            val random = case.getValue("mathRandom").jsonPrimitive.double
-            val document = DemoData.create(now(case).atZone(paris).toLocalDate()) { random }
             val expected = case.getValue("expected").jsonObject
-            assertEquals(name(case), courses(expected.getValue("courses")), document.courses)
-            assertEquals(name(case), revisions(expected.getValue("revisions")), document.revisions)
-            assertEquals(name(case), subjects(expected.getValue("subjects")), document.subjects)
-            assertEquals(name(case), events(expected.getValue("pronoteEvents")), document.pronoteEvents)
-            assertEquals(name(case), settings(expected.getValue("settings")), document.settings)
-            val exported = json.parseToJsonElement(AppDocumentCodec.export(document, now(case)))
-            assertEquals(name(case), case.getValue("expectedExport"), exported)
-            // L’export web se relit tel quel dans le document natif.
-            val reimported = AppDocumentCodec.decodeExport(case.getValue("expectedExport").toString())!!
-            assertEquals(document.copy(pronoteEvents = emptyList()), reimported)
+            val exported = case.getValue("expectedExport")
+            // Compatibilité de l’export web : décodage puis réencodage identique.
+            val imported = AppDocumentCodec.decodeExport(exported.toString())!!
+            assertEquals(name(case), courses(expected.getValue("courses")), imported.courses)
+            assertEquals(name(case), revisions(expected.getValue("revisions")), imported.revisions)
+            assertEquals(name(case), settings(expected.getValue("settings")), imported.settings)
+            assertEquals(name(case), exported, json.parseToJsonElement(AppDocumentCodec.export(imported, now(case))))
+            // Un import explicite est conservé tel quel : il est déjà à la version courante.
+            assertEquals(imported, DataMigrations.migrate(imported))
+
+            // Installation du jalon 1 : démo modifiée par des validations, plus de vrais créneaux synchronisés.
+            val realEvent = PronoteEvent(
+                id = "pronote-c1-2026-11-18T08:30-0", subjectName = "MATHEMATIQUES", matchedSubjectId = "maths",
+                date = "2026-11-18", startTime = "08:30", endTime = "09:30", isCancelled = false,
+            )
+            val demoRevisions = revisions(expected.getValue("revisions"))
+            val validated = ScoreSubmission.submit(
+                courses(expected.getValue("courses")), demoRevisions, DEFAULT_SETTINGS,
+                demoRevisions.first { it.status != fr.jmethod.app.model.RevisionStatus.COMPLETED }.id, 10, now(case), paris,
+            ).revisions
+            val legacy = AppDocument(
+                courses = courses(expected.getValue("courses")),
+                revisions = validated,
+                pronoteEvents = events(expected.getValue("pronoteEvents")) + realEvent,
+                initialized = true,
+            )
+            assertTrue(validated.any { it.isEmergencySession == true })
+            val migrated = DataMigrations.migrate(legacy)
+            assertTrue(migrated.courses.isEmpty())
+            assertTrue(migrated.revisions.isEmpty())
+            assertEquals(listOf(realEvent), migrated.pronoteEvents)
+            assertEquals(DataMigrations.CURRENT_VERSION, migrated.dataVersion)
+            assertEquals(legacy.subjects, migrated.subjects)
+            // Idempotente.
+            assertEquals(migrated, DataMigrations.migrate(migrated))
+            assertEquals(migrated, DataMigrations.migrate(DataMigrations.removeLegacyDemo(migrated).copy(dataVersion = 0)))
         }
     }
 

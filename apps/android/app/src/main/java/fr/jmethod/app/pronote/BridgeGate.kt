@@ -20,7 +20,7 @@ object BridgeGate {
         data class Qr(val image: String) : Event
     }
 
-    val stages = setOf("filling-login", "submitting-login", "opening-qr", "filling-code", "generating-qr")
+    val stages = setOf("filling-login", "submitting-login", "mfa-done", "opening-qr", "filling-code", "generating-qr")
     val errorCodes = setOf(
         "LOGIN_REJECTED", "LOGIN_STALLED", "LOGIN_FORM_NOT_FOUND", "MFA_REQUIRED",
         "LOGIN_TIMEOUT", "QR_TIMEOUT", "QR_TOO_LARGE", "AUTOMATION_FAILED",

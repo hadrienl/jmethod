@@ -40,7 +40,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import fr.jmethod.app.JMethodApplication
+import fr.jmethod.app.pronote.AccessPhase
+import fr.jmethod.app.ui.pronote.LoadingScreen
+import fr.jmethod.app.ui.pronote.LoginScreen
 import fr.jmethod.app.ui.pronote.OfficialPageLayer
+import fr.jmethod.app.ui.pronote.OfflineBanner
 import fr.jmethod.app.ui.pronote.PronoteViewModel
 import fr.jmethod.app.ui.pronote.SettingsScreen
 import fr.jmethod.app.ui.theme.JColors
@@ -87,100 +91,110 @@ fun JMethodApp() {
     }
 
     Box(Modifier.fillMaxSize()) {
-        // La page officielle reste montée pendant toute la tentative, sous le contenu quand elle est masquée.
+        // La page officielle reste montée pendant toute la tentative (écran de connexion compris),
+        // sous le contenu quand elle est masquée.
         if (pronote.browserStarted) {
             OfficialPageLayer(pronoteViewModel, pronote, Modifier.zIndex(if (pronote.showBrowser) 2f else -1f))
         }
-        Scaffold(
-            containerColor = MaterialTheme.colorScheme.background,
-            snackbarHost = {
-                SnackbarHost(snackbar) { data ->
-                    val visuals = data.visuals as? ToastVisuals
-                    Snackbar(
-                        containerColor = androidx.compose.ui.graphics.Color.White,
-                        contentColor = JColors.Slate900,
-                        dismissAction = {
-                            androidx.compose.material3.TextButton(onClick = { data.dismiss() }) { Text("Fermer") }
-                        },
-                    ) {
-                        Column {
-                            if (visuals != null) {
-                                Text(visuals.title, fontWeight = FontWeight.Bold, color = if (visuals.warning) JColors.Amber900 else JColors.Emerald800)
-                            }
-                            Text(data.visuals.message)
-                        }
-                    }
-                }
-            },
-            bottomBar = {
-                NavigationBar(containerColor = androidx.compose.ui.graphics.Color.White) {
-                    val badge = today?.model?.badgeCount ?: 0
-                    val colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = JColors.Violet800,
-                        selectedTextColor = JColors.Violet800,
-                        indicatorColor = JColors.Violet50,
-                        unselectedIconColor = JColors.Slate600,
-                        unselectedTextColor = JColors.Slate600,
-                    )
-                    NavigationBarItem(
-                        selected = tab == Tab.TODAY,
-                        onClick = { tab = Tab.TODAY },
-                        icon = {
-                            BadgedBox(badge = {
-                                if (badge > 0) {
-                                    Badge(containerColor = JColors.Violet200, contentColor = JColors.Violet900) { Text("$badge") }
+        when (pronote.access) {
+            AccessPhase.CHECKING -> LoadingScreen(onSkip = pronoteViewModel.controller::skipResume)
+            AccessPhase.SIGNED_OUT -> LoginScreen(pronoteViewModel, pronote)
+            AccessPhase.CONNECTED, AccessPhase.OFFLINE -> {
+                Scaffold(
+                    containerColor = MaterialTheme.colorScheme.background,
+                    topBar = {
+                        if (pronote.access == AccessPhase.OFFLINE) OfflineBanner(pronote, pronoteViewModel.controller::retry)
+                    },
+                    snackbarHost = {
+                        SnackbarHost(snackbar) { data ->
+                            val visuals = data.visuals as? ToastVisuals
+                            Snackbar(
+                                containerColor = androidx.compose.ui.graphics.Color.White,
+                                contentColor = JColors.Slate900,
+                                dismissAction = {
+                                    androidx.compose.material3.TextButton(onClick = { data.dismiss() }) { Text("Fermer") }
+                                },
+                            ) {
+                                Column {
+                                    if (visuals != null) {
+                                        Text(visuals.title, fontWeight = FontWeight.Bold, color = if (visuals.warning) JColors.Amber900 else JColors.Emerald800)
+                                    }
+                                    Text(data.visuals.message)
                                 }
-                            }) { Icon(Icons.Filled.Home, contentDescription = null) }
-                        },
-                        label = { Text("Aujourd’hui") },
-                        colors = colors,
-                        modifier = Modifier.semantics {
-                            contentDescription = if (badge > 0) "Aujourd’hui, $badge séance${if (badge > 1) "s" else ""} à faire" else "Aujourd’hui"
-                        },
-                    )
-                    NavigationBarItem(
-                        selected = tab == Tab.SETTINGS,
-                        onClick = { tab = Tab.SETTINGS },
-                        icon = { Icon(Icons.Filled.Settings, contentDescription = null) },
-                        label = { Text("Réglages") },
-                        colors = colors,
-                    )
-                }
-            },
-        ) { padding ->
-            when (tab) {
-                Tab.TODAY -> {
-                    val state = today
-                    if (state == null) {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-                    } else {
-                        TodayScreen(state, padding, onScore = todayViewModel::openScore, onDetail = todayViewModel::openDetail)
-                        val document = state.document
-                        state.scoringRevisionId?.let { id ->
-                            val revision = document.revisions.firstOrNull { it.id == id }
-                            val course = revision?.let { r -> document.courses.firstOrNull { it.id == r.courseId } }
-                            if (revision != null && course != null) {
-                                ScoreSheet(
-                                    revision, course, document.subjects.firstOrNull { it.id == course.subjectId }, document.settings,
-                                    onDismiss = todayViewModel::closeSheets,
-                                    onSubmit = { score -> todayViewModel.submitScore(revision.id, score, withConfetti = true) },
-                                )
                             }
                         }
-                        state.detailRevisionId?.let { id ->
-                            val revision = document.revisions.firstOrNull { it.id == id }
-                            val course = revision?.let { r -> document.courses.firstOrNull { it.id == r.courseId } }
-                            if (revision != null && course != null) {
-                                RevisionDetailSheet(
-                                    revision, course, document.subjects.firstOrNull { it.id == course.subjectId }, document.revisions,
-                                    onDismiss = todayViewModel::closeSheets,
-                                    onValidate = { score -> todayViewModel.submitScore(revision.id, score, withConfetti = false) },
-                                )
+                    },
+                    bottomBar = {
+                        NavigationBar(containerColor = androidx.compose.ui.graphics.Color.White) {
+                            val badge = today?.model?.badgeCount ?: 0
+                            val colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = JColors.Violet800,
+                                selectedTextColor = JColors.Violet800,
+                                indicatorColor = JColors.Violet50,
+                                unselectedIconColor = JColors.Slate600,
+                                unselectedTextColor = JColors.Slate600,
+                            )
+                            NavigationBarItem(
+                                selected = tab == Tab.TODAY,
+                                onClick = { tab = Tab.TODAY },
+                                icon = {
+                                    BadgedBox(badge = {
+                                        if (badge > 0) {
+                                            Badge(containerColor = JColors.Violet200, contentColor = JColors.Violet900) { Text("$badge") }
+                                        }
+                                    }) { Icon(Icons.Filled.Home, contentDescription = null) }
+                                },
+                                label = { Text("Aujourd’hui") },
+                                colors = colors,
+                                modifier = Modifier.semantics {
+                                    contentDescription = if (badge > 0) "Aujourd’hui, $badge séance${if (badge > 1) "s" else ""} à faire" else "Aujourd’hui"
+                                },
+                            )
+                            NavigationBarItem(
+                                selected = tab == Tab.SETTINGS,
+                                onClick = { tab = Tab.SETTINGS },
+                                icon = { Icon(Icons.Filled.Settings, contentDescription = null) },
+                                label = { Text("Réglages") },
+                                colors = colors,
+                            )
+                        }
+                    },
+                ) { padding ->
+                    when (tab) {
+                        Tab.TODAY -> {
+                            val state = today
+                            if (state == null) {
+                                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                            } else {
+                                TodayScreen(state, padding, onScore = todayViewModel::openScore, onDetail = todayViewModel::openDetail)
+                                val document = state.document
+                                state.scoringRevisionId?.let { id ->
+                                    val revision = document.revisions.firstOrNull { it.id == id }
+                                    val course = revision?.let { r -> document.courses.firstOrNull { it.id == r.courseId } }
+                                    if (revision != null && course != null) {
+                                        ScoreSheet(
+                                            revision, course, document.subjects.firstOrNull { it.id == course.subjectId }, document.settings,
+                                            onDismiss = todayViewModel::closeSheets,
+                                            onSubmit = { score -> todayViewModel.submitScore(revision.id, score, withConfetti = true) },
+                                        )
+                                    }
+                                }
+                                state.detailRevisionId?.let { id ->
+                                    val revision = document.revisions.firstOrNull { it.id == id }
+                                    val course = revision?.let { r -> document.courses.firstOrNull { it.id == r.courseId } }
+                                    if (revision != null && course != null) {
+                                        RevisionDetailSheet(
+                                            revision, course, document.subjects.firstOrNull { it.id == course.subjectId }, document.revisions,
+                                            onDismiss = todayViewModel::closeSheets,
+                                            onValidate = { score -> todayViewModel.submitScore(revision.id, score, withConfetti = false) },
+                                        )
+                                    }
+                                }
                             }
                         }
+                        Tab.SETTINGS -> SettingsScreen(pronoteViewModel, pronote, syncInfo, padding)
                     }
                 }
-                Tab.SETTINGS -> SettingsScreen(pronoteViewModel, pronote, syncInfo, padding)
             }
         }
         CelebrationOverlay(celebration, Modifier.zIndex(3f))

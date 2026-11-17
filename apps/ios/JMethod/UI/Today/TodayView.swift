@@ -18,8 +18,8 @@ struct TodayView: View {
                     HeroCard(hero: screen.hero) { if let revision = screen.hero.revision { scoring = revision } }
                     ProgressCard(screen: screen)
                     PhaseGuide()
-                    ProgrammeSection(screen: screen, onScore: { scoring = $0 }, onDetail: { detail = $0 })
-                    TomorrowSection(screen: screen, hasSync: app.lastPronoteSync != nil)
+                    ProgrammeSection(screen: screen, hasCourses: !document.courses.isEmpty, onScore: { scoring = $0 }, onDetail: { detail = $0 })
+                    TomorrowSection(screen: screen)
                     Text("Pas besoin de tout apprendre en un jour. Juste un peu, chaque jour.")
                         .font(.footnote)
                         .foregroundStyle(Theme.textMuted)
@@ -212,6 +212,7 @@ private struct PhaseGuide: View {
 
 private struct ProgrammeSection: View {
     let screen: TodayScreen
+    let hasCourses: Bool
     let onScore: (Revision) -> Void
     let onDetail: (Revision) -> Void
 
@@ -234,7 +235,8 @@ private struct ProgrammeSection: View {
                 VStack(spacing: 10) {
                     Image(systemName: "checkmark.circle").font(.largeTitle).foregroundStyle(Theme.success).accessibilityHidden(true)
                     Text("Tout est à jour").font(.headline)
-                    Text("Aucune séance à préparer pour demain.").font(.subheadline).foregroundStyle(Theme.textSecondary)
+                    Text(hasCourses ? "Aucune séance à préparer pour demain." : "Aucun cours enregistré pour l’instant : rien à préparer ce soir.")
+                        .font(.subheadline).foregroundStyle(Theme.textSecondary).multilineTextAlignment(.center)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 28)
@@ -350,7 +352,6 @@ private struct RevisionRow: View {
 
 private struct TomorrowSection: View {
     let screen: TodayScreen
-    let hasSync: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -364,10 +365,6 @@ private struct TomorrowSection: View {
             if screen.tomorrowEvents.isEmpty {
                 Text("Aucun cours importé pour demain.").font(.subheadline).foregroundStyle(Theme.textSecondary)
             } else {
-                if !hasSync {
-                    Text("Exemple d’emploi du temps : connecte Pronote dans Réglages pour voir tes vrais cours.")
-                        .font(.footnote).foregroundStyle(Theme.textMuted)
-                }
                 ForEach(screen.tomorrowEvents) { item in
                     TomorrowEventCard(item: item)
                 }

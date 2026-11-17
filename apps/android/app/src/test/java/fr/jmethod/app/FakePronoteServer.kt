@@ -21,7 +21,9 @@ class FakePronoteServer(
     var secureMode: Int = 0,
     val parent: Boolean = false,
 ) {
-    val origin = "https://school.index-education.net"
+    val origin = "https://abcd1234.index-education.net"
+    /** Simule une absence de réseau. */
+    var offline = false
     val calls = mutableListOf<String>()
     val timetableMembers = mutableListOf<String?>()
     val timetableResources = mutableListOf<String?>()
@@ -55,6 +57,7 @@ class FakePronoteServer(
     private fun weekOf(date: LocalDate) = 1 + (ChronoUnit.DAYS.between(premierLundi, date) / 7).toInt()
 
     val transport = PronoteTransport { method, url, body, _ ->
+        if (offline) throw java.io.IOException("réseau indisponible")
         require(url.startsWith("$origin/"))
         if (method == "GET") {
             beforeRequest("GET")

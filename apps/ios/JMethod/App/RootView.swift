@@ -8,6 +8,8 @@ struct RootView: View {
 
     enum Tab: Hashable { case today, settings }
 
+    private var route: AppRoute { AppRoute.resolve(load: app.loadState, access: pronote.access) }
+
     var body: some View {
         ZStack {
             Theme.background.ignoresSafeArea()
@@ -31,17 +33,25 @@ struct RootView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in app.refreshDay() }
         .onChange(of: scenePhase) { _, phase in if phase == .active { app.refreshDay() } }
+        .onChange(of: pronote.access) { old, new in
+            // Après une connexion réussie, l'app s'ouvre sur Aujourd'hui.
+            if new == .connected && old != .connected { tab = .today }
+        }
     }
 
     @ViewBuilder private var content: some View {
-        switch app.loadState {
+        switch route {
         case .loading:
-            ProgressView("Chargement de tes révisions")
+            ProgressView("Chargement")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Theme.background)
-        case .failed(let message):
+        case .resuming:
+            ResumingView(pronote: pronote)
+        case .loadFailure(let message):
             LoadFailureView(app: app, message: message)
-        case .ready:
+        case .signIn:
+            SignInView(pronote: pronote)
+        case .app(let offline):
             TabView(selection: $tab) {
                 TodayView(app: app)
                     .tabItem { Label("Aujourd’hui", systemImage: "checklist") }
@@ -49,10 +59,66 @@ struct RootView: View {
                     .tag(Tab.today)
                 SettingsView(app: app, pronote: pronote)
                     .tabItem { Label("Réglages", systemImage: "gearshape") }
-                    .badge(pronote.errorMessage == nil ? 0 : 1)
                     .tag(Tab.settings)
             }
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if offline { OfflineBanner(pronote: pronote) }
+            }
         }
+    }
+}
+
+/// Reprise de la connexion enregistrée : écran sobre ; après quelques secondes, l'app peut s'ouvrir sans attendre.
+private struct ResumingView: View {
+    let pronote: PronoteSession
+    @State private var allowSkip = false
+
+    var body: some View {
+        VStack(spacing: 20) {
+            BrandMark()
+            ProgressView("Connexion à Pronote…")
+            if allowSkip {
+                Button("Ouvrir sans attendre") { pronote.openWithoutWaiting() }
+                    .buttonStyle(SecondaryButtonStyle())
+                    .frame(maxWidth: 280)
+            }
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Theme.background)
+        .task {
+            try? await Task.sleep(for: .seconds(10))
+            allowSkip = true
+        }
+    }
+}
+
+/// Bandeau du mode hors ligne : données locales, connexion conservée, nouvel essai possible.
+private struct OfflineBanner: View {
+    let pronote: PronoteSession
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "wifi.slash").foregroundStyle(Theme.warning).accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Hors ligne").font(.subheadline.bold())
+                Text(pronote.isWorking ? "Connexion à Pronote…" : "Tes données enregistrées restent disponibles.")
+                    .font(.caption).foregroundStyle(Theme.textSecondary)
+            }
+            .accessibilityElement(children: .combine)
+            Spacer(minLength: 8)
+            if pronote.isWorking {
+                ProgressView()
+            } else {
+                Button("Réessayer") { pronote.resumeSavedConnection() }
+                    .font(.subheadline.bold())
+                    .frame(minWidth: 44, minHeight: 44)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(Theme.warningSoft)
+        .overlay(alignment: .bottom) { Divider() }
     }
 }
 
@@ -77,44 +143,51 @@ private struct LoadFailureView: View {
             Button("Mettre le fichier de côté et repartir", role: .destructive) { Task { await app.startOverAfterUnreadableFile() } }
             Button("Annuler", role: .cancel) {}
         } message: {
-            Text("Le fichier illisible est conservé à part sur l’iPhone, et l’app recharge les données de démonstration.")
+            Text("Le fichier illisible est conservé à part sur l’iPhone, et l’app repart d’un document vide.")
         }
     }
 }
 
-/// Page officielle Pronote : affichée en plein écran à la demande, sinon conservée derrière le contenu.
+/// Page officielle Pronote présentée en feuille quand elle est nécessaire (ENT, vérification de sécurité).
+/// Masquée, elle reste dans la hiérarchie avec une taille réelle pour que la connexion continue.
 private struct OfficialPageLayer: View {
-    @Bindable var pronote: PronoteSession
+    let pronote: PronoteSession
 
     private var shown: Bool { pronote.webActive && pronote.webVisible }
 
     var body: some View {
-        VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 12) {
-                    Text("Page officielle Pronote").font(.headline)
-                    Spacer()
-                    Button("Masquer") { pronote.webVisible = false }
-                        .frame(minHeight: 44)
-                    Button("Fermer") { pronote.cancel() }
-                        .frame(minHeight: 44)
+        ZStack(alignment: .bottom) {
+            Color.black.opacity(shown ? 0.35 : 0).ignoresSafeArea()
+            VStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 12) {
+                        Text("Connexion à Pronote").font(.headline).accessibilityAddTraits(.isHeader)
+                        Spacer()
+                        Button("Annuler") { pronote.cancel() }
+                            .font(.body.weight(.semibold))
+                            .frame(minHeight: 44)
+                    }
+                    if let message = pronote.webMessage {
+                        Text(message).font(.footnote).foregroundStyle(Theme.textSecondary)
+                    }
                 }
-                if let message = pronote.errorMessage {
-                    Label(message, systemImage: "info.circle").font(.footnote).foregroundStyle(Theme.text)
-                }
-                Button("Continuer la connexion automatique") { pronote.continueOnVisiblePage() }
-                    .buttonStyle(SecondaryButtonStyle())
-                    .accessibilityHint("Après une vérification terminée dans la page, prépare la connexion de l’iPhone.")
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+                .background(Theme.surface)
+                Divider()
+                OfficialWebView(webView: pronote.web.webView)
             }
-            .padding()
-            .background(.regularMaterial)
-            OfficialWebView(webView: pronote.web.webView)
+            .background(Theme.surface)
+            .clipShape(UnevenRoundedRectangle(topLeadingRadius: 20, topTrailingRadius: 20, style: .continuous))
+            .padding(.top, 44)
+            .ignoresSafeArea(edges: .bottom)
         }
-        .background(Theme.surface)
         .opacity(shown ? 1 : 0.001)
         .allowsHitTesting(shown)
         .accessibilityHidden(!shown)
+        .accessibilityAddTraits(shown ? .isModal : [])
         .zIndex(shown ? 10 : -1)
+        .animation(.easeOut(duration: 0.2), value: shown)
     }
 }
 

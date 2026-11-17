@@ -175,37 +175,34 @@ final class DomainVectorTests: XCTestCase {
         }
     }
 
-    // MARK: Démonstration
+    // MARK: Export web et ancien jeu de démonstration
 
-    func testGenerateSamplePronoteFeedEvents() throws {
-        for item in try cases("generateSamplePronoteFeed") {
-            let name = item["name"] as? String ?? ""
-            let today = SchoolDay.today(now: try vectorDate(item["now"]))
-            let events = try DemoData.sampleEvents(today: today, subjects: Constants.defaultSubjects)
-            check(events, try decodeJSON([PronoteEvent].self, item["expectedEvents"]), name)
-        }
-    }
-
-    func testInitializeDefaultData() throws {
+    /// L'app ne crée plus de données de démonstration ; le vecteur `initializeDefaultData` sert seulement
+    /// à vérifier qu'un export JSON du web se relit, et que la migration retire ce jeu de démonstration.
+    func testWebExportDecodesAndDemoMigrationRemovesDemoSet() throws {
         for item in try cases("initializeDefaultData") {
             let name = item["name"] as? String ?? ""
-            let random = try XCTUnwrap(item["mathRandom"] as? Double)
-            let document = try DemoData.document(today: SchoolDay.today(now: try vectorDate(item["now"])), random: { random })
             let expected = try XCTUnwrap(item["expected"] as? [String: Any])
-            check(document.courses, try decodeJSON([Course].self, expected["courses"]), name)
-            check(document.revisions, try decodeJSON([Revision].self, expected["revisions"]), name)
-            check(document.subjects, try decodeJSON([Subject].self, expected["subjects"]), name)
-            check(document.pronoteEvents, try decodeJSON([PronoteEvent].self, expected["pronoteEvents"]), name)
-            check(document.settings, try decodeJSON(AppSettings.self, expected["settings"]), name)
-
-            // L'export JSON du web se relit comme document de l'app (sans créneaux Pronote).
             let exported = try decodeJSON(AppDocument.self, item["expectedExport"])
-            check(exported.courses, document.courses, name)
-            check(exported.revisions, document.revisions, name)
-            check(exported.subjects, document.subjects, name)
-            check(exported.settings, document.settings, name)
+            check(exported.courses, try decodeJSON([Course].self, expected["courses"]), name)
+            check(exported.revisions, try decodeJSON([Revision].self, expected["revisions"]), name)
+            check(exported.subjects, try decodeJSON([Subject].self, expected["subjects"]), name)
+            check(exported.settings, try decodeJSON(AppSettings.self, expected["settings"]), name)
             check(exported.pronoteEvents, [], name)
-            XCTAssertTrue(exported.initialized, name)
+            check(exported.initialized, true, name)
+
+            // Installation du jalon 1 : document web complet (avec créneaux d'exemple) plus un vrai créneau synchronisé.
+            var installed = exported
+            installed.pronoteEvents = try decodeJSON([PronoteEvent].self, expected["pronoteEvents"])
+            let real = PronoteEvent(id: "pronote-29#abc-2026-11-18T08:00:00-0", subjectName: "LATIN", date: "2026-11-18", startTime: "08:00", endTime: "09:00", isCancelled: false)
+            installed.pronoteEvents.append(real)
+            let migrated = DemoMigration.removingDemoData(from: installed)
+            check(migrated.courses, [], name)
+            check(migrated.revisions, [], name)
+            check(migrated.pronoteEvents, [real], name)
+            check(migrated.subjects, installed.subjects, name)
+            check(migrated.settings, installed.settings, name)
+            check(DemoMigration.removingDemoData(from: migrated), migrated, "\(name) idempotence")
         }
     }
 

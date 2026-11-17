@@ -16,7 +16,6 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
-import fr.jmethod.app.BuildConfig
 import fr.jmethod.app.pronote.OfficialPage
 
 /** Événements de la page officielle transmis au contrôleur, toujours sur le thread principal. */
@@ -99,7 +98,6 @@ class WebViewOfficialPage(private val application: Application) : OfficialPage {
         val context = MutableContextWrapper(activity)
         wrapper = context
         return WebView(context).apply {
-            WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.useWideViewPort = true

@@ -30,7 +30,7 @@ enum ProtocolCrypto {
 
     static func unhex(_ value: String) throws -> Data {
         guard value.count.isMultiple(of: 2), value.allSatisfy({ $0.isHexDigit }) else {
-            throw PronoteFailure.invalid("hex", "Le QR code ou la réponse Pronote est invalide.")
+            throw PronoteFailure.invalid("hex", "La réponse de Pronote est illisible. Réessaie.")
         }
         var result = Data()
         var index = value.startIndex
@@ -47,7 +47,7 @@ enum ProtocolCrypto {
     /// Un chiffré AES-CBC/PKCS7 fait toujours un multiple non nul de 16 octets ; CommonCrypto ne le vérifie pas.
     static func decrypt(_ value: Data, key: Data, iv: Data) throws -> Data {
         guard !value.isEmpty, value.count.isMultiple(of: kCCBlockSizeAES128) else {
-            throw PronoteFailure.invalid("crypto", "Le QR code a expiré, son code est incorrect ou la réponse est incompatible.")
+            throw PronoteFailure.invalid("crypto", "La réponse de Pronote est illisible. Réessaie.")
         }
         return try aes(value, key: key, iv: iv, operation: CCOperation(kCCDecrypt))
     }
@@ -64,7 +64,7 @@ enum ProtocolCrypto {
                 }
             }
         }
-        guard status == kCCSuccess else { throw PronoteFailure.invalid("crypto", "Le QR code a expiré, son code est incorrect ou la réponse est incompatible.") }
+        guard status == kCCSuccess else { throw PronoteFailure.invalid("crypto", "La réponse de Pronote est illisible. Réessaie.") }
         return Data(output.prefix(length))
     }
 

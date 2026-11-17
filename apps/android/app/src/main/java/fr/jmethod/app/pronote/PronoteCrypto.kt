@@ -46,7 +46,13 @@ object PronoteCrypto {
             doFinal(data)
         }
 
-    fun decrypt(data: ByteArray, key: ByteArray, iv: ByteArray): ByteArray = try {
+    /** Rejette avant AES tout chiffré vide ou dont la taille n’est pas un multiple de 16 octets. */
+    fun decrypt(data: ByteArray, key: ByteArray, iv: ByteArray): ByteArray {
+        if (data.isEmpty() || data.size % 16 != 0) throw PronoteException("crypto", "Données de connexion invalides.")
+        return decryptBlocks(data, key, iv)
+    }
+
+    private fun decryptBlocks(data: ByteArray, key: ByteArray, iv: ByteArray): ByteArray = try {
         Cipher.getInstance("AES/CBC/PKCS5Padding").run {
             init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), IvParameterSpec(iv))
             doFinal(data)

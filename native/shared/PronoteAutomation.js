@@ -27,6 +27,7 @@
   var loginFilled = false;
   var loginSubmittedAt = 0;
   var loginWanted = false;
+  var mfaShown = false;
   var lastStage = '';
   var closedOld = false;
 
@@ -138,7 +139,16 @@
     try {
       var dialogs = Array.from(document.querySelectorAll('[role="dialog"]')).filter(visible);
       var security = dialogs.find(function (dialog) { var name = dialogName(dialog); return !/qr\s*code/.test(name) && /securisation|double authentification|verification.*compte|verifier.*identite/.test(name); });
-      if (security) { fail('MFA_REQUIRED'); return; }
+      // Security check: ask native to reveal the page once, keep watching, and resume the QR flow by itself
+      // once the user has completed it (the page is not reloaded after MFA).
+      if (security) {
+        if (!mfaShown) { mfaShown = true; send('error', { code: 'MFA_REQUIRED' }); }
+        started = Date.now();
+        if (authenticatedAt) authenticatedAt = Date.now();
+        if (loginSubmittedAt) loginSubmittedAt = Date.now();
+        return;
+      }
+      if (mfaShown) { mfaShown = false; send('progress', { stage: 'mfa-done' }); }
       var qrButton = targets().find(function (item) { var name = label(item); return visible(item) && /qr\s*code|code a flasher/.test(name) && /application|mobile|flasher/.test(name) && !/generer/.test(name); });
       if (!qrButton) { credentialLogin(); return; }
       if (!authenticatedAt) { authenticatedAt = Date.now(); login = null; send('authenticated'); }

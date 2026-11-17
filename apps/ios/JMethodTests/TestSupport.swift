@@ -70,3 +70,29 @@ extension Optional {
     /// `nil` devient `NSNull` pour une comparaison JSON.
     var json: Any { self.map { $0 as Any } ?? NSNull() }
 }
+
+/// Document de test (aucun lien avec l'ancien jeu de démonstration) : deux cours avec leurs révisions,
+/// les séances antérieures à `today` étant terminées, et un créneau Pronote synchronisé pour le lendemain.
+enum Fixture {
+    static func document(today: String) throws -> AppDocument {
+        let first = try XCTUnwrap(SchoolDay.adding(-7, to: today))
+        let second = today
+        let courses = [
+            Course(id: "course-test-1", subjectId: "maths", chapter: "Chapitre test", courseNumber: 1, title: "Cours test 1", date: first, description: "Résumé test", createdAt: first),
+            Course(id: "course-test-2", subjectId: "francais", chapter: "Chapitre test", courseNumber: 2, title: "Cours test 2", date: second, description: nil, createdAt: second),
+        ]
+        var revisions: [Revision] = []
+        for course in courses { revisions += try AdaptiveAlgorithm.initialRevisions(for: course, intervals: Constants.defaultIntervals) }
+        revisions = revisions.map { revision in
+            guard revision.scheduledDate < today else { return revision }
+            var done = revision
+            done.status = .completed
+            done.completedDate = revision.scheduledDate
+            done.score = 70
+            return done
+        }
+        let event = PronoteEvent(id: "pronote-x-\(try XCTUnwrap(SchoolDay.adding(1, to: today)))T08:00:00-0", subjectName: "MATHEMATIQUES", matchedSubjectId: "maths",
+                                 date: try XCTUnwrap(SchoolDay.adding(1, to: today)), startTime: "08:00", endTime: "09:00", room: "Salle 1", teacher: "Professeur A", isCancelled: false)
+        return AppDocument(settings: Constants.defaultSettings, subjects: Constants.defaultSubjects, courses: courses, revisions: revisions, pronoteEvents: [event], initialized: true)
+    }
+}

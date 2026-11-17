@@ -2,11 +2,33 @@ import Foundation
 import Security
 
 /// Trousseau iOS, accessibilité `WhenUnlockedThisDeviceOnly`, sans synchronisation iCloud.
-/// Contient le jeton mobile rotatif (avec URL, identifiant, UUID d'application) et le choix d'enfant d'un compte parent.
+/// Contient le jeton mobile rotatif (avec URL, identifiant, UUID d'application), le choix d'enfant d'un compte parent
+/// et l'établissement saisi (pour préremplir le formulaire ; jamais le mot de passe).
 enum PronoteKeychain {
     private static let service = "fr.jmethod.app.pronote"
     private static let credentialsAccount = "mobile-token"
     private static let childAccount = "selected-child"
+    private static let schoolAccount = "school"
+
+    struct School: Codable, Equatable, Sendable {
+        /// Saisie de l'utilisateur telle quelle (code, hôte ou adresse).
+        var input: String
+        var account: PronoteAccountType
+    }
+
+    static func loadSchool() -> School? {
+        guard let data = try? read(schoolAccount) else { return nil }
+        return try? JSONDecoder().decode(School.self, from: data)
+    }
+
+    static func saveSchool(_ school: School) {
+        if let data = try? JSONEncoder().encode(school) { try? write(data, account: schoolAccount) }
+    }
+
+    /// Retire le jeton seul (refusé par Pronote) ; l'établissement mémorisé reste pour préremplir.
+    static func removeCredentials() {
+        delete(credentialsAccount)
+    }
 
     static func loadCredentials() throws -> PronoteCredentials? {
         guard let data = try read(credentialsAccount) else { return nil }
@@ -28,7 +50,8 @@ enum PronoteKeychain {
         else { delete(childAccount) }
     }
 
-    static func removeAll() {
+    /// Déconnexion : jeton et choix d'enfant effacés. L'établissement mémorisé (non secret) est conservé pour préremplir.
+    static func removeConnection() {
         delete(credentialsAccount)
         delete(childAccount)
     }
@@ -73,6 +96,6 @@ enum PronoteKeychain {
     }
 
     private static var failure: PronoteFailure {
-        .invalid("keychain", "Le trousseau sécurisé est indisponible. Déverrouille l’iPhone puis réessaie.")
+        .invalid("keychain", "Ta connexion enregistrée n’est pas accessible. Déverrouille l’iPhone puis réessaie.")
     }
 }

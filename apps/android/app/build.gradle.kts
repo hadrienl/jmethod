@@ -39,7 +39,7 @@ android {
     }
     buildFeatures {
         compose = true
-        buildConfig = true
+        buildConfig = false
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

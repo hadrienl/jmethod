@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.webkit.WebViewFeature
 import fr.jmethod.app.AppContainer
 import fr.jmethod.app.data.AppDocumentCodec
+import fr.jmethod.app.pronote.AccessPhase
 import fr.jmethod.app.pronote.NativeTransport
 import fr.jmethod.app.pronote.PronoteConnectionController
 import fr.jmethod.app.pronote.PronoteEventMapper
@@ -48,6 +49,12 @@ class PronoteViewModel(application: Application, private val container: AppConta
                 )
             }
         },
+        clearLessons = {
+            container.repository.update { document ->
+                document.copy(pronoteEvents = emptyList(), settings = document.settings.copy(lastPronoteSync = null))
+            }
+        },
+        loginPreferences = container.loginPreferences,
         webMessagesSupported = WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER),
     )
 
@@ -63,8 +70,8 @@ class PronoteViewModel(application: Application, private val container: AppConta
                 controller.onBridgeMessage(raw, sourceOrigin, isMainFrame)
             override fun onRendererGone() = controller.cancel()
         }
-        // Reprise automatique de la session enregistrée au lancement.
-        if (controller.uiState.value.hasSavedSession) controller.restoreSaved()
+        // Reprise automatique de la session enregistrée au lancement (écran de chargement en attendant).
+        if (controller.uiState.value.access == AccessPhase.CHECKING) controller.restoreSaved()
     }
 
     override fun onCleared() {

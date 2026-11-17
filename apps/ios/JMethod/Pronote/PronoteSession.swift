@@ -1,50 +1,61 @@
 import Foundation
 import Observation
 
-/// Connexion Pronote de l'app : formulaire natif ou page officielle, QR automatique,
+/// Connexion Pronote : formulaire de connexion, page officielle masquée (affichée seulement si nécessaire),
 /// reprise par jeton au lancement, synchronisation des 14 prochains jours, choix de l'enfant, déconnexion.
+/// L'accès à l'app dépend de `access`.
 @Observable
 @MainActor
 final class PronoteSession {
     enum Phase: Equatable, Sendable {
-        case idle, opening, login, signingIn, authenticated, qr, nativeAuthentication, synchronizing, ready, failed
-
-        var label: String {
-            switch self {
-            case .idle: "Pronote n’est pas connecté"
-            case .opening: "Ouverture de Pronote"
-            case .login: "Connecte-toi dans la page officielle"
-            case .signingIn: "Connexion à Pronote en cours"
-            case .authenticated: "Session Pronote reconnue"
-            case .qr: "Préparation de la connexion de l’iPhone"
-            case .nativeAuthentication: "Connexion directe depuis l’iPhone"
-            case .synchronizing: "Lecture de l’emploi du temps"
-            case .ready: "Pronote est connecté"
-            case .failed: "Une étape demande ton intervention"
-            }
-        }
+        case idle, signingIn, authenticated, qr, nativeAuthentication, synchronizing, ready, failed
 
         var isWorking: Bool {
             switch self {
-            case .opening, .signingIn, .authenticated, .qr, .nativeAuthentication, .synchronizing: true
-            case .idle, .login, .ready, .failed: false
+            case .signingIn, .authenticated, .qr, .nativeAuthentication, .synchronizing: true
+            case .idle, .ready, .failed: false
             }
+        }
+
+        /// Libellé simple affiché pendant une connexion.
+        var progressLabel: String {
+            self == .synchronizing ? "Lecture de ton emploi du temps…" : "Connexion à Pronote…"
         }
     }
 
+    /// Accès à l'app.
+    enum Access: Equatable, Sendable {
+        /// Reprise de la connexion enregistrée au lancement (écran de chargement).
+        case resuming
+        /// Aucune connexion active : écran de connexion plein écran.
+        case signedOut
+        /// Connexion enregistrée mais Pronote injoignable : l'app s'ouvre sur les données locales.
+        case offline
+        case connected
+    }
+
+    /// Issue d'un échec de reprise par jeton.
+    enum ResumeFailure: Equatable, Sendable {
+        /// Pronote refuse la connexion enregistrée : il faut se reconnecter.
+        case signInRequired
+        /// Réseau ou serveur indisponible : la connexion est conservée.
+        case unavailable
+    }
+
     private(set) var phase: Phase = .idle
+    private(set) var access: Access
     private(set) var errorMessage: String?
     private(set) var account: PronoteAccount?
     private(set) var selectedChildId: String?
     private(set) var hasSavedConnection = false
-    /// Adresse de l'espace web associée au jeton enregistré, pour pré-remplir le formulaire.
-    private(set) var savedAddress = ""
-    /// Page officielle en cours d'utilisation (masquée ou visible).
+    /// Établissement et type de compte mémorisés pour préremplir le formulaire (jamais le mot de passe).
+    private(set) var school: PronoteKeychain.School?
+    /// Page officielle en cours d'utilisation (masquée ou affichée).
     private(set) var webActive = false
-    /// Page officielle affichée à l'écran.
-    var webVisible = false {
-        didSet { web.setPageVisible(webVisible) }
-    }
+    /// Page officielle affichée (ENT, vérification de sécurité).
+    private(set) var webVisible = false
+    /// Raison pour laquelle la page officielle est affichée.
+    private(set) var webMessage: String?
 
     @ObservationIgnored let web = PronoteWebFlow()
     @ObservationIgnored private weak var app: AppModel?
@@ -52,20 +63,25 @@ final class PronoteSession {
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var resumed = false
-    @ObservationIgnored private var publicDemo = false
 
     init(app: AppModel) {
         self.app = app
-        if let saved = try? PronoteKeychain.loadCredentials() {
-            hasSavedConnection = true
-            savedAddress = PronoteURL.webPage(fromMobile: saved.url)
-        }
+        let saved = (try? PronoteKeychain.loadCredentials()) != nil
+        hasSavedConnection = saved
+        access = saved ? .resuming : .signedOut
+        school = PronoteKeychain.loadSchool()
         selectedChildId = PronoteKeychain.loadSelectedChild()
         web.onEvent = { [weak self] event in self?.handle(event) }
     }
 
     var isWorking: Bool { phase.isWorking }
-    var isConnected: Bool { account != nil }
+
+    /// Un échec de reprise par jeton n'impose une nouvelle connexion que si Pronote refuse explicitement le jeton
+    /// ou demande une vérification ; sinon (réseau, serveur, appareil verrouillé) la connexion est conservée.
+    nonisolated static func classifyResumeFailure(_ error: Error) -> ResumeFailure {
+        if let failure = error as? PronoteFailure, failure.code == "login" || failure.code == "mfa" { return .signInRequired }
+        return .unavailable
+    }
 
     // MARK: Entrées utilisateur
 
@@ -73,56 +89,57 @@ final class PronoteSession {
     func resumeAtLaunch() {
         guard !resumed else { return }
         resumed = true
-        #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("--pronote-public-demo") {
-            connectPublicDemo()
+        guard hasSavedConnection else {
+            access = .signedOut
             return
         }
-        #endif
-        guard hasSavedConnection else { return }
         resumeSavedConnection()
     }
 
+    /// Reprise par jeton (lancement ou bouton Réessayer du mode hors ligne).
     func resumeSavedConnection() {
         do {
             guard let saved = try PronoteKeychain.loadCredentials() else {
                 hasSavedConnection = false
+                access = .signedOut
                 return
             }
-            publicDemo = false
             connect(saved, mode: .token)
         } catch {
             fail(error)
+            if access == .resuming { access = .offline }
         }
     }
 
-    /// Formulaire natif : la page officielle reste masquée et reçoit les identifiants une seule fois.
-    func signIn(address: String, username: String, password: String) {
-        let user = username.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !user.isEmpty, !password.isEmpty else {
-            errorMessage = "Indique ton identifiant et ton mot de passe Pronote."
-            phase = .failed
-            return
-        }
-        open(address: address, username: user, password: password)
+    /// Ouvre l'app sur les données locales sans attendre la fin de la reprise, qui continue en arrière-plan
+    /// (elle n'est pas annulée, pour ne pas perdre un jeton déjà renouvelé par Pronote).
+    func openWithoutWaiting() {
+        if access == .resuming { access = .offline }
     }
 
-    /// Connexion manuelle dans la page officielle visible (ENT, formulaire inhabituel).
-    func openOfficialPage(address: String) {
-        open(address: address, username: nil, password: nil)
-    }
-
-    /// Après une vérification terminée dans la page, relance la génération automatique du QR code.
-    func continueOnVisiblePage() {
+    /// Formulaire de connexion : la page officielle reste masquée et reçoit les identifiants une seule fois.
+    func signIn(school input: String, account type: PronoteAccountType, username: String, password: String) {
+        cancel()
         errorMessage = nil
-        web.resumeOnVisiblePage()
-    }
-
-    func importQR(image: Data, pin: String) {
+        let user = username.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolved = PronoteURL.resolve(input, account: type)
+        guard !resolved.address.isEmpty else {
+            return fail(PronoteFailure.invalid("url", "Indique le code ou l’adresse de ton établissement."))
+        }
+        guard !user.isEmpty, !password.isEmpty else {
+            return fail(PronoteFailure.invalid("form", "Indique ton identifiant et ton mot de passe."))
+        }
         do {
-            let qr = try PronoteWebFlow.decode(image: image)
-            publicDemo = false
-            connect(try PronoteClient.credentials(qr: qr, pin: pin, uuid: stableUUID()), mode: .qr)
+            let url = try PronoteURL.validated(resolved.address)
+            guard PronoteURL.trustedPages.contains(url.lastPathComponent.lowercased()) else {
+                throw PronoteFailure.invalid("url", "Cette adresse ne correspond pas à un espace Élève ou Parent.")
+            }
+            let remembered = PronoteKeychain.School(input: input.trimmingCharacters(in: .whitespacesAndNewlines), account: resolved.account)
+            school = remembered
+            PronoteKeychain.saveSchool(remembered)
+            webActive = true
+            webVisible = false
+            web.start(url: url, username: user, password: password)
         } catch {
             fail(error)
         }
@@ -158,7 +175,7 @@ final class PronoteSession {
                 self.finish(lessons: lessons)
             } catch {
                 guard let self, self.generation == attempt, !Task.isCancelled else { return }
-                self.fail(error)
+                self.connectionFailed(error, mode: .token)
             }
         }
     }
@@ -166,11 +183,11 @@ final class PronoteSession {
     func selectChild(_ id: String) {
         guard id != selectedChildId, account?.children.contains(where: { $0.id == id }) == true else { return }
         selectedChildId = id
-        if !publicDemo { PronoteKeychain.saveSelectedChild(id) }
+        PronoteKeychain.saveSelectedChild(id)
         synchronize()
     }
 
-    /// Annule la tentative en cours ; rien n'est enregistré après l'annulation.
+    /// Annule la tentative en cours (bouton Annuler de la page officielle) ; rien n'est enregistré après l'annulation.
     func cancel() {
         generation = UUID()
         task?.cancel()
@@ -178,7 +195,8 @@ final class PronoteSession {
         web.close()
         webActive = false
         webVisible = false
-        if phase.isWorking || phase == .login { phase = account == nil ? .idle : .ready }
+        webMessage = nil
+        if phase.isWorking { phase = account == nil ? .idle : .ready }
     }
 
     func dismissError() {
@@ -186,62 +204,41 @@ final class PronoteSession {
         if phase == .failed { phase = account == nil ? .idle : .ready }
     }
 
-    /// Oublie le compte : jeton et choix d'enfant retirés du trousseau, données WebKit et créneaux Pronote effacés.
+    /// Déconnexion : jeton et choix d'enfant retirés du trousseau, données WebKit et créneaux Pronote effacés.
+    /// Les cours et révisions restent ; l'établissement mémorisé sert à préremplir le formulaire.
     func disconnect() async {
         cancel()
-        PronoteKeychain.removeAll()
+        PronoteKeychain.removeConnection()
         await PronoteWebFlow.clearWebsiteData()
         app?.clearPronoteData()
         client = nil
         account = nil
         selectedChildId = nil
         hasSavedConnection = false
-        savedAddress = ""
         errorMessage = nil
-        publicDemo = false
         phase = .idle
+        access = .signedOut
     }
 
     // MARK: Flux
-
-    private func open(address: String, username: String?, password: String?) {
-        cancel()
-        errorMessage = nil
-        phase = .opening
-        let trimmed = address.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            fail(PronoteFailure.invalid("url", "Indique l’adresse de ton espace Pronote, par exemple xxxx.index-education.net."))
-            return
-        }
-        do {
-            let normalized = PronoteURL.normalized(trimmed)
-            let url = try PronoteURL.validated(normalized)
-            guard PronoteURL.trustedPages.contains(url.lastPathComponent.lowercased()) else {
-                throw PronoteFailure.invalid("url", "Utilise l’adresse de l’espace Élèves ou Parents, sans « mobile ».")
-            }
-            savedAddress = normalized
-            publicDemo = false
-            webActive = true
-            webVisible = username == nil
-            web.start(url: url, username: username, password: password)
-        } catch {
-            fail(error)
-        }
-    }
 
     private func handle(_ event: PronoteWebFlow.Event) {
         switch event {
         case .phase(let next):
             phase = next
-            if next == .authenticated { webVisible = false }
-        case .needsUser(let message):
-            errorMessage = message
-            phase = .failed
+        case .reveal(let message):
+            webMessage = message
             webVisible = true
-        case .rejected(let message):
+            web.setPageVisible(true)
+        case .conceal:
+            webVisible = false
+            webMessage = nil
+            web.setPageVisible(false)
+        case .failed(let message), .rejected(let message):
             web.close()
             webActive = false
             webVisible = false
+            webMessage = nil
             errorMessage = message
             phase = .failed
         case .qr(let qr, let pin):
@@ -271,21 +268,18 @@ final class PronoteSession {
                 let account = try await client.login(mode: mode, persist: self.persister(for: attempt))
                 try Task.checkCancellation()
                 guard self.generation == attempt else { return }
-                if !self.publicDemo {
-                    let snapshot = await client.credentialSnapshot()
-                    try Task.checkCancellation()
-                    guard self.generation == attempt else { return }
-                    try PronoteKeychain.saveCredentials(snapshot)
-                    self.hasSavedConnection = true
-                    self.savedAddress = PronoteURL.webPage(fromMobile: snapshot.url)
-                }
+                let snapshot = await client.credentialSnapshot()
+                try Task.checkCancellation()
+                guard self.generation == attempt else { return }
+                try PronoteKeychain.saveCredentials(snapshot)
+                self.hasSavedConnection = true
                 self.client = client
                 self.account = account
                 if account.children.isEmpty {
                     self.selectedChildId = nil
                 } else if !account.children.contains(where: { $0.id == self.selectedChildId }) {
                     self.selectedChildId = account.children.first?.id
-                    if !self.publicDemo { PronoteKeychain.saveSelectedChild(self.selectedChildId) }
+                    PronoteKeychain.saveSelectedChild(self.selectedChildId)
                 }
                 self.phase = .synchronizing
                 let lessons = try await client.timetable(childId: self.selectedChildId)
@@ -294,16 +288,14 @@ final class PronoteSession {
                 self.finish(lessons: lessons)
             } catch {
                 guard let self, self.generation == attempt, !Task.isCancelled else { return }
-                self.fail(error)
+                self.connectionFailed(error, mode: mode)
             }
         }
     }
 
     /// Enregistrement immédiat du jeton rotatif, seulement pour la tentative courante et non annulée.
     private func persister(for attempt: UUID) -> @Sendable (PronoteCredentials) async throws -> Void {
-        let save = !publicDemo
         return { [weak self] credentials in
-            guard save else { return }
             guard let self else { throw CancellationError() }
             try await self.storeRotatedToken(credentials, attempt: attempt)
         }
@@ -321,26 +313,51 @@ final class PronoteSession {
         web.close()
         webActive = false
         webVisible = false
+        webMessage = nil
         errorMessage = nil
         phase = .ready
+        access = .connected
+    }
+
+    private func connectionFailed(_ error: Error, mode: PronoteClient.LoginMode) {
+        fail(error)
+        if account != nil {
+            // Connexion établie mais lecture impossible : l'app reste ouverte, l'erreur est visible dans Réglages.
+            if mode == .token, Self.classifyResumeFailure(error) == .signInRequired {
+                signOutAfterRejection()
+            } else {
+                access = .connected
+            }
+            return
+        }
+        guard mode == .token else { return }
+        switch Self.classifyResumeFailure(error) {
+        case .signInRequired:
+            signOutAfterRejection()
+        case .unavailable:
+            if access == .resuming { access = .offline }
+        }
+    }
+
+    /// Jeton refusé : il est retiré, l'écran de connexion s'affiche avec un message simple.
+    private func signOutAfterRejection() {
+        PronoteKeychain.removeCredentials()
+        hasSavedConnection = false
+        client = nil
+        account = nil
+        errorMessage = "Ta session Pronote a expiré. Reconnecte-toi."
+        access = .signedOut
     }
 
     private func fail(_ failure: Error) {
         if failure is CancellationError { return }
         errorMessage = (failure as? PronoteFailure)?.message
-            ?? ((failure as? URLError).map { _ in "Pronote est injoignable. Vérifie la connexion réseau puis réessaie." })
-            ?? "La connexion n’a pas abouti. Réessaie ou passe par la page officielle."
+            ?? ((failure as? URLError).map { _ in "Pronote est injoignable. Vérifie ta connexion internet." })
+            ?? "La connexion n’a pas abouti. Réessaie."
         phase = .failed
-        if webActive { webVisible = true }
+        web.close()
+        webActive = false
+        webVisible = false
+        webMessage = nil
     }
-
-    #if DEBUG
-    /// Démonstration publique Index Education par le protocole natif seul (lancement avec `--pronote-public-demo`).
-    /// Rien n'est enregistré dans le trousseau.
-    private func connectPublicDemo() {
-        publicDemo = true
-        connect(.init(url: "https://demo.index-education.net/pronote/mobile.eleve.html?fd=1", username: "demonstration",
-                      password: "pronotevs", uuid: UUID().uuidString, clientIdentifier: nil), mode: .publicDemo)
-    }
-    #endif
 }

@@ -93,7 +93,7 @@ data class AppSettings(
 /**
  * Document unique persistant de l’app. Il reprend les clés du stockage web et du format
  * d’export (`version`, `courses`, `revisions`, `subjects`, `settings`) et y ajoute
- * `pronoteEvents` et `initialized`. Le jeton Pronote n’y figure jamais.
+ * `pronoteEvents`, `initialized` et `dataVersion`. Le jeton Pronote n’y figure jamais.
  */
 @Serializable
 data class AppDocument(
@@ -104,4 +104,6 @@ data class AppDocument(
     val revisions: List<Revision> = emptyList(),
     val pronoteEvents: List<PronoteEvent> = emptyList(),
     val initialized: Boolean = false,
+    /** Version des données natives (migrations). Absente des documents antérieurs : 0. */
+    val dataVersion: Int = 0,
 )

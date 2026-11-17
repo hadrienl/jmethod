@@ -2,7 +2,7 @@ package fr.jmethod.app
 
 import fr.jmethod.app.data.AppDocumentCodec
 import fr.jmethod.app.data.AppDocumentStore
-import fr.jmethod.app.data.DemoData
+import fr.jmethod.app.data.DataMigrations
 import fr.jmethod.app.model.AppSettings
 import fr.jmethod.app.model.RevisionStatus
 import fr.jmethod.app.pronote.BridgeGate
@@ -15,7 +15,6 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
-import java.time.LocalDate
 
 class AppDocumentStoreTest {
     @get:Rule val folder = TemporaryFolder()
@@ -25,7 +24,11 @@ class AppDocumentStoreTest {
         val file = File(folder.root, "jmethod-data.json")
         val store = AppDocumentStore(file)
         assertTrue(store.read() is AppDocumentStore.ReadResult.Missing)
-        val document = DemoData.create(LocalDate.of(2026, 11, 17)) { 0.5 }
+        val course = fr.jmethod.app.model.Course("course-1", "maths", "Chapitre", 1, "Titre", "2026-11-17", null, "2026-11-17")
+        val document = DataMigrations.emptyDocument().copy(
+            courses = listOf(course),
+            revisions = fr.jmethod.app.domain.AdaptiveAlgorithm.generateInitialRevisions(course, fr.jmethod.app.model.DEFAULT_INTERVALS),
+        )
         store.write(document)
         store.write(document.copy(settings = document.settings.copy(lastPronoteSync = "2026-11-17T19:00:00.000Z")))
         val loaded = (store.read() as AppDocumentStore.ReadResult.Loaded).document
@@ -36,6 +39,18 @@ class AppDocumentStoreTest {
         val text = file.readText()
         assertFalse(text.contains("null"))
         assertFalse(text.contains("jeton"))
+    }
+
+    @Test
+    fun firstLaunchDocumentHasNoFictionalData() {
+        val document = DataMigrations.emptyDocument()
+        assertTrue(document.initialized)
+        assertTrue(document.courses.isEmpty())
+        assertTrue(document.revisions.isEmpty())
+        assertTrue(document.pronoteEvents.isEmpty())
+        assertEquals(fr.jmethod.app.model.DEFAULT_SUBJECTS, document.subjects)
+        assertEquals(AppSettings(), document.settings)
+        assertEquals(document, DataMigrations.migrate(document))
     }
 
     @Test

@@ -1,6 +1,8 @@
 package fr.jmethod.app
 
+import fr.jmethod.app.pronote.AccountType
 import fr.jmethod.app.pronote.PronoteCrypto
+import fr.jmethod.app.pronote.PronoteException
 import fr.jmethod.app.pronote.PronotePolicy
 import org.json.JSONArray
 import org.json.JSONObject
@@ -8,6 +10,7 @@ import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 import java.nio.charset.StandardCharsets.UTF_8
 
@@ -183,6 +186,43 @@ class ProtocolVectorsTest {
         assertEquals("https://school.index-education.net/pronote/parent.html", PronotePolicy.normalizedAddress("HTTPS://School.Index-Education.net/pronote/parent.html?login=true"))
         assertEquals("", PronotePolicy.normalizedAddress("   "))
         PronotePolicy.validatedUrl(PronotePolicy.normalizedAddress("school.index-education.net"))
+    }
+
+    @Test
+    fun schoolCodeHostOrFullAddress() {
+        val student = "https://abcd1234.index-education.net/pronote/eleve.html"
+        val parent = "https://abcd1234.index-education.net/pronote/parent.html"
+        assertEquals(student, PronotePolicy.schoolAddress("abcd1234", AccountType.STUDENT))
+        assertEquals(parent, PronotePolicy.schoolAddress("abcd1234", AccountType.PARENT))
+        assertEquals(student, PronotePolicy.schoolAddress("  ABCD 1234 ", AccountType.STUDENT))
+        assertEquals(parent, PronotePolicy.schoolAddress("abcd1234.index-education.net", AccountType.PARENT))
+        assertEquals(student, PronotePolicy.schoolAddress("abcd1234.index-education.net/pronote/", AccountType.STUDENT))
+        // La page d’une adresse complète prime sur le choix Élève/Parent.
+        assertEquals(parent, PronotePolicy.schoolAddress("https://abcd1234.index-education.net/pronote/parent.html", AccountType.STUDENT))
+        assertEquals(student, PronotePolicy.schoolAddress("https://abcd1234.index-education.net/pronote/mobile.eleve.html?fd=1", AccountType.PARENT))
+        assertEquals("", PronotePolicy.schoolAddress("   ", AccountType.STUDENT))
+        PronotePolicy.validatedUrl(PronotePolicy.schoolAddress("abcd1234", AccountType.STUDENT))
+        for (invalid in listOf("abcd_1234", "abcd1234.example.test", "http://abcd1234.index-education.net:8080/pronote/eleve.html")) {
+            val rejected = runCatching { PronotePolicy.validatedUrl(PronotePolicy.schoolAddress(invalid, AccountType.STUDENT)) }.isFailure
+            assertTrue(invalid, rejected)
+        }
+    }
+
+    @Test
+    fun malformedCiphertextIsRejectedBeforeAes() {
+        val key = ByteArray(16)
+        for (size in listOf(0, 1, 15, 17, 31)) {
+            try {
+                PronoteCrypto.decrypt(ByteArray(size), key, PronoteCrypto.zeroIv)
+                fail("taille $size acceptée")
+            } catch (error: PronoteException) {
+                assertEquals("crypto", error.code)
+                assertEquals("Données de connexion invalides.", error.message)
+            }
+        }
+        val valid = PronoteCrypto.encrypt(bytes("bloc"), key, PronoteCrypto.zeroIv)
+        assertEquals(16, valid.size)
+        assertArrayEquals(bytes("bloc"), PronoteCrypto.decrypt(valid, key, PronoteCrypto.zeroIv))
     }
 
     @Test

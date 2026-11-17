@@ -18,6 +18,25 @@ final class PronoteTests: XCTestCase {
         XCTAssertEqual(PronoteURL.normalized(""), "")
     }
 
+    func testSchoolCodeAndAccountTypeResolution() {
+        XCTAssertEqual(PronoteURL.resolve("abcd1234", account: .student).address, "https://abcd1234.index-education.net/pronote/eleve.html")
+        XCTAssertEqual(PronoteURL.resolve(" ABCD 1234 ", account: .parent).address, "https://abcd1234.index-education.net/pronote/parent.html")
+        XCTAssertEqual(PronoteURL.resolve("abcd1234", account: .parent).account, .parent)
+        XCTAssertEqual(PronoteURL.resolve("abcd1234.index-education.net", account: .parent).address, "https://abcd1234.index-education.net/pronote/parent.html")
+        XCTAssertEqual(PronoteURL.resolve("abcd1234.index-education.net/pronote/", account: .student).address, "https://abcd1234.index-education.net/pronote/eleve.html")
+        // Une adresse complète impose son espace et met le choix à jour.
+        let full = PronoteURL.resolve("https://abcd1234.index-education.net/pronote/eleve.html?login=true", account: .parent)
+        XCTAssertEqual(full.address, "https://abcd1234.index-education.net/pronote/eleve.html")
+        XCTAssertEqual(full.account, .student)
+        let mobileParent = PronoteURL.resolve("abcd1234.index-education.net/pronote/mobile.parent.html", account: .student)
+        XCTAssertEqual(mobileParent.address, "https://abcd1234.index-education.net/pronote/parent.html")
+        XCTAssertEqual(mobileParent.account, .parent)
+        XCTAssertEqual(PronoteURL.resolve("   ", account: .student).address, "")
+        XCTAssertNoThrow(try PronoteURL.validated(PronoteURL.resolve("abcd1234", account: .student).address))
+        // Un code avec des caractères inattendus n'est pas complété en hôte Index Education.
+        XCTAssertThrowsError(try PronoteURL.validated(PronoteURL.resolve("abcd_1234", account: .student).address))
+    }
+
     func testAddressValidationRejectsForeignOrigins() throws {
         XCTAssertNoThrow(try PronoteURL.validated("https://school.index-education.net/pronote/eleve.html"))
         XCTAssertThrowsError(try PronoteURL.validated("https://index-education.net.evil.test/pronote/eleve.html"))

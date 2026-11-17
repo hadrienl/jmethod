@@ -74,6 +74,20 @@ object PronotePolicy {
         return uri
     }
 
+    /**
+     * Adresse de l’espace Pronote à partir du champ « Code ou adresse de l’établissement » :
+     * un code seul (sans point, casse et espaces ignorés) devient `https://<code>.index-education.net/pronote/<page>` ;
+     * un host ou une adresse complète passent par [normalizedAddress] (la page d’une adresse complète prime).
+     */
+    fun schoolAddress(input: String, accountType: AccountType): String {
+        val compact = input.filterNot { it.isWhitespace() }
+        if (compact.isEmpty()) return ""
+        if ('.' !in compact && '/' !in compact && ':' !in compact) {
+            return "https://${compact.lowercase()}.index-education.net/pronote/${accountType.page}"
+        }
+        return normalizedAddress(input, accountType.page)
+    }
+
     /** Accepte une saisie approximative (sans https, sans page, avec ?/#, page mobile) et la ramène à l’espace web officiel. */
     fun normalizedAddress(input: String, defaultPage: String = "eleve.html"): String {
         var text = input.trim()

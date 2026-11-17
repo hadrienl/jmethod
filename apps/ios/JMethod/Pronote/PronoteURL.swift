@@ -1,7 +1,32 @@
 import Foundation
 
+/// Espace Pronote choisi dans le formulaire.
+enum PronoteAccountType: String, Codable, Sendable, CaseIterable {
+    case student, parent
+
+    var page: String { self == .student ? "eleve.html" : "parent.html" }
+    var label: String { self == .student ? "Élève" : "Parent" }
+}
+
 enum PronoteURL {
     static let trustedPages: Set<String> = ["eleve.html", "parent.html"]
+
+    /// Adresse officielle à partir de la saisie du formulaire :
+    /// - un code seul (`abcd1234`, sans point, casse et espaces ignorés) devient `https://abcd1234.index-education.net/pronote/<page>` ;
+    /// - un hôte seul reçoit la page du type de compte choisi ;
+    /// - une adresse complète garde sa page (`eleve.html` ou `parent.html`), qui prime sur le choix et le met à jour.
+    static func resolve(_ input: String, account: PronoteAccountType) -> (address: String, account: PronoteAccountType) {
+        let compact = input.filter { !$0.isWhitespace }.lowercased()
+        guard !compact.isEmpty else { return ("", account) }
+        if !compact.contains("."), !compact.contains("/"), !compact.contains(":"),
+           compact.allSatisfy({ ($0.isASCII && ($0.isLetter || $0.isNumber)) || $0 == "-" }) {
+            return ("https://\(compact).index-education.net/pronote/\(account.page)", account)
+        }
+        let address = normalized(input, defaultPage: account.page)
+        let page = URL(string: address)?.lastPathComponent.lowercased()
+        let resolved: PronoteAccountType = page == "parent.html" ? .parent : page == "eleve.html" ? .student : account
+        return (address, resolved)
+    }
 
     /// Accepte une saisie approximative (hôte seul, sans https, page mobile, avec ?…#…)
     /// et la ramène à l'espace web officiel : `xxxx.index-education.net` devient

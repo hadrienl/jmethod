@@ -102,8 +102,9 @@ fun TodayScreen(
     ) {
         if (model.allDoneBanner) item(key = "done") { AllDoneBanner() }
         item(key = "header") { Header(model) }
-        item(key = "hero") { Hero(model, onScore) }
-        item(key = "progress") { Progress(model) }
+        val hasCourses = state.document.courses.isNotEmpty()
+        item(key = "hero") { Hero(model, hasCourses, onScore) }
+        if (hasCourses) item(key = "progress") { Progress(model) }
         item(key = "phases") { PhaseLegend() }
         item(key = "programme") { ProgrammeHeader(model) }
         if (model.overdueBanner != null) {
@@ -174,7 +175,7 @@ private fun Header(model: TodayModel) {
 }
 
 @Composable
-private fun Hero(model: TodayModel, onScore: (String) -> Unit) {
+private fun Hero(model: TodayModel, hasCourses: Boolean, onScore: (String) -> Unit) {
     val hero = model.hero
     Column(
         Modifier.fillMaxWidth().clip(CardShape).background(JColors.Violet700).padding(24.dp),
@@ -189,7 +190,7 @@ private fun Hero(model: TodayModel, onScore: (String) -> Unit) {
         }
         Spacer(Modifier.height(20.dp))
         Text(
-            hero.title,
+            if (hasCourses) hero.title else "Rien à préparer ce soir.",
             color = Color.White,
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.ExtraBold,
@@ -207,8 +208,13 @@ private fun Hero(model: TodayModel, onScore: (String) -> Unit) {
                 color = JColors.Violet100,
                 style = MaterialTheme.typography.bodyMedium,
             )
-        } else {
+        } else if (hasCourses) {
             Text("Tes révisions pour demain sont à jour. Bonne soirée !", color = JColors.Violet100, style = MaterialTheme.typography.bodyMedium)
+        } else {
+            Text(
+                "Aucune séance de révision n’est enregistrée sur ce téléphone. Ton emploi du temps de demain est juste en dessous.",
+                color = JColors.Violet100, style = MaterialTheme.typography.bodyMedium,
+            )
         }
         val revision = hero.revision
         if (revision != null) {

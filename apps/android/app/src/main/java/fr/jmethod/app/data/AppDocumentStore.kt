@@ -48,7 +48,7 @@ object AppDocumentCodec {
     fun decodeExport(text: String): AppDocument? = runCatching {
         val root: JsonObject = json.parseToJsonElement(text).jsonObject
         if (root["courses"] == null || root["revisions"] == null) return null
-        json.decodeFromJsonElement(AppDocument.serializer(), root).copy(initialized = true)
+        json.decodeFromJsonElement(AppDocument.serializer(), root).copy(initialized = true, dataVersion = DataMigrations.CURRENT_VERSION)
     }.getOrNull()
 }
 

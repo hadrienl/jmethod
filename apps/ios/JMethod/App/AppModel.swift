@@ -31,13 +31,23 @@ final class AppModel {
 
     @ObservationIgnored private let store: DocumentStore?
     @ObservationIgnored private let now: () -> Date
+    @ObservationIgnored private let preferences: UserDefaults
     @ObservationIgnored private var version = 0
 
-    init(store: DocumentStore?, now: @escaping () -> Date = Date.init) {
+    /// Indicateur (non sensible) de la migration qui retire le jeu de démonstration du jalon 1.
+    static let demoMigrationKey = "fr.jmethod.migration.demoDataRemoved"
+
+    /// Premier lancement : réglages et matières par défaut (configuration), aucun cours, révision ni créneau.
+    static var emptyDocument: AppDocument {
+        AppDocument(settings: Constants.defaultSettings, subjects: Constants.defaultSubjects, courses: [], revisions: [], pronoteEvents: [], initialized: true)
+    }
+
+    init(store: DocumentStore?, now: @escaping () -> Date = Date.init, preferences: UserDefaults = .standard) {
         self.store = store
         self.now = now
+        self.preferences = preferences
         self.today = SchoolDay.today(now: now())
-        self.document = AppDocument(settings: Constants.defaultSettings, subjects: Constants.defaultSubjects, courses: [], revisions: [], pronoteEvents: [], initialized: false)
+        self.document = Self.emptyDocument
     }
 
     static func live() -> AppModel {
@@ -60,11 +70,13 @@ final class AppModel {
             return
         }
         do {
-            if let saved = try await store.load(), saved.initialized {
+            if let saved = try await store.load() {
                 document = saved
+                await migrateDemoDataIfNeeded(store: store)
             } else {
-                document = try DemoData.document(today: today)
+                document = Self.emptyDocument
                 persist()
+                preferences.set(true, forKey: Self.demoMigrationKey)
             }
             loadState = .ready
         } catch {
@@ -72,7 +84,25 @@ final class AppModel {
         }
     }
 
-    /// Met de côté un fichier illisible (sans le supprimer) puis recharge les données de démonstration.
+    /// Migration unique : retire les données de démonstration puis l'enregistre avant de la marquer faite.
+    private func migrateDemoDataIfNeeded(store: DocumentStore) async {
+        guard !preferences.bool(forKey: Self.demoMigrationKey) else { return }
+        let cleaned = DemoMigration.removingDemoData(from: document)
+        if cleaned != document {
+            document = cleaned
+            version += 1
+            do {
+                try await store.save(cleaned, version: version)
+            } catch {
+                // Réessayée au prochain lancement ; les données restent utilisables en mémoire.
+                toast = .init(title: "Enregistrement impossible", message: "Le nettoyage des données d’exemple sera refait au prochain lancement.", kind: .warning)
+                return
+            }
+        }
+        preferences.set(true, forKey: Self.demoMigrationKey)
+    }
+
+    /// Met de côté un fichier illisible (sans le supprimer) puis repart d'un document vide.
     func startOverAfterUnreadableFile() async {
         guard let store else { return }
         do {

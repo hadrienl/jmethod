@@ -4,7 +4,9 @@ import android.app.Application
 import fr.jmethod.app.data.AppClock
 import fr.jmethod.app.data.AppDocumentStore
 import fr.jmethod.app.data.AppRepository
+import fr.jmethod.app.pronote.LoginPreferences
 import fr.jmethod.app.pronote.SessionVault
+import fr.jmethod.app.pronote.SharedLoginPreferences
 import fr.jmethod.app.pronote.TokenVault
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -17,11 +19,11 @@ class AppContainer(application: Application) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     val repository = AppRepository(
         store = AppDocumentStore(File(application.filesDir, "jmethod-data.json")),
-        clock = clock,
         scope = scope,
         io = Dispatchers.IO,
     )
     val vault: SessionVault = TokenVault(application)
+    val loginPreferences: LoginPreferences = SharedLoginPreferences(application)
 }
 
 class JMethodApplication : Application() {

@@ -76,3 +76,15 @@ test('credentials are never typed outside the trusted Pronote origin',async()=>{
  await page.addScriptTag({content:script});await page.waitForTimeout(1200);
  assert.deepEqual(await page.locator('input').evaluateAll(i=>i.map(e=>e.value)),['','']);assert.equal(await page.evaluate(()=>window.submissions.length),0);await context.close();
 });
+
+test('security check reveals the page once, then the QR flow resumes by itself',async()=>{
+ const {context,page}=await pageFor();
+ await page.evaluate(()=>{const d=document.createElement('div');d.id='mfa';d.role='dialog';d.innerHTML='<h1>Sécurisation de votre compte</h1><input aria-label="Code PIN">';document.body.append(d);});
+ await page.addScriptTag({content:script});await page.waitForTimeout(1200);
+ assert.deepEqual(await page.evaluate(()=>window.messages.filter(m=>m.type==='error').map(m=>m.code)),['MFA_REQUIRED']);
+ assert.equal(await page.evaluate(()=>window.clicks.open),0);
+ await page.evaluate(()=>document.getElementById('mfa').remove());
+ await page.waitForFunction(()=>window.messages.some(m=>m.type==='qr'),null,{timeout:8000});
+ const r=await page.evaluate(()=>({errors:window.messages.filter(m=>m.type==='error').length,done:window.messages.some(m=>m.stage==='mfa-done'),clicks:window.clicks}));
+ assert.equal(r.errors,1);assert.ok(r.done);assert.deepEqual(r.clicks,{open:1,generate:1});await context.close();
+});

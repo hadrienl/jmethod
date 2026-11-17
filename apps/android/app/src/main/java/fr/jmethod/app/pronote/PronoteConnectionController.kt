@@ -32,23 +32,51 @@ interface OfficialPage {
     fun clearBrowsingData()
 }
 
-data class LoginForm(val address: String = "", val username: String = "", val password: String = "")
+/** Type d’espace Pronote : page `eleve.html` ou `parent.html`. */
+enum class AccountType(val page: String) { STUDENT("eleve.html"), PARENT("parent.html") }
+
+data class LoginForm(
+    /** Code de l’établissement (`abcd1234`), host ou adresse complète. */
+    val school: String = "",
+    val accountType: AccountType = AccountType.STUDENT,
+    val username: String = "",
+    val password: String = "",
+)
+
+/** Établissement et type de compte mémorisés pour préremplir le formulaire (jamais le mot de passe). */
+interface LoginPreferences {
+    fun load(): Pair<String, AccountType>?
+    fun save(school: String, accountType: AccountType)
+}
 
 data class PronoteAccount(val name: String, val children: List<Child>, val selectedChildId: String?)
 
+/** Accès à l’app : il faut une connexion Pronote active (ou un jeton enregistré, hors ligne). */
+enum class AccessPhase {
+    /** Jeton enregistré : reprise en cours au lancement (écran de chargement). */
+    CHECKING,
+    /** Aucun jeton, jeton refusé ou déconnexion : écran de connexion plein écran. */
+    SIGNED_OUT,
+    /** Session reprise ou nouvelle connexion, emploi du temps lu. */
+    CONNECTED,
+    /** Jeton conservé mais Pronote injoignable : l’app s’ouvre sur les données locales. */
+    OFFLINE,
+}
+
 data class PronoteUiState(
+    val access: AccessPhase = AccessPhase.SIGNED_OUT,
     val title: String = "Compte Pronote",
     val message: String = "Connecte ton compte pour importer ton emploi du temps des deux prochaines semaines.",
     val busy: Boolean = false,
     /** Une tentative utilise la page officielle (visible ou masquée). */
     val browserStarted: Boolean = false,
     val showBrowser: Boolean = false,
-    /** Le script est arrêté : l’utilisateur peut relancer l’association sur la page courante. */
-    val automationStopped: Boolean = false,
     val hasSavedSession: Boolean = false,
     val account: PronoteAccount? = null,
     val form: LoginForm = LoginForm(),
     val isError: Boolean = false,
+    /** Erreur affichée sous le bouton « Se connecter ». */
+    val formError: String? = null,
 )
 
 /**
@@ -68,6 +96,9 @@ class PronoteConnectionController(
     private val today: () -> LocalDate,
     /** Convertit et enregistre les créneaux lus ; appelé uniquement pour la tentative courante. */
     private val storeLessons: suspend (List<Lesson>) -> Unit,
+    /** Supprime les créneaux Pronote importés (déconnexion). */
+    private val clearLessons: suspend () -> Unit = {},
+    private val loginPreferences: LoginPreferences? = null,
     private val webMessagesSupported: Boolean = true,
     private val random: SecureRandom = SecureRandom(),
 ) {
@@ -89,31 +120,46 @@ class PronoteConnectionController(
     private var injected = false
     /** Identifiants du formulaire natif : en mémoire seulement, effacés à leur unique transmission. */
     private var pendingCredentials: Pair<String, String>? = null
-    private var credentialMode = false
 
     init {
         val saved = vault.load() != null
-        state.update { it.copy(hasSavedSession = saved) }
+        state.update {
+            if (saved) {
+                it.copy(hasSavedSession = true, access = AccessPhase.CHECKING, busy = true, title = "Reconnexion à Pronote",
+                    message = "Vérification de la session enregistrée…")
+            } else {
+                it.copy(hasSavedSession = false, access = AccessPhase.SIGNED_OUT,
+                    title = "Connecte ton compte Pronote", message = "J-Method importe ton emploi du temps des deux prochaines semaines.")
+            }
+        }
+        loginPreferences?.load()?.let { (school, type) ->
+            state.update { it.copy(form = it.form.copy(school = school, accountType = type)) }
+        }
     }
 
     // region Formulaire
 
-    fun onAddressChange(value: String) = state.update { it.copy(form = it.form.copy(address = value)) }
-    fun onUsernameChange(value: String) = state.update { it.copy(form = it.form.copy(username = value)) }
-    fun onPasswordChange(value: String) = state.update { it.copy(form = it.form.copy(password = value)) }
+    fun onSchoolChange(value: String) = state.update { it.copy(form = it.form.copy(school = value), formError = null) }
+    fun onAccountTypeChange(value: AccountType) = state.update { it.copy(form = it.form.copy(accountType = value), formError = null) }
+    fun onUsernameChange(value: String) = state.update { it.copy(form = it.form.copy(username = value), formError = null) }
+    fun onPasswordChange(value: String) = state.update { it.copy(form = it.form.copy(password = value), formError = null) }
 
     fun submitCredentials() {
         val form = state.value.form
         val login = form.username.trim()
         val secret = form.password
-        if (state.value.busy || login.isEmpty() || secret.isEmpty() || form.address.isBlank()) return
-        state.update { it.copy(form = it.form.copy(password = "")) }
-        open(form.address, login to secret)
-    }
-
-    fun openOfficialPage() {
-        if (state.value.busy) return
-        open(state.value.form.address, null)
+        if (state.value.busy || state.value.browserStarted || login.isEmpty() || secret.isEmpty() || form.school.isBlank()) return
+        val url = PronotePolicy.schoolAddress(form.school, form.accountType)
+        val uri = try {
+            PronotePolicy.validatedUrl(url).also { require(!it.path.substringAfterLast('/').startsWith("mobile.")) }
+        } catch (_: Exception) {
+            state.update { it.copy(formError = "Établissement introuvable. Saisis le code de ton établissement (par exemple abcd1234) ou l’adresse de ta page Pronote.") }
+            return
+        }
+        // La page d’une adresse complète prime sur le choix Élève/Parent : le choix est mis à jour.
+        val type = if (uri.path.endsWith(AccountType.PARENT.page)) AccountType.PARENT else AccountType.STUDENT
+        state.update { it.copy(form = it.form.copy(password = "", accountType = type), formError = null) }
+        open(url, uri, login to secret)
     }
 
     // endregion
@@ -122,20 +168,7 @@ class PronoteConnectionController(
 
     private fun newPin() = random.nextInt(10_000).toString().padStart(4, '0')
 
-    private fun open(input: String, credentials: Pair<String, String>?) {
-        val url = PronotePolicy.normalizedAddress(input)
-        state.update { it.copy(form = it.form.copy(address = url)) }
-        val uri = try {
-            PronotePolicy.validatedUrl(url).also { require(!it.path.substringAfterLast('/').startsWith("mobile.")) }
-        } catch (_: Exception) {
-            state.update {
-                it.copy(
-                    title = "Adresse à vérifier", isError = true,
-                    message = "Saisis l’adresse de ton espace Élèves ou Parents, par exemple school.index-education.net.",
-                )
-            }
-            return
-        }
+    private fun open(url: String, uri: java.net.URI, credentials: Pair<String, String>) {
         cancel(reset = false)
         generation.incrementAndGet()
         nonce = UUID.randomUUID().toString()
@@ -144,21 +177,13 @@ class PronoteConnectionController(
         claimed = false
         injected = false
         pendingCredentials = credentials
-        credentialMode = credentials != null
         state.update {
-            if (credentialMode) {
-                it.copy(browserStarted = true, showBrowser = false, busy = true, automationStopped = false, isError = false,
-                    title = "Connexion à Pronote", message = "Ouverture de la page Pronote…")
-            } else {
-                it.copy(browserStarted = true, showBrowser = true, busy = false, automationStopped = false, isError = false,
-                    title = "Connecte-toi à Pronote",
-                    message = "La connexion et les vérifications restent dans la page officielle. L’association sera ensuite automatique.")
-            }
+            it.copy(browserStarted = true, showBrowser = false, busy = true, isError = false, formError = null,
+                title = "Connexion à Pronote", message = "Connexion en cours…")
         }
         page.load(url)
-        if (credentialMode) startWatchdog(90_000, "Pronote n’a pas répondu à temps. Vérifie l’adresse, puis réessaie ou termine la connexion dans la page affichée.")
-        else startWatchdog(600_000, EXPIRED)
-        if (!webMessagesSupported) failure("Mets à jour Android System WebView pour permettre l’association automatique sécurisée.")
+        startWatchdog(90_000, "Pronote n’a pas répondu à temps. Vérifie l’établissement et ta connexion internet, puis réessaie.")
+        if (!webMessagesSupported) failure("Mets à jour Android System WebView depuis le Play Store, puis réessaie.")
     }
 
     fun onPageStarted() {
@@ -168,9 +193,10 @@ class PronoteConnectionController(
     fun onPageFinished(url: String?) {
         if (!state.value.browserStarted || claimed || url == null || injected) return
         if (!PronotePolicy.isTrustedPage(url, origin)) {
-            // ENT/CAS hors de l’origine Pronote : les identifiants ne sont jamais saisis ailleurs.
-            if (credentialMode && url.startsWith("https://")) {
-                reveal("Connexion par l’ENT", "Ton établissement passe par un ENT : termine la connexion dans la page affichée.", scriptStopped = false)
+            // ENT/CAS hors de l’origine Pronote : la page est affichée, les identifiants n’y sont jamais saisis.
+            if (url.startsWith("https://") && !state.value.showBrowser) {
+                pendingCredentials = null
+                reveal("Connexion par l’ENT", "Ton établissement passe par son ENT : termine la connexion dans cette page.")
             }
             return
         }
@@ -182,35 +208,21 @@ class PronoteConnectionController(
         val config = JSONObject().put("nonce", nonce).put("pin", pin).put("allowedOrigin", origin).put("demo", false)
         pendingCredentials?.let { (login, secret) -> config.put("credentials", JSONObject().put("username", login).put("password", secret)) }
         pendingCredentials = null
-        state.update { it.copy(automationStopped = false) }
         page.evaluate("window.__JM_CONFIG=$config;\n${automationScript()}")
     }
 
-    fun setBrowserVisible(visible: Boolean) {
-        if (state.value.browserStarted) state.update { it.copy(showBrowser = visible) }
-    }
-
-    /** Relance l’automatisation sur la page Pronote courante (après MFA, ENT ou erreur), avec un nouveau nonce et un nouveau code. */
-    fun resumeAutomation() {
-        if (!state.value.browserStarted || !PronotePolicy.isTrustedPage(page.currentUrl, origin)) {
-            state.update { it.copy(message = "Reviens sur la page Pronote de ton établissement, puis relance l’association.") }
-            return
-        }
+    /**
+     * Le formulaire officiel n’a pas pu être rempli : la page est affichée pour que l’utilisateur se
+     * connecte lui-même, et l’automatisation est réarmée (nouveau nonce, nouveau code) pour la suite.
+     */
+    private fun rearmOnVisiblePage(title: String, text: String) {
         stopScript()
         generation.incrementAndGet()
-        activeJob?.cancel()
-        activeJob = null
         nonce = UUID.randomUUID().toString()
         pin = newPin()
-        claimed = false
         pendingCredentials = null
-        credentialMode = false
-        state.update {
-            it.copy(title = "Association automatique", isError = false,
-                message = "Termine la connexion si besoin : l’association reprendra dès que Pronote sera ouvert.")
-        }
-        inject()
-        startWatchdog(600_000, EXPIRED)
+        reveal(title, text)
+        if (PronotePolicy.isTrustedPage(page.currentUrl, origin)) inject()
     }
 
     fun onBridgeMessage(raw: String?, sourceOrigin: String, isMainFrame: Boolean) {
@@ -218,19 +230,23 @@ class PronoteConnectionController(
         val event = BridgeGate.accept(raw, BridgeGate.Attempt(nonce, pin, origin), sourceOrigin, isMainFrame, page.currentUrl) ?: return
         when (event) {
             BridgeGate.Event.Authenticated -> {
-                state.update {
-                    it.copy(showBrowser = false, busy = true, isError = false, title = "Association automatique",
-                        message = "Préparation du QR code temporaire…")
-                }
-                startWatchdog(45_000, "L’association a pris trop de temps. Reprends la connexion dans Pronote.")
+                hidePage()
+                startWatchdog(45_000, "La connexion a pris trop de temps. Réessaie dans quelques instants.")
             }
-            is BridgeGate.Event.Progress -> state.update { it.copy(message = progressMessage(event.stage)) }
+            is BridgeGate.Event.Progress -> if (event.stage == "mfa-done") {
+                // Vérification terminée par l’utilisateur : le script reprend seul, la page est masquée.
+                hidePage()
+                startWatchdog(45_000, "La connexion a pris trop de temps. Réessaie dans quelques instants.")
+            } else if (!state.value.showBrowser) {
+                state.update { it.copy(message = progressMessage(event.stage)) }
+            }
             is BridgeGate.Event.Failure -> when (event.code) {
-                "LOGIN_REJECTED" -> if (credentialMode) rejected() else failure(REJECTED)
-                "MFA_REQUIRED" -> reveal("Vérification demandée", "Pronote demande une vérification supplémentaire : termine-la dans la page affichée.", scriptStopped = true)
-                "LOGIN_FORM_NOT_FOUND" -> reveal("Connexion à terminer", "Le formulaire de connexion Pronote n’a pas été reconnu : connecte-toi directement dans la page affichée.", scriptStopped = true)
-                "LOGIN_STALLED" -> reveal("Connexion à terminer", "Pronote ne répond pas après l’envoi de tes identifiants : vérifie la page affichée.", scriptStopped = true)
-                else -> failure("L’association automatique s’est arrêtée. Affiche Pronote, puis relance l’association si nécessaire.")
+                "LOGIN_REJECTED" -> rejected()
+                // Non terminal : la tentative (nonce, code) reste valide, le script attend la fin de la vérification.
+                "MFA_REQUIRED" -> reveal("Vérification de sécurité", "Pronote demande une vérification : termine-la dans cette page, la connexion continuera ensuite.")
+                "LOGIN_FORM_NOT_FOUND", "LOGIN_STALLED" ->
+                    rearmOnVisiblePage("Termine la connexion", "Connecte-toi dans cette page Pronote : J-Method continuera ensuite automatiquement.")
+                else -> failure("La connexion à Pronote n’a pas abouti. Réessaie dans quelques instants.")
             }
             is BridgeGate.Event.Qr -> {
                 // Réclamation atomique du premier QR : tout message ultérieur est ignoré.
@@ -242,13 +258,13 @@ class PronoteConnectionController(
         }
     }
 
+    private fun hidePage() = state.update {
+        it.copy(showBrowser = false, busy = true, isError = false, title = "Connexion à Pronote", message = "Connexion en cours…")
+    }
+
     private fun progressMessage(stage: String) = when (stage) {
-        "filling-login" -> "Saisie de tes identifiants…"
-        "submitting-login" -> "Connexion à Pronote…"
-        "opening-qr" -> "Ouverture du QR code…"
-        "filling-code" -> "Création du code temporaire…"
-        "generating-qr" -> "Génération du QR code…"
-        else -> "Association en cours…"
+        "filling-login", "submitting-login" -> "Connexion en cours…"
+        else -> "Préparation de ton emploi du temps…"
     }
 
     private fun stopScript() = page.evaluate("window.__JM_PRONOTE_POC?.stop()")
@@ -262,35 +278,21 @@ class PronoteConnectionController(
         }
     }
 
-    private fun reveal(title: String, text: String, scriptStopped: Boolean) {
-        pendingCredentials = null
-        credentialMode = false
-        state.update { it.copy(busy = false, showBrowser = true, title = title, message = text, automationStopped = scriptStopped, isError = false) }
-        if (scriptStopped) watchdog?.cancel() else startWatchdog(600_000, EXPIRED)
+    /** Page officielle affichée en plein écran (ENT, vérification) ; la tentative continue, délai étendu. */
+    private fun reveal(title: String, text: String) {
+        state.update { it.copy(busy = false, showBrowser = true, title = title, message = text, isError = false) }
+        startWatchdog(600_000, "La connexion a expiré. Réessaie quand tu veux.")
     }
 
+    /** Échec : la tentative est abandonnée et le formulaire revient avec un message. */
     private fun failure(text: String) {
-        watchdog?.cancel()
-        pendingCredentials = null
-        credentialMode = false
-        val started = state.value.browserStarted
-        state.update {
-            it.copy(busy = false, title = "Connexion à reprendre", message = text, isError = true,
-                automationStopped = started, showBrowser = started)
-        }
-        if (started) stopScript()
+        cancel(reset = false)
+        page.release()
+        state.update { it.copy(browserStarted = false, showBrowser = false, isError = true, title = "Connexion impossible", message = text, formError = text) }
     }
 
     /** Identifiants refusés : la page reste masquée et le formulaire natif revient. */
-    private fun rejected() {
-        cancel(reset = false)
-        page.release()
-        state.update {
-            it.copy(browserStarted = false, showBrowser = false, title = "Identifiants refusés", isError = true, message = REJECTED)
-        }
-    }
-
-    // endregion
+    private fun rejected() = failure(REJECTED)
 
     // region Session native
 
@@ -321,7 +323,7 @@ class PronoteConnectionController(
 
     private fun connectQr(image: String, code: String) {
         val attempt = generation.get()
-        state.update { it.copy(busy = true, isError = false, title = "Connexion native", message = "Vérification du jeton et récupération des cours…") }
+        state.update { it.copy(busy = true, isError = false, title = "Connexion à Pronote", message = "Récupération de ton emploi du temps…") }
         activeJob = scope.launch {
             try {
                 val binding = Binding(attempt)
@@ -333,28 +335,29 @@ class PronoteConnectionController(
                 }
                 if (attempt != generation.get()) return@launch
                 synchronized(vaultLock) { if (attempt == generation.get()) vault.saveSelectedChildId(null) }
+                state.value.form.let { loginPreferences?.save(it.school.trim(), it.accountType) }
                 binding.adopted = true
                 val adopted = Session(connection, binding)
                 session = adopted
-                state.update { it.copy(browserStarted = false, showBrowser = false, automationStopped = false, hasSavedSession = true, form = it.form.copy(username = "", password = "")) }
+                state.update { it.copy(browserStarted = false, showBrowser = false, hasSavedSession = true, form = it.form.copy(password = "")) }
                 page.release()
                 sync(attempt, adopted)
             } catch (_: CancellationException) {
             } catch (error: Exception) {
-                if (attempt == generation.get()) failure(messageFor(error, "Connexion impossible. Retourne à Pronote pour réessayer."))
+                if (attempt == generation.get()) failure(messageFor(error, "La connexion à Pronote n’a pas abouti. Réessaie dans quelques instants."))
             }
         }
     }
 
     /** Reprise par jeton enregistré (au lancement ou à la demande). */
     fun restoreSaved() {
-        if (state.value.busy || state.value.browserStarted) return
+        if (state.value.browserStarted || activeJob?.isActive == true) return
         val credentials = vault.load() ?: run {
-            state.update { it.copy(hasSavedSession = false) }
+            state.update { it.copy(hasSavedSession = false, busy = false, access = AccessPhase.SIGNED_OUT) }
             return
         }
         val attempt = generation.incrementAndGet()
-        state.update { it.copy(busy = true, isError = false, title = "Reconnexion à Pronote", message = "Vérification de la session enregistrée…") }
+        state.update { it.copy(busy = true, isError = false, title = "Reconnexion à Pronote", message = "Connexion en cours…") }
         activeJob = scope.launch {
             try {
                 val binding = Binding(attempt)
@@ -369,20 +372,45 @@ class PronoteConnectionController(
             } catch (_: CancellationException) {
             } catch (error: Exception) {
                 if (attempt != generation.get()) return@launch
-                if (error is PronoteException && error.code == "login") {
-                    // Jeton refusé : il est définitivement invalide, une nouvelle association est nécessaire.
-                    synchronized(vaultLock) { vault.clear() }
+                if (!signOutIfRefused(error)) {
+                    // Problème réseau ou serveur : le jeton est conservé et l’app s’ouvre hors ligne.
                     state.update {
-                        it.copy(busy = false, hasSavedSession = false, account = null, isError = true, title = "Session expirée",
-                            message = "Pronote n’accepte plus la session enregistrée. Reconnecte ton compte.")
-                    }
-                } else {
-                    state.update {
-                        it.copy(busy = false, isError = true, title = "Synchronisation impossible",
+                        it.copy(busy = false, isError = true, access = AccessPhase.OFFLINE, title = offlineTitle(error),
                             message = messageFor(error, "La reconnexion à Pronote a échoué. Réessaie plus tard."))
                     }
                 }
             }
+        }
+    }
+
+    /** Jeton refusé (ou vérification de sécurité exigée) : il est effacé et l’écran de connexion revient. */
+    private fun signOutIfRefused(error: Exception): Boolean {
+        if (error !is PronoteException || error.code !in setOf("login", "mfa")) return false
+        session = null
+        synchronized(vaultLock) { vault.clear() }
+        state.update {
+            it.copy(busy = false, hasSavedSession = false, account = null, isError = true, access = AccessPhase.SIGNED_OUT,
+                title = "Reconnecte-toi",
+                message = if (error.code == "mfa") messageFor(error, "") else "Ta connexion à Pronote a expiré. Reconnecte-toi pour continuer.",
+                formError = if (error.code == "mfa") messageFor(error, "") else "Ta connexion à Pronote a expiré. Reconnecte-toi pour continuer.")
+        }
+        return true
+    }
+
+    private fun offlineTitle(error: Exception) = if (error is IOException) "Hors ligne" else "Pronote indisponible"
+
+    /** Bandeau hors ligne : nouvel essai de reprise ou de synchronisation, sans déconnecter. */
+    fun retry() {
+        if (session == null) restoreSaved() else refresh()
+    }
+
+    /** Ouvre l’app sur les données locales sans attendre la fin de la reprise. */
+    fun skipResume() {
+        if (state.value.access != AccessPhase.CHECKING) return
+        cancel(reset = false)
+        state.update {
+            it.copy(access = AccessPhase.OFFLINE, isError = true, title = "Synchronisation interrompue",
+                message = "Les données enregistrées sur ce téléphone sont affichées. Réessaie quand tu veux.")
         }
     }
 
@@ -423,15 +451,16 @@ class PronoteConnectionController(
             storeLessons(lessons)
             if (attempt != generation.get()) return
             state.update {
-                it.copy(busy = false, isError = false, hasSavedSession = true, title = "Pronote connecté",
-                    message = "Emploi du temps à jour. Le jeton de connexion reste chiffré sur ce téléphone.",
+                it.copy(busy = false, isError = false, hasSavedSession = true, access = AccessPhase.CONNECTED, title = "Pronote connecté",
+                    message = "Emploi du temps à jour.",
                     account = PronoteAccount(connection.accountName, connection.children, connection.selectedChildId))
             }
         } catch (_: CancellationException) {
         } catch (error: Exception) {
-            if (attempt == generation.get()) {
+            if (attempt == generation.get() && !signOutIfRefused(error)) {
                 state.update {
-                    it.copy(busy = false, isError = true, title = "Synchronisation impossible",
+                    it.copy(busy = false, isError = true, title = if (it.access == AccessPhase.CONNECTED) "Synchronisation impossible" else offlineTitle(error),
+                        access = if (it.access == AccessPhase.CONNECTED) AccessPhase.CONNECTED else AccessPhase.OFFLINE,
                         message = messageFor(error, "Lecture de l’emploi du temps impossible. Réessaie plus tard."),
                         account = PronoteAccount(connection.accountName, connection.children, connection.selectedChildId))
                 }
@@ -444,12 +473,13 @@ class PronoteConnectionController(
         return connection.timetable(today(), 14)
     }
 
+    /** Messages sans détail technique ; les codes internes ne sont jamais affichés. */
     private fun messageFor(error: Exception, fallback: String): String = when {
         error is PronoteException && error.code == "mfa" ->
-            "Pronote demande une vérification de sécurité : reconnecte ton compte depuis la page officielle."
+            "Pronote demande une vérification de sécurité. Reconnecte-toi pour la terminer."
         error is PronoteException && error.code == "pronote-25" ->
             "Pronote a bloqué temporairement les connexions après trop d’essais. Réessaie plus tard."
-        error is PronoteException -> error.message
+        error is PronoteException && error.code == "url" -> error.message
         error is IOException -> "Pronote est injoignable. Vérifie ta connexion internet, puis réessaie."
         else -> fallback
     }
@@ -463,10 +493,13 @@ class PronoteConnectionController(
         activeJob?.cancel()
         activeJob = null
         pendingCredentials = null
-        credentialMode = false
         claimed = true
         if (state.value.browserStarted) stopScript()
-        state.update { it.copy(busy = false, automationStopped = false) }
+        state.update {
+            // Reprise interrompue au lancement : le jeton reste, l’app s’ouvre hors ligne.
+            val access = if (it.access == AccessPhase.CHECKING) AccessPhase.OFFLINE else it.access
+            it.copy(busy = false, access = access)
+        }
         if (reset) {
             page.release()
             state.update {
@@ -476,7 +509,7 @@ class PronoteConnectionController(
         }
     }
 
-    /** Déconnexion : jeton, enfant choisi, cookies et stockage de la page officielle supprimés. */
+    /** Déconnexion : jeton, enfant choisi, cookies, stockage web et créneaux importés supprimés ; cours et révisions restent. */
     fun disconnect() {
         cancel(reset = false)
         session = null
@@ -488,9 +521,10 @@ class PronoteConnectionController(
         page.release()
         state.update {
             it.copy(browserStarted = false, showBrowser = false, account = null, hasSavedSession = false, isError = false,
-                title = "Compte Pronote déconnecté",
-                message = "Le jeton de connexion a été supprimé de ce téléphone. Les cours déjà importés restent affichés.")
+                access = AccessPhase.SIGNED_OUT, title = "Tu es déconnecté", formError = null,
+                message = "Ton emploi du temps importé a été retiré de ce téléphone. Tes cours et tes révisions restent enregistrés.")
         }
+        scope.launch { clearLessons() }
     }
 
     fun dispose() {

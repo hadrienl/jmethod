@@ -3,7 +3,7 @@ import Foundation
 /// Client du protocole mobile Pronote, strictement en lecture seule.
 /// Clé, IV, numéro d'ordre et ressources appartiennent à une session : ils sont réinitialisés à chaque authentification.
 actor PronoteClient {
-    enum LoginMode: Sendable { case qr, token, publicDemo }
+    enum LoginMode: Sendable { case qr, token }
 
     /// Liste blanche explicite des fonctions réseau. Ne pas l'étendre pour contourner une erreur.
     static let readFunctions: Set<String> = [
@@ -38,13 +38,13 @@ actor PronoteClient {
     static func credentials(qr: PronoteQRData, pin: String, uuid: String = UUID().uuidString) throws -> PronoteCredentials {
         let url = try PronoteURL.validated(qr.url)
         guard pin.count == 4, pin.allSatisfy({ $0.isASCII && $0.isNumber }) else {
-            throw PronoteFailure.invalid("pin", "Le code temporaire doit comporter quatre chiffres.")
+            throw PronoteFailure.invalid("pin", "La connexion n’a pas pu être finalisée. Réessaie.")
         }
         let key = ProtocolCrypto.md5(Data(pin.utf8))
         let login = try ProtocolCrypto.decrypt(ProtocolCrypto.unhex(qr.login), key: key, iv: ProtocolCrypto.zeroIV)
         let token = try ProtocolCrypto.decrypt(ProtocolCrypto.unhex(qr.jeton), key: key, iv: ProtocolCrypto.zeroIV)
         guard let username = String(data: login, encoding: .utf8), let password = String(data: token, encoding: .utf8) else {
-            throw PronoteFailure.invalid("qr", "Le QR code ne peut pas être lu.")
+            throw PronoteFailure.invalid("qr", "La connexion n’a pas pu être finalisée. Réessaie.")
         }
         return .init(url: try PronoteURL.mobile(url).absoluteString, username: username, password: password, uuid: uuid, clientIdentifier: nil)
     }
@@ -76,7 +76,7 @@ actor PronoteClient {
             "genreConnexion": 0, "genreEspace": space, "identifiant": credentials.username,
             "pourENT": false, "enConnexionAuto": false, "demandeConnexionAuto": false,
             "demandeConnexionAppliMobile": mode == .qr, "demandeConnexionAppliMobileJeton": mode == .qr,
-            "enConnexionAppliMobile": mode == .token, "uuidAppliMobile": mode == .publicDemo ? "" : credentials.uuid,
+            "enConnexionAppliMobile": mode == .token, "uuidAppliMobile": credentials.uuid,
             "loginTokenSAV": "",
         ])
         let authenticationKey = ProtocolCodec.authenticationKey(
@@ -87,8 +87,8 @@ actor PronoteClient {
         let authenticated = try await call("Authentification", data: ["connexion": 0, "challenge": challenge, "espace": space])
         guard let encryptedKey = authenticated["cle"] as? String else {
             throw PronoteFailure.invalid("login", mode == .token
-                ? "La connexion enregistrée n’est plus acceptée par Pronote. Reconnecte-toi."
-                : "La connexion Pronote a été refusée.")
+                ? "Pronote demande de te reconnecter."
+                : "Pronote a refusé la connexion. Réessaie.")
         }
         key = try ProtocolCodec.sessionKey(encryptedCle: encryptedKey, authenticationKey: authenticationKey, iv: iv)
 
@@ -101,7 +101,7 @@ actor PronoteClient {
            let actionData = actionText.data(using: .utf8),
            let actions = try? JSONSerialization.jsonObject(with: actionData) as? [Int],
            actions.contains(3) || actions.contains(5) {
-            throw PronoteFailure.invalid("mfa", "Pronote demande une vérification de sécurité supplémentaire : termine-la dans la page officielle.")
+            throw PronoteFailure.invalid("mfa", "Pronote demande une vérification de sécurité : reconnecte-toi pour la terminer.")
         }
         try Task.checkCancellation()
 
@@ -209,7 +209,7 @@ actor PronoteClient {
             "Content-Type": "application/json",
         ])
         guard (200..<300).contains(response.status) else {
-            throw PronoteFailure.invalid("http-\(response.status)", "Pronote a répondu avec une erreur (\(response.status)). Réessaie plus tard ou passe par la page officielle.")
+            throw PronoteFailure.invalid("http-\(response.status)", "Pronote ne répond pas correctement pour le moment (\(response.status)). Réessaie plus tard.")
         }
         return response.data
     }

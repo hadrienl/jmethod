@@ -8,8 +8,12 @@ import CoreImage
 final class PronoteWebFlow: NSObject, WKNavigationDelegate {
     enum Event {
         case phase(PronoteSession.Phase)
-        /// La page doit être affichée pour que l'utilisateur termine (ENT, vérification, blocage).
-        case needsUser(String)
+        /// La page doit être affichée (ENT, vérification de sécurité, formulaire inhabituel) ; la tentative continue.
+        case reveal(String)
+        /// La page n'est plus nécessaire (vérification terminée, session reconnue).
+        case conceal
+        /// Tentative terminée sans succès : la page est refermée, le formulaire reprend la main.
+        case failed(String)
         /// Identifiants refusés : le formulaire natif reprend la main, la page reste masquée.
         case rejected(String)
         case qr(PronoteQRData, pin: String)
@@ -45,35 +49,31 @@ final class PronoteWebFlow: NSObject, WKNavigationDelegate {
         configuration.userContentController.add(WeakScriptHandler(self), name: Self.handlerName)
     }
 
-    /// Démarre une tentative : nonce et code temporaire neufs, page masquée si les identifiants viennent du formulaire natif.
-    func start(url: URL, username: String? = nil, password: String? = nil) {
+    /// Démarre une tentative : nonce et code temporaire neufs, page masquée ; les identifiants du formulaire
+    /// sont transmis une seule fois au script sur une page Pronote de confiance.
+    func start(url: URL, username: String, password: String) {
         stop()
-        if let username, let password, !username.isEmpty, !password.isEmpty {
-            pendingLogin = (username, password)
-            nativeLogin = true
-        } else {
-            nativeLogin = false
-        }
+        pendingLogin = (username, password)
+        nativeLogin = true
         origin = PronoteURL.origin(url)
         beginAttempt()
         isActive = true
-        pageVisible = !nativeLogin
-        onEvent?(.phase(nativeLogin ? .signingIn : .login))
+        pageVisible = false
+        onEvent?(.phase(.signingIn))
         webView.load(URLRequest(url: url))
-        armTimeout(seconds: nativeLogin ? 90 : 600, message: "La connexion a pris trop de temps. Termine-la dans la page affichée ou relance-la.")
+        armTimeout(seconds: 90, message: "Pronote met trop de temps à répondre. Réessaie dans un instant.")
     }
 
-    /// Relance l'automatisation sur la page affichée, après une vérification terminée par l'utilisateur.
-    func resumeOnVisiblePage() {
-        guard isActive, trusted(webView.url) else {
-            onEvent?(.needsUser("Ouvre ton espace Pronote dans la page affichée, puis réessaie."))
-            return
-        }
+    /// Formulaire Pronote introuvable ou sans réponse : la page est affichée et le script, relancé sans identifiants,
+    /// attend que l'utilisateur se connecte lui-même pour terminer la connexion.
+    private func watchVisiblePage(_ message: String) {
+        guard isActive, trusted(webView.url) else { fail(message); return }
         nativeLogin = false
         pendingLogin = nil
         beginAttempt()
-        onEvent?(.phase(.login))
-        armTimeout(seconds: 120, message: "Le QR code n’a pas pu être préparé. Termine dans la page affichée ou importe un QR code.")
+        pageVisible = true
+        onEvent?(.reveal(message))
+        armTimeout(seconds: 600, message: "La connexion a pris trop de temps. Réessaie.")
         inject()
     }
 
@@ -115,14 +115,22 @@ final class PronoteWebFlow: NSObject, WKNavigationDelegate {
         timeout = Task { [weak self] in
             try? await Task.sleep(for: .seconds(seconds))
             guard !Task.isCancelled else { return }
-            self?.handOver(message)
+            self?.fail(message)
         }
     }
 
-    private func handOver(_ message: String) {
-        stop()
+    /// Fin de tentative sans succès : script arrêté, page refermée.
+    private func fail(_ message: String) {
+        close()
+        pageVisible = false
+        onEvent?(.failed(message))
+    }
+
+    /// Page nécessaire à l'utilisateur, tentative conservée (même nonce, même code), délai étendu.
+    private func reveal(_ message: String) {
         pageVisible = true
-        onEvent?(.needsUser(message))
+        onEvent?(.reveal(message))
+        armTimeout(seconds: 600, message: "La connexion a pris trop de temps. Réessaie.")
     }
 
     private func trusted(_ url: URL?) -> Bool {
@@ -144,10 +152,9 @@ final class PronoteWebFlow: NSObject, WKNavigationDelegate {
         guard isActive, !claimed else { return }
         if !trusted(webView.url) {
             // ENT / CAS : rien n'est saisi hors de Pronote, l'utilisateur termine dans la page.
-            if nativeLogin && !pageVisible {
+            if !pageVisible {
                 pendingLogin = nil
-                pageVisible = true
-                onEvent?(.needsUser("Ton établissement passe par un ENT : termine la connexion dans la page affichée."))
+                reveal("Ton établissement passe par un ENT : termine la connexion ci-dessous.")
             }
             return
         }
@@ -164,13 +171,13 @@ final class PronoteWebFlow: NSObject, WKNavigationDelegate {
               let script = try? String(contentsOf: scriptURL, encoding: .utf8),
               let config = try? JSONSerialization.data(withJSONObject: settings),
               let json = String(data: config, encoding: .utf8) else {
-            handOver("L’automatisation n’a pas pu démarrer. Tu peux continuer dans la page Pronote.")
+            fail("La connexion n’a pas pu démarrer. Réessaie.")
             return
         }
         let attempt = nonce
         webView.evaluateJavaScript("window.__JM_CONFIG = \(json);\n" + script) { [weak self] _, error in
             guard let self, error != nil, self.nonce == attempt, !self.claimed else { return }
-            self.handOver("L’automatisation n’a pas démarré. Tu peux continuer dans la page Pronote.")
+            self.fail("La connexion n’a pas pu démarrer. Réessaie.")
         }
     }
 
@@ -189,11 +196,18 @@ final class PronoteWebFlow: NSObject, WKNavigationDelegate {
         switch event["type"] as? String {
         case "authenticated":
             pageVisible = false
+            onEvent?(.conceal)
             onEvent?(.phase(.authenticated))
-            armTimeout(seconds: 45, message: "Le QR code attend une intervention : termine dans la page Pronote.")
+            armTimeout(seconds: 45, message: "La connexion n’a pas abouti. Réessaie.")
         case "progress":
             switch event["stage"] as? String {
             case "filling-login", "submitting-login": onEvent?(.phase(.signingIn))
+            case "mfa-done":
+                // Vérification terminée par l'utilisateur : la page est masquée, le script reprend seul.
+                pageVisible = false
+                onEvent?(.conceal)
+                onEvent?(.phase(.signingIn))
+                armTimeout(seconds: 90, message: "Pronote met trop de temps à répondre. Réessaie dans un instant.")
             case "opening-qr", "filling-code", "generating-qr": onEvent?(.phase(.qr))
             default: break
             }
@@ -210,7 +224,7 @@ final class PronoteWebFlow: NSObject, WKNavigationDelegate {
                 let qr = try Self.decode(dataURL: image)
                 onEvent?(.qr(qr, pin: qrPin))
             } catch {
-                handOver("Le QR code n’a pas pu être lu. Réessaie ou importe une capture du QR code.")
+                fail("La connexion n’a pas pu être finalisée. Réessaie.")
             }
         default:
             break
@@ -222,21 +236,19 @@ final class PronoteWebFlow: NSObject, WKNavigationDelegate {
         case "LOGIN_REJECTED":
             stop()
             pageVisible = false
-            onEvent?(.rejected("Pronote a refusé l’identifiant ou le mot de passe. Vérifie-les puis réessaie."))
+            onEvent?(.rejected("Identifiant ou mot de passe incorrect."))
         case "MFA_REQUIRED":
-            handOver("Pronote demande une vérification supplémentaire : termine-la dans la page affichée, puis touche « Continuer ».")
+            // Non terminal : la tentative continue, le script signale lui-même la fin de la vérification.
+            reveal("Pronote demande une vérification de sécurité : termine-la ci-dessous.")
         case "LOGIN_FORM_NOT_FOUND":
-            handOver("Le formulaire Pronote n’a pas été trouvé (ENT ?) : connecte-toi dans la page affichée.")
+            watchVisiblePage("Connecte-toi ci-dessous pour terminer.")
         case "LOGIN_STALLED":
-            handOver("Pronote ne répond pas après la connexion : vérifie la page affichée.")
+            watchVisiblePage("Pronote ne répond pas : vérifie la page ci-dessous.")
         case "LOGIN_TIMEOUT":
-            handOver("La connexion a expiré. Relance-la lorsque tu es prêt.")
-        case "QR_TIMEOUT":
-            handOver("La préparation du QR code a pris trop de temps : termine dans la page affichée ou importe un QR code.")
-        case "QR_TOO_LARGE":
-            handOver("Le QR code reçu est trop volumineux. Réessaie ou importe une capture du QR code.")
+            fail("La connexion a pris trop de temps. Réessaie.")
         default:
-            handOver("La génération automatique attend une intervention dans la page Pronote.")
+            // QR_TIMEOUT, QR_TOO_LARGE, AUTOMATION_FAILED et codes inconnus.
+            fail("La connexion n’a pas abouti. Réessaie.")
         }
     }
 
@@ -245,7 +257,7 @@ final class PronoteWebFlow: NSObject, WKNavigationDelegate {
     nonisolated static func decode(dataURL: String) throws -> PronoteQRData {
         let prefix = "data:image/png;base64,"
         guard dataURL.hasPrefix(prefix), let data = Data(base64Encoded: String(dataURL.dropFirst(prefix.count))) else {
-            throw PronoteFailure.invalid("qr-image", "Image QR invalide.")
+            throw PronoteFailure.invalid("qr-image", "Image invalide.")
         }
         return try decode(image: data)
     }
@@ -258,10 +270,10 @@ final class PronoteWebFlow: NSObject, WKNavigationDelegate {
               let detector = CIDetector(ofType: CIDetectorTypeQRCode, context: nil, options: [CIDetectorAccuracy: CIDetectorAccuracyHigh]),
               let text = (detector.features(in: picture).first as? CIQRCodeFeature)?.messageString,
               let data = text.data(using: .utf8) else {
-            throw PronoteFailure.invalid("qr-decode", "Aucun QR code Pronote lisible dans cette image.")
+            throw PronoteFailure.invalid("qr-decode", "La connexion n’a pas pu être finalisée. Réessaie.")
         }
         guard let value = try? JSONDecoder().decode(PronoteQRData.self, from: data) else {
-            throw PronoteFailure.invalid("qr-decode", "Ce QR code ne correspond pas à un compte Pronote.")
+            throw PronoteFailure.invalid("qr-decode", "La connexion n’a pas pu être finalisée. Réessaie.")
         }
         _ = try PronoteURL.validated(value.url)
         return value
