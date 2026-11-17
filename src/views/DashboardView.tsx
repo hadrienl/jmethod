@@ -42,7 +42,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({todayStr,courses,re
         </div>
         <div className="hero-art" aria-hidden="true"><div className="orbit orbit-one"/><div className="orbit orbit-two"/><div className="art-book"><BookOpen size={66} strokeWidth={1.5}/></div><span className="art-star">✦</span><span className="art-check"><Check size={24}/></span></div>
       </div>
-      <div className="surface p-5 sm:p-6 flex flex-col justify-between"><div className="flex items-center justify-between"><h2 className="font-bold">Tes petits progrès</h2><span className="text-xl" aria-hidden="true">🌱</span></div>
+      <div className="surface p-5 sm:p-6 flex flex-col justify-between"><div className="flex items-center justify-between"><h2 className="font-bold">Tes petits progrès</h2></div>
         <div className="flex items-end gap-2 mt-5"><span className="text-5xl font-extrabold tracking-tight">{completed.length}</span><span className="text-slate-600 pb-1">/ {total} séance{total>1?'s':''} terminée{total>1?'s':''}</span></div>
         <div role="progressbar" aria-label="Séances terminées aujourd’hui" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} className="h-3 rounded-full bg-violet-100 mt-5 overflow-hidden"><div className="h-full bg-violet-600 rounded-full transition-all" style={{width:`${progress}%`}}/></div>
         <p className="text-sm text-slate-600 mt-4">{completed.length?'Chaque séance compte. Continue comme ça !':total?'La première séance, c’est déjà un progrès.':'Aucune séance prévue aujourd’hui.'}</p>
