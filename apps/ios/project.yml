@@ -47,6 +47,8 @@ targets:
       # Vecteurs synthétiques partagés : référencés depuis native/shared, jamais copiés.
       - path: ../../native/shared/protocol-vectors.json
         buildPhase: resources
+      - path: ../../native/shared/notebook-vectors.json
+        buildPhase: resources
       - path: ../../native/shared/domain/domain-vectors.json
         buildPhase: resources
       - path: ../../native/shared/domain/constants.json

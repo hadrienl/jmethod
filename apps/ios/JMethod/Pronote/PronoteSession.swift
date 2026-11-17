@@ -71,6 +71,9 @@ final class PronoteSession {
     private(set) var webVisible = false
     /// Raison pour laquelle la page officielle est affichée.
     private(set) var webMessage: String?
+    /// Change à chaque déconnexion, changement d'enfant ou nouvelle connexion : l'aperçu du cahier de textes
+    /// et ses pièces jointes téléchargées sont alors effacés.
+    private(set) var notebookScope = 0
 
     /// WebView réelle, présente seulement quand aucun parcours de test n'est injecté.
     @ObservationIgnored let web: PronoteWebFlow?
@@ -261,6 +264,7 @@ final class PronoteSession {
         guard id != selectedChildId, account?.children.contains(where: { $0.id == id }) == true else { return }
         selectedChildId = id
         vault.saveSelectedChild(id)
+        notebookScope += 1
         synchronize()
     }
 
@@ -300,6 +304,7 @@ final class PronoteSession {
         BackgroundRefresh.cancel()
         await clearWebData()
         app?.clearPronoteData()
+        notebookScope += 1
         client = nil
         account = nil
         selectedChildId = nil
@@ -310,6 +315,36 @@ final class PronoteSession {
         errorMessage = nil
         phase = .idle
         access = .signedOut
+    }
+
+    // MARK: Cahier de textes
+
+    /// Lit le cahier de textes (28 jours) avec la connexion active ; une session expirée est reprise une fois par jeton.
+    func readNotebook(now: Date = Date()) async throws -> NotebookRead {
+        guard let client else {
+            throw PronoteFailure.invalid("offline", "Pronote n’est pas connecté. Réessaie la connexion, puis rouvre le cahier de textes.")
+        }
+        let child = selectedChildId
+        let today = SchoolDay.today(now: now)
+        do {
+            return try await client.notebook(today: today, childId: child)
+        } catch let failure as PronoteFailure where failure.isExpiredSession {
+            guard !tokenLoginInFlight, let saved = try vault.loadCredentials() else { throw failure }
+            tokenLoginInFlight = true
+            defer { tokenLoginInFlight = false }
+            let fresh = try makeClient(saved)
+            _ = try await fresh.login(mode: .token, persist: tokenPersister(epoch: epoch))
+            self.client = fresh
+            return try await fresh.notebook(today: today, childId: child)
+        }
+    }
+
+    /// Télécharge une pièce jointe dans le cache privé ; refusé si la session a changé depuis la lecture.
+    func downloadAttachment(_ attachment: NotebookAttachment, session: UUID, to destination: URL) async throws {
+        guard attachment.kind == .file, let client else {
+            throw PronoteFailure.invalid("download", NotebookRules.downloadUnavailable)
+        }
+        try await client.download(attachmentId: attachment.id, name: attachment.name, session: session, to: destination)
     }
 
     // MARK: Arrière-plan
@@ -498,6 +533,7 @@ final class PronoteSession {
         silentRelogin = false
         self.client = client
         self.account = account
+        notebookScope += 1
         if account.children.isEmpty {
             selectedChildId = nil
         } else if !account.children.contains(where: { $0.id == selectedChildId }) {
@@ -569,6 +605,7 @@ final class PronoteSession {
         hasSavedConnection = false
         client = nil
         account = nil
+        notebookScope += 1
         school = vault.loadSchool()
         savedLogin = vault.loadLogin()
         errorMessage = message

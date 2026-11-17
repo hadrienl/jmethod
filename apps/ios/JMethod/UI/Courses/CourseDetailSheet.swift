@@ -68,6 +68,13 @@ struct CourseDetailSheet: View {
                     .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Theme.border))
                 }
 
+                if let subject = detail.subject {
+                    Button { app.presented = .notebook(subjectId: subject.id) } label: {
+                        Label("Voir le cahier de textes de \(subject.name)", systemImage: "text.book.closed")
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                }
+
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(alignment: .firstTextBaseline) {
                         Text("Cycle des révisions").font(.subheadline.weight(.semibold))

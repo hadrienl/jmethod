@@ -15,7 +15,10 @@ struct CoursesView: View {
             Group {
                 if document.courses.isEmpty {
                     ScrollView {
-                        EmptyCourses(app: app, onShowPlanning: onShowPlanning)
+                        VStack(spacing: 16) {
+                            NotebookCard { app.presented = .notebook(subjectId: nil) }
+                            EmptyCourses(app: app, onShowPlanning: onShowPlanning)
+                        }
                             .padding(16)
                             .frame(maxWidth: 720)
                             .frame(maxWidth: .infinity)
@@ -23,6 +26,7 @@ struct CoursesView: View {
                 } else {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 16) {
+                            NotebookCard { app.presented = .notebook(subjectId: nil) }
                             SubjectChips(subjects: document.subjects, selection: $subjectId)
                             if list.empty {
                                 NoMatch { search = ""; subjectId = nil }
@@ -51,6 +55,39 @@ struct CoursesView: View {
                 }
             }
         }
+    }
+}
+
+/// Accès au cahier de textes Pronote (lecture seule).
+private struct NotebookCard: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                Image(systemName: "text.book.closed")
+                    .font(.title3)
+                    .foregroundStyle(Theme.violet)
+                    .frame(width: 44, height: 44)
+                    .background(Theme.violetTrack, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Cahier de textes").font(.headline).foregroundStyle(Theme.text)
+                    Text("Contenus de séance et devoirs publiés dans Pronote").font(.caption).foregroundStyle(Theme.textSecondary)
+                        .multilineTextAlignment(.leading)
+                }
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(Theme.textMuted).accessibilityHidden(true)
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.border))
+            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Ouvre le cahier de textes en lecture seule")
     }
 }
 

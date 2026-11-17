@@ -39,6 +39,8 @@ final class AppModel {
         case revision(revisionId: String)
         case course(courseId: String)
         case addCourse
+        /// Cahier de textes ; une matière J-Method le filtre (ouverture depuis la fiche d'un cours).
+        case notebook(subjectId: String?)
 
         var id: String {
             switch self {
@@ -46,6 +48,7 @@ final class AppModel {
             case .revision(let id): "revision-\(id)"
             case .course(let id): "course-\(id)"
             case .addCourse: "add-course"
+            case .notebook(let id): "notebook-\(id ?? "all")"
             }
         }
     }
@@ -237,6 +240,40 @@ final class AppModel {
         toast = .init(title: CourseDeletion.toastTitle, message: CourseDeletion.toastMessage, kind: .info)
     }
 
+    // MARK: Réglages et sauvegarde
+
+    /// « Enregistrer » des réglages : appliqués aux prochaines validations et aux nouveaux cours.
+    func saveSettings(sensitivity: Double, emergencyThreshold: Double, intervals: [Int]) {
+        document.settings = SettingsLogic.save(document.settings, icalUrl: document.settings.pronoteIcalUrl,
+                                               sensitivity: sensitivity, emergencyThreshold: emergencyThreshold, intervals: intervals)
+        persist()
+        toast = .init(title: "Réglages enregistrés", message: "Ils s’appliquent aux prochaines validations et aux nouveaux cours.", kind: .success)
+    }
+
+    /// Couleur d'une matière : enregistrée aussitôt, comme sur le web.
+    func setSubjectColor(subjectId: String, color: String) {
+        guard SettingsLogic.isValidColor(color) else { return }
+        document.subjects = SettingsLogic.subjectColor(document.subjects, subjectId: subjectId, color: color)
+        persist()
+    }
+
+    /// Texte de l'export au format `exportAllData`.
+    func exportText() -> String { Backup.export(document, now: now()) }
+
+    var exportFileName: String { Backup.fileName(today: SchoolDay.today(now: now())) }
+
+    /// Restauration confirmée : cours et séances remplacés, matières et réglages s'ils sont fournis, créneaux Pronote conservés.
+    func restore(_ accepted: Backup.Accepted) {
+        document = accepted.apply(to: document)
+        presented = nil
+        persist()
+        toast = .init(title: "Sauvegarde restaurée", message: "\(accepted.courses.count) cours et \(accepted.revisions.count) séance\(accepted.revisions.count > 1 ? "s" : "") importé\(accepted.revisions.count > 1 ? "s" : "").", kind: .success)
+    }
+
+    func showToast(_ title: String, _ message: String, warning: Bool = false) {
+        toast = .init(title: title, message: message, kind: warning ? .warning : .success)
+    }
+
     // MARK: Pronote
 
     func applyPronote(lessons: [PronoteLesson], syncedAt: Date, announce: Bool = true) {
@@ -276,13 +313,13 @@ final class AppModel {
     }
 
     /// Comme `Date.prototype.toISOString` : `2026-11-17T18:30:00.000Z`.
-    static func isoString(_ date: Date) -> String {
+    nonisolated static func isoString(_ date: Date) -> String {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return formatter.string(from: date)
     }
 
-    static func parseISO(_ value: String) -> Date? {
+    nonisolated static func parseISO(_ value: String) -> Date? {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         if let date = formatter.date(from: value) { return date }

@@ -3,10 +3,11 @@ import SwiftUI
 struct RootView: View {
     let app: AppModel
     let pronote: PronoteSession
+    let notebook: NotebookModel
     @Environment(\.scenePhase) private var scenePhase
     @State private var tab: Tab = .today
 
-    enum Tab: Hashable { case today, planning, courses, settings }
+    enum Tab: Hashable { case today, planning, courses, stats, settings }
 
     private var route: AppRoute { AppRoute.resolve(load: app.loadState, access: pronote.access) }
 
@@ -56,6 +57,7 @@ struct RootView: View {
             // Retour à l'écran de connexion : aucune feuille ne reste ouverte.
             if new == .signedOut { app.presented = nil }
         }
+        .onChange(of: pronote.notebookScope) { _, _ in notebook.scopeChanged() }
     }
 
     #if DEBUG
@@ -67,6 +69,7 @@ struct RootView: View {
         case "planning": tab = .planning
         case "courses": tab = .courses
         case "settings": tab = .settings
+        case "stats": tab = .stats
         default: break
         }
         guard let sheet = defaults.string(forKey: "JMethodPreviewSheet") else { return }
@@ -76,6 +79,9 @@ struct RootView: View {
         case ("course", let id): app.presented = .course(courseId: id)
         case ("revision", let id): app.presented = .revision(revisionId: id)
         case ("score", let id): app.presented = .score(revisionId: id)
+        case ("notebook", let id):
+            notebook.loadPreview(today: app.today)
+            app.presented = .notebook(subjectId: id.isEmpty ? nil : id)
         default: break
         }
     }
@@ -110,8 +116,11 @@ struct RootView: View {
                         .tabItem { Label("Planning", systemImage: "calendar") }
                         .tag(Tab.planning)
                     CoursesView(app: app, onShowPlanning: { tab = .planning })
-                        .tabItem { Label("Mes cours", systemImage: "books.vertical") }
+                        .tabItem { Label { Text("Cours").accessibilityLabel("Mes cours") } icon: { Image(systemName: "books.vertical") } }
                         .tag(Tab.courses)
+                    StatsView(app: app)
+                        .tabItem { Label { Text("Progrès").accessibilityLabel("Mes progrès") } icon: { Image(systemName: "chart.bar") } }
+                        .tag(Tab.stats)
                     SettingsView(app: app, pronote: pronote)
                         .tabItem { Label("Réglages", systemImage: "gearshape") }
                         .tag(Tab.settings)
@@ -122,6 +131,7 @@ struct RootView: View {
                     case .revision(let id): RevisionDetailSheet(app: app, revisionId: id)
                     case .course(let id): CourseDetailSheet(app: app, courseId: id)
                     case .addCourse: AddCourseSheet(app: app)
+                    case .notebook(let subjectId): NotebookView(app: app, model: notebook, subjectId: subjectId)
                     }
                 }
             }

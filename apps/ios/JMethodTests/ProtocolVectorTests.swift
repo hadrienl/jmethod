@@ -173,9 +173,13 @@ final class ProtocolVectorTests: XCTestCase {
 
     func testReadOnlyAllowList() throws {
         let safety = try section("safety")
-        XCTAssertEqual(PronoteClient.readFunctions, Set(try XCTUnwrap(safety["readOnlyFunctionIds"] as? [String])))
+        // Liste du jalon 1, complétée au jalon 5 par la seule `PageCahierDeTexte` (`notebook-vectors.json`, contrôlée par `checkCall`).
+        let base = Set(try XCTUnwrap(safety["readOnlyFunctionIds"] as? [String]))
+        XCTAssertEqual(PronoteClient.readFunctions.subtracting(base), ["PageCahierDeTexte"])
+        XCTAssertTrue(base.isSubset(of: PronoteClient.readFunctions))
         for rejected in try XCTUnwrap(safety["rejectedFunctionExamples"] as? [String]) {
             XCTAssertFalse(PronoteClient.readFunctions.contains(rejected), rejected)
+            XCTAssertThrowsError(try PronoteClient.checkCall(rejected, tab: nil, data: nil), rejected)
         }
     }
 }
