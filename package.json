@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "setup:pronote": "python3 -m venv .venv && .venv/bin/python -m pip install -r scripts/requirements-pronote.txt",
     "dev:web": "vite",
-    "test:pronote": ".venv/bin/python -m unittest discover -s tests -p \"test_pronote*.py\" -v"
+    "test:pronote": ".venv/bin/python -m unittest discover -s tests -p \"test_pronote*.py\" -v",
+    "vectors:domain": "TZ=Europe/Paris node native/shared/domain/generate-vectors.mjs"
   },
   "dependencies": {
     "canvas-confetti": "^1.9.4",

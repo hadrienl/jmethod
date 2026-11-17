@@ -20,6 +20,8 @@ native/artifacts/
 native/ios/build/
 native/ios/DerivedData/
 native/ios/.build/
+apps/ios/DerivedData/
+apps/ios/build/
 **/xcuserdata/
 **/local.properties
 **/.gradle/

@@ -1,0 +1,174 @@
+import Foundation
+import Observation
+
+/// État principal de l'app (document, jour courant, retours visuels). Toute écriture passe par `DocumentStore`.
+@Observable
+@MainActor
+final class AppModel {
+    enum LoadState: Equatable {
+        case loading
+        case ready
+        case failed(String)
+    }
+
+    struct Toast: Identifiable, Equatable {
+        enum Kind { case success, info, warning }
+        let id = UUID()
+        var title: String
+        var message: String
+        var kind: Kind
+    }
+
+    private(set) var loadState: LoadState = .loading
+    private(set) var document: AppDocument
+    /// Jour réel au fuseau Europe/Paris, rafraîchi au changement de jour.
+    private(set) var today: String
+    /// Incrémenté quand la dernière séance du programme est validée (feu d'artifice).
+    private(set) var celebration = 0
+    /// Incrémenté pour une séance validée avec au moins 75/100 (petite gerbe, comme le web).
+    private(set) var confetti = 0
+    var toast: Toast?
+
+    @ObservationIgnored private let store: DocumentStore?
+    @ObservationIgnored private let now: () -> Date
+    @ObservationIgnored private var version = 0
+
+    init(store: DocumentStore?, now: @escaping () -> Date = Date.init) {
+        self.store = store
+        self.now = now
+        self.today = SchoolDay.today(now: now())
+        self.document = AppDocument(settings: Constants.defaultSettings, subjects: Constants.defaultSubjects, courses: [], revisions: [], pronoteEvents: [], initialized: false)
+    }
+
+    static func live() -> AppModel {
+        AppModel(store: (try? DocumentStore.defaultURL()).map(DocumentStore.init(url:)))
+    }
+
+    var programme: EveningProgramme {
+        EveningProgramme(revisions: document.revisions, courses: document.courses, today: today)
+    }
+
+    func course(id: String) -> Course? { document.courses.first { $0.id == id } }
+    func subject(id: String) -> Subject? { document.subjects.first { $0.id == id } }
+
+    // MARK: Chargement
+
+    func load() async {
+        refreshDay()
+        guard let store else {
+            loadState = .failed("Le dossier de l’app est inaccessible.")
+            return
+        }
+        do {
+            if let saved = try await store.load(), saved.initialized {
+                document = saved
+            } else {
+                document = try DemoData.document(today: today)
+                persist()
+            }
+            loadState = .ready
+        } catch {
+            loadState = .failed((error as? LocalizedError)?.errorDescription ?? "Tes données n’ont pas pu être chargées.")
+        }
+    }
+
+    /// Met de côté un fichier illisible (sans le supprimer) puis recharge les données de démonstration.
+    func startOverAfterUnreadableFile() async {
+        guard let store else { return }
+        do {
+            try await store.archiveUnreadable()
+            loadState = .loading
+            await load()
+        } catch {
+            loadState = .failed("Le fichier illisible n’a pas pu être mis de côté.")
+        }
+    }
+
+    func refreshDay() {
+        let current = SchoolDay.today(now: now())
+        if current != today { today = current }
+    }
+
+    // MARK: Séances
+
+    /// Validation d'une séance du programme : autoévaluation puis replanification adaptative depuis le jour préparé.
+    @discardableResult
+    func validate(revisionId: String, score: Int) -> AdaptiveAlgorithm.Explanation? {
+        refreshDay()
+        let outcome: ScoreSubmission.Outcome
+        do {
+            outcome = try ScoreSubmission.submit(
+                revisions: document.revisions, courses: document.courses, settings: document.settings,
+                revisionId: revisionId, score: max(0, min(100, score)), now: now()
+            )
+        } catch {
+            toast = .init(title: "Séance non enregistrée", message: "Les dates de ce cours sont invalides.", kind: .warning)
+            return nil
+        }
+        today = outcome.today
+        guard !outcome.ignored else { return nil }
+        document.revisions = outcome.revisions
+        persist()
+        if outcome.celebrate {
+            celebration += 1
+        } else if score >= 75 {
+            confetti += 1
+        }
+        if let message = outcome.toast {
+            toast = .init(title: message.title, message: message.message, kind: message.kind == .warning ? .warning : .success)
+        }
+        return outcome.explanation
+    }
+
+    // MARK: Pronote
+
+    func applyPronote(lessons: [PronoteLesson], syncedAt: Date) {
+        let events = LessonConverter.events(from: lessons, subjects: document.subjects)
+        document.pronoteEvents = events
+        document.settings.lastPronoteSync = Self.isoString(syncedAt)
+        persist()
+        toast = .init(title: "Pronote synchronisé", message: "\(events.count) créneau\(events.count > 1 ? "x" : "") importé\(events.count > 1 ? "s" : "") dans ton planning.", kind: .success)
+    }
+
+    /// Oubli du compte : les créneaux importés de Pronote sont retirés du téléphone.
+    func clearPronoteData() {
+        document.pronoteEvents = []
+        document.settings.lastPronoteSync = nil
+        persist()
+    }
+
+    var lastPronoteSync: Date? {
+        document.settings.lastPronoteSync.flatMap(Self.parseISO)
+    }
+
+    // MARK: Persistance
+
+    private func persist() {
+        version += 1
+        let snapshot = document
+        let currentVersion = version
+        guard let store else { return }
+        Task { [weak self] in
+            do {
+                try await store.save(snapshot, version: currentVersion)
+            } catch {
+                self?.toast = .init(title: "Enregistrement impossible", message: "Tes dernières modifications n’ont pas pu être enregistrées sur l’iPhone.", kind: .warning)
+            }
+        }
+    }
+
+    /// Comme `Date.prototype.toISOString` : `2026-11-17T18:30:00.000Z`.
+    static func isoString(_ date: Date) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.string(from: date)
+    }
+
+    static func parseISO(_ value: String) -> Date? {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = formatter.date(from: value) { return date }
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.date(from: value)
+    }
+}

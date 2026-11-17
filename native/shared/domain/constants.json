@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "generator": "native/shared/domain/generate-vectors.mjs",
+  "regenerate": "npm run vectors:domain",
+  "timeZone": "Europe/Paris",
+  "containsPersonalData": false,
+  "sources": {
+    "src/lib/adaptiveAlgorithm.ts": "b4f1d7244e53695efa709fefcf4f6ec324f857a32fedbe95367a6c1fe91f4782",
+    "src/lib/eveningProgramme.ts": "e679be77d654dada2cd36c5499a9fab8209ea5ed0e8dfa515c53d494407ec81c",
+    "src/lib/icalParser.ts": "cc34aa47daa3b1da45b977db3afd100801d860192a55f18296c1393e16a05f76",
+    "src/lib/constants.ts": "882854e33f02a575a47948aa12bb06c33939a8c89af70fe9caa565de2549222a",
+    "src/lib/storage.ts": "65ce4c3dcd319d627bcf1ddd0981387f2066d11d799d020dbf659b01a3e267a8",
+    "src/types/index.ts": "346e085e078d930ed1b4aea20c3bc9af9efe2ea9079e5e0fd5e27d4e129ee49b",
+    "src/views/DashboardView.tsx": "01cb7c2b09dab397685ea44fa4a86aaba6fca8638fdda9240ff04ede426ef5a6",
+    "src/App.tsx": "ebca3c59c8921a7adb4c0751ce991efb4691d0fe9dbdb43995fa069e3e053739",
+    "src/components/Navigation.tsx": "4613119ba32519f45b80cf8a9b06942e1f99c0bf8b80c7832c3209d85e9c1d2a",
+    "src/components/ScoreModal.tsx": "9b3954535cbf3d2b965a1f4fcf633ebc7b51f350b5468dd6e2e71643e5ab393a"
+  },
+  "DEFAULT_SUBJECTS": [
+    {"id":"maths","name":"Mathématiques","color":"#38BDF8","description":"Algèbre, Géométrie, Arithmétique, Probabilités"},
+    {"id":"francais","name":"Français","color":"#EF4444","description":"Grammaire, Littérature, Rédaction, Orthographe"},
+    {"id":"physique-chimie","name":"Physique-chimie","color":"#6366F1","description":"Énergie, Mouvement, Organisation de la matière"},
+    {"id":"histoire-geo","name":"Histoire-géographie","color":"#94A3B8","description":"Histoire, Géographie, EMC"},
+    {"id":"espagnol","name":"Espagnol","color":"#1D4ED8","description":"Vocabulaire, Grammaire, Conjugaison"},
+    {"id":"musique","name":"Musique","color":"#84CC16","description":"Éducation musicale et chant"},
+    {"id":"svt","name":"S.V.T.","color":"#14B8A6","description":"Sciences de la Vie et de la Terre, Génétique"},
+    {"id":"anglais","name":"Anglais","color":"#8B5CF6","description":"Grammar, Vocabulary, Reading & Listening"},
+    {"id":"techno","name":"Technologie","color":"#B45309","description":"Design, Informatique, Systèmes automatisés"},
+    {"id":"arts-plastiques","name":"Arts plastiques","color":"#EC4899","description":"Pratiques artistiques, Histoire des arts"}
+  ],
+  "DEFAULT_INTERVALS": [0,1,2,4,7,14,25,45,60,90],
+  "DEFAULT_SETTINGS": {"intervals":[0,1,2,4,7,14,25,45,60,90],"sensitivity":0.4,"emergencyThreshold":30,"pronoteIcalUrl":"","soundEnabled":true,"userName":"Élève","userGrade":"3ème"},
+  "PHASE_CONFIG": {
+    "encodage": {"label":"Découvrir","color":"#2563EB","bgLight":"bg-blue-500/10","border":"border-blue-500/30","text":"text-blue-700","dot":"bg-blue-500","description":"Apprendre et comprendre un nouveau cours (J0)"},
+    "consolidation": {"label":"S’entraîner","color":"#F97316","bgLight":"bg-orange-500/10","border":"border-orange-500/30","text":"text-orange-700","dot":"bg-orange-500","description":"Revoir pour fixer la mémorisation (J1, J2, J4)"},
+    "recuperation": {"label":"Se tester","color":"#10B981","bgLight":"bg-emerald-500/10","border":"border-emerald-500/30","text":"text-emerald-700","dot":"bg-emerald-500","description":"Rappel actif sans regarder le cours (J7 à J90)"}
+  },
+  "TODAY_PHASES": {
+    "encodage": {"label":"Découvrir","hint":"Comprends et reformule ton cours.","symbol":"01"},
+    "consolidation": {"label":"S’entraîner","hint":"Entraîne-toi à retrouver les idées clés.","symbol":"02"},
+    "recuperation": {"label":"Se tester","hint":"Essaie de te rappeler sans regarder.","symbol":"03"}
+  },
+  "SCORE_PRESETS": [{"val":0,"label":"0","sub":"Pas encore"},{"val":25,"label":"25","sub":"Difficile"},{"val":50,"label":"50","sub":"Ça revient"},{"val":75,"label":"75","sub":"Maîtrisé"},{"val":100,"label":"100","sub":"Parfait"}],
+  "SCORE_SLIDER": {"min":0,"max":100,"step":5,"initial":50}
+}
