@@ -21,8 +21,12 @@ struct RevisionSessionSheet: View {
     struct Outcome: Equatable {
         var title: String
         var message: String
+        /// Rattrapage programmé : présentation d'avertissement (ambre), comme Android.
+        var warning: Bool
         var next: Revision?
         var nextLabel: String?
+        /// « Encore N séances au programme ce soir. »
+        var remainingLabel: String?
     }
 
     init(app: AppModel, notebook: NotebookModel, importer: NotebookCourseImporter, revisionId: String, start: Start = .detail) {
@@ -159,14 +163,20 @@ struct RevisionSessionSheet: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.l) {
                 VStack(alignment: .leading, spacing: Spacing.xs) {
-                    Label(outcome.title, systemImage: outcome.next == nil ? "checkmark.seal.fill" : "checkmark.circle.fill")
+                    Label(outcome.title, systemImage: outcome.warning ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
                         .font(.title3.weight(.bold))
-                        .foregroundStyle(Theme.success)
+                        .foregroundStyle(outcome.warning ? Theme.warning : Theme.success)
                         .accessibilityAddTraits(.isHeader)
                     Text(outcome.message).font(.subheadline).foregroundStyle(Theme.text)
                 }
-                .panel(padding: Spacing.m, fill: Theme.successSoft)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .panel(padding: Spacing.m, fill: outcome.warning ? Theme.warningSoft : Theme.successSoft)
                 .accessibilityElement(children: .combine)
+                .accessibilityLabel(outcome.warning ? "Attention. \(outcome.title). \(outcome.message)" : "\(outcome.title). \(outcome.message)")
+                if let remaining = outcome.remainingLabel {
+                    Text(remaining).font(.footnote).foregroundStyle(Theme.textSecondary)
+                        .accessibilityIdentifier("session-remaining")
+                }
                 if let next = outcome.next, let label = outcome.nextLabel {
                     Button { showNext(next) } label: {
                         Label(label, systemImage: "arrow.right").multilineTextAlignment(.leading)
@@ -182,25 +192,22 @@ struct RevisionSessionSheet: View {
         .background(Theme.surface)
     }
 
+    /// Comme Android : s'il reste une séance au programme, la fiche affiche le résultat et propose la suivante, sans
+    /// message ni confettis par-dessus ; sinon elle se ferme (message, confettis ou feu d'artifice dans Aujourd'hui).
     private func validate(score: Int) {
-        let validated = revisionId
-        let explanation = app.validate(revisionId: validated, score: score)
-        let next = RevisionSession.nextDue(revisions: app.document.revisions, courses: app.document.courses,
-                                           subjects: app.document.subjects, today: app.today, excluding: validated)
-        let message = explanation?.message ?? "Ta séance est enregistrée."
-        if let next {
-            outcome = Outcome(title: "Séance validée · \(score)/100", message: message, next: next,
-                              nextLabel: RevisionSession.nextLabel(next, courses: app.document.courses, subjects: app.document.subjects))
+        guard let validation = app.submitScore(revisionId: revisionId, score: score, showsResult: true) else {
+            // Séance déjà validée ou disparue : retour à la fiche.
             path = []
-        } else {
-            // Programme terminé : la feuille se ferme, le feu d'artifice existant prend le relais.
-            outcome = Outcome(title: "Programme terminé", message: message, next: nil, nextLabel: nil)
-            path = []
-            Task {
-                try? await Task.sleep(for: .seconds(1.4))
-                dismiss()
-            }
+            return
         }
+        guard let next = validation.next else {
+            dismiss()
+            return
+        }
+        outcome = Outcome(title: validation.title, message: validation.message, warning: validation.warning, next: next,
+                          nextLabel: RevisionSession.nextLabel(next, courses: app.document.courses, subjects: app.document.subjects),
+                          remainingLabel: AppModel.remainingLabel(validation.remaining))
+        path = []
     }
 
     private func showNext(_ next: Revision) {

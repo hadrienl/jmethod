@@ -72,7 +72,7 @@ final class PronoteWebFlow: NSObject, WKNavigationDelegate, LoginPageDriver {
         isActive = true
         pageVisible = false
         onEvent?(.phase(.signingIn))
-        webView.load(URLRequest(url: url))
+        webView.load(URLRequest(url: PronoteURL.directLogin(url)))
         armTimeout(seconds: 90, message: "Pronote met trop de temps à répondre. Réessaie dans un instant.")
     }
 
@@ -264,9 +264,11 @@ final class PronoteWebFlow: NSObject, WKNavigationDelegate, LoginPageDriver {
         case fail(String)
     }
 
+    nonisolated static let rejectedMessage = "Pronote a refusé l’identifiant ou le mot de passe. Utilise ceux de Pronote, pas ceux d’ÉduConnect, puis réessaie."
+
     nonisolated static func outcome(forErrorCode code: String) -> ErrorOutcome {
         switch code {
-        case "LOGIN_REJECTED": .rejected("Identifiant ou mot de passe incorrect.")
+        case "LOGIN_REJECTED": .rejected(Self.rejectedMessage)
         // Non terminal : la tentative continue, le script signale lui-même la fin de la vérification.
         case "MFA_REQUIRED": .reveal("Pronote demande une vérification de sécurité : termine-la ci-dessous.")
         case "LOGIN_FORM_NOT_FOUND": .watch("Connecte-toi ci-dessous pour terminer.")

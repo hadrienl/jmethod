@@ -52,6 +52,27 @@ struct CourseDocumentStore: Sendable {
         try? (target as NSURL).setResourceValue(true, forKey: .isExcludedFromBackupKey)
     }
 
+    /// Fichier enregistré qui est en réalité une page HTML (page d'accueil Pronote renvoyée à la place du document
+    /// par l'ancienne adresse de téléchargement iOS). Un document nommé `.html`/`.htm` n'est jamais concerné.
+    func isHTMLImpostor(_ document: CourseDocument) -> Bool {
+        guard !NotebookRules.isHTMLName(document.name), let target = url(for: document),
+              FileManager.default.fileExists(atPath: target.path) else { return false }
+        return NotebookRules.looksLikeHTML(NotebookRules.head(of: target))
+    }
+
+    /// Efface ces fichiers HTML ; renvoie `courseId/documentId` de chaque document concerné (à retélécharger).
+    /// Seuls les fichiers fautifs sont effacés : le cours et ses autres documents ne changent pas.
+    func removeHTMLImpostors(in courses: [Course]) -> Set<String> {
+        var removed: Set<String> = []
+        for course in courses {
+            for document in course.documents ?? [] where isHTMLImpostor(document) {
+                guard let target = url(for: document), (try? FileManager.default.removeItem(at: target)) != nil else { continue }
+                removed.insert("\(course.id)/\(document.id)")
+            }
+        }
+        return removed
+    }
+
     /// Suppression d'un cours : tous ses fichiers.
     func removeAll(courseId: String) {
         try? FileManager.default.removeItem(at: documentsDirectory.appendingPathComponent(Self.safeComponent(courseId), isDirectory: true))

@@ -32,7 +32,7 @@ struct PlanningView: View {
                     FiltersBar(subjects: document.subjects, subjectId: $subjectId, phase: $phase)
 
                     if document.courses.isEmpty {
-                        NoCourseHint()
+                        NoCourseHint { app.openAddCourse() }
                     }
 
                     switch mode {
@@ -168,16 +168,31 @@ private struct FiltersBar: View {
     }
 }
 
+/// Aucun cours : explication et « Créer un cours » (comme Android `NoCourseCard`).
 private struct NoCourseHint: View {
+    let onCreateCourse: () -> Void
+
     var body: some View {
-        Label {
-            Text("Aucun cours pour l’instant : ajoute ton premier cours dans Mes cours, ou depuis un créneau de l’emploi du temps.")
-        } icon: {
-            Image(systemName: "lightbulb")
+        HStack(alignment: .top, spacing: Spacing.m) {
+            IconTile(systemName: "graduationcap", tint: Theme.violet, background: Theme.violetSoft)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: Spacing.s) {
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    Text("Aucun cours pour l’instant").font(.cardTitle).foregroundStyle(Theme.text)
+                    Text("Tes séances de révision apparaîtront ici. Ajoute un cours depuis un créneau de ton emploi du temps, ou crée-le directement.")
+                        .font(.subheadline).foregroundStyle(Theme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .accessibilityElement(children: .combine)
+                Button(action: onCreateCourse) {
+                    Label("Créer un cours", systemImage: "plus")
+                }
+                .buttonStyle(TintedButtonStyle(fullWidth: false))
+                .accessibilityIdentifier("planning-create-course")
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .font(.subheadline)
-        .foregroundStyle(Theme.violetDeep)
-        .panel(padding: Spacing.s, fill: Theme.violetSoft)
+        .surface()
     }
 }
 

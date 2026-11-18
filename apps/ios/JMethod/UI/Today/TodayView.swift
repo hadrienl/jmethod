@@ -1,32 +1,48 @@
 import SwiftUI
 
 /// Onglet Aujourd'hui : le soir prépare le lendemain (`docs/evening-workflow.md`), l'en-tête garde la date réelle.
+/// Ordre : carte « Pour demain » (commencer, enchaîner), emploi du temps de demain, puis une seule section repliable
+/// « Dans ton programme » (progrès, étapes, séances à reprendre et liste), repliée à chaque lancement.
 struct TodayView: View {
     let app: AppModel
+    /// Section du programme dépliée : mémorisée le temps de la session seulement.
+    @State private var programmeExpanded = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let document = app.document
         let screen = TodayScreen(today: app.today, courses: document.courses, revisions: document.revisions,
                                  subjects: document.subjects, pronoteEvents: document.pronoteEvents)
+        let hasCourses = !document.courses.isEmpty
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.l) {
-                    if screen.allDoneBanner { AllDoneBanner() }
                     TodayHeader(date: screen.headerDate)
-                    HeroCard(hero: screen.hero, canReview: RevisionSession.hasDocuments(screen.hero.course),
+                    HeroCard(hero: screen.hero, hasCourses: hasCourses, canReview: RevisionSession.hasDocuments(screen.hero.course),
                              onStart: { if let revision = screen.hero.revision { app.presented = .score(revisionId: revision.id) } },
                              onReview: { if let revision = screen.hero.revision { app.presented = .review(revisionId: revision.id) } })
-                    ProgressCard(screen: screen)
-                    PhaseGuide()
-                    ProgrammeSection(screen: screen, hasCourses: !document.courses.isEmpty, onScore: { app.presented = .score(revisionId: $0.id) },
-                                     onDetail: { app.presented = .revision(revisionId: $0.id) })
                     TomorrowSection(screen: screen, courseFor: { RevisionSession.courseForSlot($0, courses: document.courses, subjects: document.subjects) },
                                     onAddCourse: { app.openAddCourse(from: $0) }, onOpenCourse: { app.presented = .course(courseId: $0.id) })
-                    Text("Pas besoin de tout apprendre en un jour. Juste un peu, chaque jour.")
-                        .font(.footnote)
-                        .foregroundStyle(Theme.textMuted)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: .infinity)
+                    VStack(alignment: .leading, spacing: Spacing.s) {
+                        ProgrammeToggle(summary: screen.programme.due.isEmpty ? "Tout est fait" : screen.dueLabel, expanded: programmeExpanded) {
+                            if reduceMotion {
+                                programmeExpanded.toggle()
+                            } else {
+                                withAnimation(.easeInOut(duration: 0.2)) { programmeExpanded.toggle() }
+                            }
+                        }
+                        if programmeExpanded {
+                            VStack(alignment: .leading, spacing: Spacing.l) {
+                                if screen.allDoneBanner { AllDoneBanner() }
+                                // Aucun cours : pas de compteur de progrès (comme Android).
+                                if hasCourses { ProgressCard(screen: screen) }
+                                PhaseGuide()
+                                ProgrammeSection(screen: screen, hasCourses: hasCourses, onScore: { app.presented = .score(revisionId: $0.id) },
+                                                 onDetail: { app.presented = .revision(revisionId: $0.id) })
+                            }
+                            .transition(.opacity)
+                        }
+                    }
                 }
                 .padding(.top, Spacing.s)
                 .screenContent()
@@ -34,6 +50,47 @@ struct TodayView: View {
             .background(Theme.background)
             .toolbar(.hidden, for: .navigationBar)
         }
+    }
+}
+
+/// En-tête pleine largeur de la section repliable : titre, résumé (« N à faire » ou « Tout est fait ») et chevron.
+private struct ProgrammeToggle: View {
+    let summary: String
+    let expanded: Bool
+    let action: () -> Void
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        Button(action: action) {
+            HStack(alignment: .center, spacing: Spacing.s) {
+                let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: Spacing.xxs))
+                    : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: Spacing.xs))
+                layout {
+                    Text("Dans ton programme").font(.sectionTitle).foregroundStyle(Theme.text).layoutPriority(1)
+                    if !typeSize.isAccessibilitySize { Spacer(minLength: Spacing.xs) }
+                    Text(summary).font(.subheadline).foregroundStyle(Theme.textMuted)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Image(systemName: "chevron.down")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Theme.violetDark)
+                    .rotationEffect(.degrees(expanded ? 180 : 0))
+                    .accessibilityHidden(true)
+            }
+            .padding(.horizontal, Spacing.m)
+            .padding(.vertical, Spacing.s)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .background(Theme.surface, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Radius.card, style: .continuous).strokeBorder(Theme.border))
+            .contentShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Dans ton programme, \(summary)")
+        .accessibilityValue(expanded ? "déplié" : "replié")
+        .accessibilityHint("Affiche le détail du programme")
+        .accessibilityAddTraits([.isButton, .isHeader])
+        .accessibilityIdentifier("today-programme-toggle")
     }
 }
 
@@ -73,6 +130,8 @@ private struct TodayHeader: View {
 
 private struct HeroCard: View {
     let hero: TodayScreen.Hero
+    /// Aucun cours enregistré : « Rien à préparer ce soir. » et comment en ajouter un (comme Android).
+    let hasCourses: Bool
     /// Le cours a au moins un document : « Revoir le cours » ouvre le document principal dans la fiche (§8.3).
     let canReview: Bool
     let onStart: () -> Void
@@ -86,7 +145,7 @@ private struct HeroCard: View {
                 .padding(.horizontal, Spacing.s)
                 .padding(.vertical, Spacing.xxs + 2)
                 .background(Theme.lime, in: Capsule())
-            Text(hero.title)
+            Text(hasCourses ? hero.title : "Rien à préparer ce soir.")
                 .font(.title.weight(.bold))
                 .padding(.top, Spacing.xxs)
                 .accessibilityAddTraits(.isHeader)
@@ -127,9 +186,11 @@ private struct HeroCard: View {
                     .accessibilityHint("Ouvre le document principal du cours")
                 }
             } else {
-                Text("Tes révisions pour demain sont à jour. Bonne soirée !")
+                Text(hasCourses ? "Tes révisions pour demain sont à jour. Bonne soirée !"
+                     : "Aucun cours n’est enregistré sur ce téléphone. Ajoute ton premier cours depuis ton emploi du temps de demain, juste en dessous, ou depuis Mes cours.")
                     .font(.callout)
                     .foregroundStyle(Theme.violetTrack)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -220,7 +281,6 @@ private struct ProgrammeSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s) {
-            SectionHeader(title: "Dans ton programme", trailing: screen.dueLabel)
             if let banner = screen.overdueBanner {
                 Label(banner, systemImage: "clock.arrow.circlepath")
                     .font(.subheadline)
@@ -228,8 +288,10 @@ private struct ProgrammeSection: View {
                     .panel(padding: Spacing.s, fill: Theme.warningSoft)
             }
             if screen.emptyProgramme {
-                EmptyState(systemImage: "checkmark", title: "Tout est à jour",
-                           message: hasCourses ? "Aucune séance à préparer pour demain." : "Aucun cours enregistré pour l’instant : rien à préparer ce soir.",
+                EmptyState(systemImage: "checkmark", title: hasCourses ? "Tout est à jour" : "Ton programme est vide",
+                           message: hasCourses
+                               ? "Aucune séance à faire pour l’instant. Tu peux ajouter un cours depuis ton emploi du temps ci-dessus."
+                               : "Ajoute un cours depuis ton emploi du temps ci-dessus : ses séances apparaîtront ici.",
                            tint: Theme.success)
             } else {
                 ForEach(screen.groups) { group in

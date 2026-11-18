@@ -143,6 +143,11 @@ struct AddCourseSheet: View {
             Label("Depuis le cahier de textes : séance de \(notebook.source.subjectLabel) du \(FrenchDate.format(notebook.source.date, "d MMMM"))",
                   systemImage: "text.book.closed")
                 .font(.footnote.weight(.semibold)).foregroundStyle(Theme.violetDark)
+            if notebook.form.subjectId == nil {
+                Label("Matière « \(notebook.source.subjectLabel) » non reconnue : choisis-la ci-dessous.", systemImage: "exclamationmark.triangle")
+                    .font(.footnote).foregroundStyle(Theme.warning)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if !notebook.documents.isEmpty {
                 Text("Documents joints").font(.subheadline.weight(.semibold)).foregroundStyle(Theme.text)
                     .accessibilityAddTraits(.isHeader)
@@ -152,6 +157,9 @@ struct AddCourseSheet: View {
                             Text(item.name).font(.subheadline).foregroundStyle(Theme.text).lineLimit(2)
                             Text("\(item.kind.label) · \(ByteCountFormatter.string(fromByteCount: Int64(item.size), countStyle: .file))")
                                 .font(.caption).foregroundStyle(Theme.textSecondary)
+                            if let title = item.extractedTitle, !title.isEmpty {
+                                Text("Titre lu : \(title)").font(.caption).foregroundStyle(Theme.textSecondary)
+                            }
                         }
                     }
                     .tint(Theme.violet)

@@ -136,7 +136,15 @@ final class NotebookCourseImporter {
         defer { try? FileManager.default.removeItem(at: directory) }
         let destination = directory.appendingPathComponent(NotebookRules.saveAsName(attachment.name))
         try await pronote.downloadAttachment(attachment, session: read.session, to: destination)
+        let names = [session.subject] + (app.subject(id: course.subjectId).map { [$0.name] } ?? [])
+        let name = attachment.name
+        let (size, title) = await Task.detached(priority: .userInitiated) { () -> (Int, String?) in
+            guard let data = try? Data(contentsOf: destination) else { return (0, nil) }
+            let extraction = DocumentText.extract(name: name, data: data)
+            return (data.count, extraction.kind == nil ? nil : CourseTitleRules.extractedTitle(extraction, name: name, subjectNames: names))
+        }.value
         try app.documentStore.restore(destination, for: document)
+        app.updateDocumentFile(courseId: course.id, documentId: document.id, size: size, extractedTitle: title)
     }
 
     enum Failure: LocalizedError {

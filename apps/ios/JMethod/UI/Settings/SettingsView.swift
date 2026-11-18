@@ -456,7 +456,8 @@ private struct PronoteAccountSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s) {
-            SectionHeader(title: "Pronote")
+            SectionHeader(title: "Compte Pronote")
+            progressPanel
             status
             if let children = pronote.account?.children, children.count > 1 {
                 Picker("Élève suivi", selection: Binding(
@@ -472,8 +473,10 @@ private struct PronoteAccountSection: View {
             if let sync = app.lastPronoteSync {
                 Text("Dernière mise à jour : \(sync.formatted(.dateTime.locale(Locale(identifier: "fr_FR")).weekday(.wide).day().month(.wide).hour().minute()))")
                     .font(.subheadline).foregroundStyle(Theme.textSecondary)
+                Text("\(app.document.pronoteEvents.count) cours sur les 14 prochains jours")
+                    .font(.subheadline).foregroundStyle(Theme.textSecondary)
             }
-            if let message = pronote.errorMessage, !pronote.isWorking {
+            if let message = pronote.errorMessage, !pronote.isWorking, pronote.access != .connected {
                 Label(message, systemImage: "exclamationmark.circle")
                     .font(.subheadline).foregroundStyle(Theme.danger)
                     .accessibilityLabel("Erreur : \(message)")
@@ -482,12 +485,17 @@ private struct PronoteAccountSection: View {
                 if pronote.access == .connected { pronote.synchronize() } else { pronote.resumeSavedConnection() }
             } label: {
                 HStack(spacing: 10) {
-                    if pronote.isWorking { ProgressView().tint(.white) }
-                    Text(pronote.isWorking ? pronote.phase.progressLabel : (pronote.access == .connected ? "Mettre à jour l’emploi du temps" : "Réessayer la connexion"))
+                    if pronote.access == .connected {
+                        Label("Actualiser", systemImage: "arrow.clockwise")
+                    } else {
+                        if pronote.isWorking { ProgressView().tint(.white) }
+                        Text(pronote.isWorking ? pronote.phase.progressLabel : "Réessayer la connexion")
+                    }
                 }
             }
             .buttonStyle(PrimaryButtonStyle())
             .disabled(pronote.isWorking)
+            .accessibilityHint(pronote.access == .connected ? "Relit ton emploi du temps des 14 prochains jours" : "")
             Button("Se déconnecter", role: .destructive) { confirmingDisconnect = true }
                 .buttonStyle(DestructiveTextButtonStyle())
         }
@@ -498,6 +506,31 @@ private struct PronoteAccountSection: View {
             Button("Annuler", role: .cancel) {}
         } message: {
             Text("« Se déconnecter » garde ton établissement, ton identifiant et ton mot de passe enregistrés sur cet iPhone pour te reconnecter plus vite. L’autre choix efface aussi ton identifiant et ton mot de passe. Dans les deux cas, ton emploi du temps importé et les documents du cahier de textes sont effacés ; tes cours et tes révisions restent enregistrés.")
+        }
+    }
+
+    /// Connecté : synchronisation en cours (barre de progression) ou interrompue, comme Android.
+    @ViewBuilder private var progressPanel: some View {
+        if pronote.access == .connected, pronote.isWorking || pronote.errorMessage != nil {
+            let failed = !pronote.isWorking
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                Text(failed ? "Synchronisation interrompue" : "Synchronisation")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(failed ? Theme.danger : Theme.violetDark)
+                Text(failed ? (pronote.errorMessage ?? "") : pronote.phase.progressLabel)
+                    .font(.subheadline).foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if !failed {
+                    ProgressView()
+                        .progressViewStyle(.linear)
+                        .tint(Theme.violet)
+                        .padding(.top, Spacing.xxs)
+                        .accessibilityLabel("Synchronisation en cours")
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .panel(padding: Spacing.m, fill: failed ? Theme.dangerSoft : Theme.violetSoft)
+            .accessibilityElement(children: .combine)
         }
     }
 

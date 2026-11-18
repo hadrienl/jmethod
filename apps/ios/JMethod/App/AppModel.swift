@@ -133,6 +133,7 @@ final class AppModel {
                     document = migrated
                     persist()
                 }
+                await repairHTMLDocuments()
             } else {
                 document = Self.emptyDocument
                 persist()
@@ -162,6 +163,26 @@ final class AppModel {
         preferences.set(true, forKey: Self.demoMigrationKey)
     }
 
+    /// Documents enregistrés comme page HTML de Pronote (ancien défaut de l'adresse de téléchargement iOS) : fichier
+    /// effacé et titre lu oublié, la fiche du cours propose alors « Retélécharger ». Idempotent, à chaque chargement ;
+    /// aucun cours n'est supprimé ni renommé.
+    private func repairHTMLDocuments() async {
+        let courses = document.courses
+        guard courses.contains(where: { !($0.documents ?? []).isEmpty }) else { return }
+        let store = documentStore
+        let repaired = await Task.detached(priority: .utility) { store.removeHTMLImpostors(in: courses) }.value
+        guard !repaired.isEmpty else { return }
+        for index in document.courses.indices {
+            let courseId = document.courses[index].id
+            guard var documents = document.courses[index].documents else { continue }
+            for position in documents.indices where repaired.contains("\(courseId)/\(documents[position].id)") {
+                documents[position].extractedTitle = nil
+            }
+            document.courses[index].documents = documents
+        }
+        persist()
+    }
+
     /// Met de côté un fichier illisible (sans le supprimer) puis repart d'un document vide.
     func startOverAfterUnreadableFile() async {
         guard let store else { return }
@@ -181,9 +202,29 @@ final class AppModel {
 
     // MARK: Séances
 
+    /// Résultat d'une validation pour la fiche de séance (§8.2).
+    struct Validation {
+        var explanation: AdaptiveAlgorithm.Explanation
+        var title: String
+        var message: String
+        /// Rattrapage programmé (note sous le seuil) : présentation d'avertissement (ambre).
+        var warning: Bool
+        /// Première séance due dans l'ordre d'Aujourd'hui ; nil si le programme du soir est vide.
+        var next: Revision?
+        /// Séances encore dues ce soir, après celle-ci.
+        var remaining: Int
+    }
+
     /// Validation d'une séance du programme : autoévaluation puis replanification adaptative depuis le jour préparé.
     @discardableResult
     func validate(revisionId: String, score: Int) -> AdaptiveAlgorithm.Explanation? {
+        submitScore(revisionId: revisionId, score: score, showsResult: false)?.explanation
+    }
+
+    /// « Valider » dans la fiche de séance. S'il reste une séance au programme et que la fiche affiche le résultat
+    /// (`showsResult`), ni message ni confettis par-dessus (comme Android) ; sinon la fiche se ferme et ils prennent
+    /// le relais (feu d'artifice et « Programme terminé » quand la dernière séance du soir est validée).
+    func submitScore(revisionId: String, score: Int, showsResult: Bool) -> Validation? {
         refreshDay()
         let outcome: ScoreSubmission.Outcome
         do {
@@ -196,18 +237,30 @@ final class AppModel {
             return nil
         }
         today = outcome.today
-        guard !outcome.ignored else { return nil }
+        guard !outcome.ignored, let explanation = outcome.explanation else { return nil }
         document.revisions = outcome.revisions
         persist()
-        if outcome.celebrate {
-            celebration += 1
-        } else if score >= 75 {
-            confetti += 1
+        let next = RevisionSession.nextDue(revisions: document.revisions, courses: document.courses,
+                                           subjects: document.subjects, today: today, excluding: revisionId)
+        let warning = outcome.toast?.kind == .warning
+        let title = outcome.toast?.title ?? "Révision validée (\(score)/100)"
+        let message = outcome.toast?.message ?? explanation.message
+        if !(showsResult && next != nil) {
+            if outcome.celebrate {
+                celebration += 1
+            } else if score >= 75 {
+                confetti += 1
+            }
+            if outcome.toast != nil {
+                toast = .init(title: outcome.celebrate ? "Programme terminé" : title, message: message, kind: warning ? .warning : .success)
+            }
         }
-        if let message = outcome.toast {
-            toast = .init(title: message.title, message: message.message, kind: message.kind == .warning ? .warning : .success)
-        }
-        return outcome.explanation
+        return Validation(explanation: explanation, title: title, message: message, warning: warning, next: next, remaining: programme.due.count)
+    }
+
+    /// « Encore N séances au programme ce soir. » (Android `JMethodApp.kt`) ; nil s'il n'en reste aucune.
+    nonisolated static func remainingLabel(_ count: Int) -> String? {
+        count > 0 ? "Encore \(count) séance\(count > 1 ? "s" : "") au programme ce soir." : nil
     }
 
     // MARK: Cours
@@ -336,6 +389,15 @@ final class AppModel {
             case .alreadyAttached: "Ce document est déjà joint à ce cours."
             }
         }
+    }
+
+    /// Fichier retéléchargé : taille et titre lu mis à jour (le nom, le type et le chemin ne changent pas).
+    func updateDocumentFile(courseId: String, documentId: String, size: Int, extractedTitle: String?) {
+        guard let index = document.courses.firstIndex(where: { $0.id == courseId }),
+              let position = document.courses[index].documents?.firstIndex(where: { $0.id == documentId }) else { return }
+        document.courses[index].documents?[position].size = size
+        document.courses[index].documents?[position].extractedTitle = extractedTitle
+        persist()
     }
 
     /// « Joindre à ce cours » (§8.5) : copie le fichier dans les documents du cours (nouvel identifiant, même nom,
