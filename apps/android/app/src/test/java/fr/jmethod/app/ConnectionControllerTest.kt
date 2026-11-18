@@ -821,6 +821,134 @@ class ConnectionControllerTest {
 
     // endregion
 
+    // region Expiration de session (protocol-reference.md, « Session expiry »)
+
+    private fun connected(server: FakePronoteServer, clock: () -> Instant = { now }, throttle: PronoteThrottle = MemoryThrottle()): Pair<PronoteConnectionController, FakeVault> {
+        val vault = savedVault(server)
+        val controller = controller(server, FakePage(), vault, mutableListOf(), throttle = throttle, clock = clock)
+        controller.restoreSaved()
+        assertEquals(AccessPhase.CONNECTED, controller.uiState.value.access)
+        assertEquals(1, server.calls.count { it == "Authentification" })
+        return controller to vault
+    }
+
+    @Test
+    fun errorEightReconnectsByTokenThenSucceeds() {
+        val server = FakePronoteServer(token = "jeton-enregistre")
+        val (controller, vault) = connected(server)
+        server.failures["PageEmploiDuTemps"] = 8
+        controller.refresh()
+        val state = controller.uiState.value
+        assertFalse(state.isError)
+        assertEquals("Pronote connecté", state.title)
+        assertEquals(2, server.calls.count { it == "Authentification" })
+        assertEquals("jeton-rotation-2", vault.credentials?.password)
+    }
+
+    @Test
+    fun errorEightTwiceShowsMessageAfterOneReconnection() {
+        val server = FakePronoteServer(token = "jeton-enregistre")
+        val (controller, _) = connected(server)
+        server.failureQueue["PageEmploiDuTemps"] = ArrayDeque(listOf(8, 8))
+        controller.refresh()
+        val state = controller.uiState.value
+        assertTrue(state.isError)
+        assertEquals("Synchronisation impossible", state.title)
+        assertEquals("Lecture de l’emploi du temps impossible. Réessaie plus tard.", state.message)
+        assertEquals(2, server.calls.count { it == "Authentification" })
+    }
+
+    @Test
+    fun errorTwentyFiveNeverReconnects() {
+        val server = FakePronoteServer(token = "jeton-enregistre")
+        val throttle = MemoryThrottle()
+        val (controller, _) = connected(server, throttle = throttle)
+        server.failures["PageEmploiDuTemps"] = 25
+        controller.refresh()
+        assertEquals(1, server.calls.count { it == "Authentification" })
+        assertEquals(PronoteThrottle.BLOCKED_MESSAGE, controller.uiState.value.message)
+        assertTrue(throttle.isBlocked(now))
+    }
+
+    @Test
+    fun idleSessionReconnectsBeforeCallingWithoutError() {
+        val server = FakePronoteServer(token = "jeton-enregistre")
+        var clock = now
+        val (controller, _) = connected(server, clock = { clock })
+        clock = now.plusSeconds(5 * 60)
+        controller.refresh()
+        assertEquals(1, server.calls.count { it == "Authentification" })
+        clock = now.plusSeconds(5 * 60 + 11 * 60)
+        val timetableCalls = server.calls.count { it == "PageEmploiDuTemps" }
+        controller.refresh()
+        assertEquals(2, server.calls.count { it == "Authentification" })
+        // Aucune requête de lecture n’est partie sur la session inactive avant la reconnexion.
+        val lastAuth = server.calls.lastIndexOf("Authentification")
+        assertEquals(timetableCalls, server.calls.subList(0, lastAuth).count { it == "PageEmploiDuTemps" })
+        assertFalse(controller.uiState.value.isError)
+    }
+
+    @Test
+    fun htmlResponseIsTreatedAsLostSession() {
+        val server = FakePronoteServer(token = "jeton-enregistre")
+        val (controller, _) = connected(server)
+        server.htmlOnce += "PageEmploiDuTemps"
+        controller.refresh()
+        assertFalse(controller.uiState.value.isError)
+        assertEquals(2, server.calls.count { it == "Authentification" })
+    }
+
+    @Test
+    fun notebookAndChildChangeFollowTheSameRule() = kotlinx.coroutines.runBlocking {
+        val server = FakePronoteServer(token = "jeton-enregistre")
+        val (controller, _) = connected(server)
+        server.failures["PageCahierDeTexte"] = 8
+        val read = controller.readNotebook()
+        assertTrue(read.snapshot.sessions.isEmpty())
+        assertEquals(2, server.calls.count { it == "Authentification" })
+
+        val parent = FakePronoteServer(token = "jeton-enregistre", parent = true)
+        val (other, vault) = connected(parent)
+        parent.failures["ParametresUtilisateur"] = 8
+        other.selectChild("enfant-b")
+        assertFalse(other.uiState.value.isError)
+        assertEquals("enfant-b", vault.child)
+        assertEquals("enfant-b", other.uiState.value.account?.selectedChildId)
+        assertEquals(2, parent.calls.count { it == "Authentification" })
+    }
+
+    /** Pièce jointe après inactivité : reconnexion, relecture du cahier (identifiants liés à la session), puis GET. */
+    @Test
+    fun idleDownloadReconnectsAndRereadsNotebookFirst() = kotlinx.coroutines.runBlocking {
+        val server = FakePronoteServer(token = "jeton-enregistre")
+        server.notebookResponses[89] = JSONObject("""{"ListeCahierDeTextes":{"V":[{"N":"cdt-1","Date":{"V":"16/11/2026"},
+            "Matiere":{"V":{"L":"MATHS"}},"listeContenus":{"V":[{"L":"Cours","ListePieceJointe":{"V":[{"N":"pj-1","L":"a.pdf","G":1}]}}]}}]}}""")
+        var clock = now
+        val files = mutableListOf<String>()
+        val vault = savedVault(server)
+        val controller = PronoteConnectionController(
+            scope = scope, io = kotlinx.coroutines.Dispatchers.Unconfined, page = FakePage(), vault = vault, transport = server.transport,
+            decodeQr = { server.qr("4321") }, automationScript = { "" }, today = { LocalDate.of(2026, 11, 17) }, storeLessons = {},
+            now = { clock }, random = fixedPin, appUuid = { APP_UUID },
+            files = fr.jmethod.app.pronote.FileTransport { url, _, _, target -> files += url.substringBefore("/FichiersExternes"); target.writeText("x"); 200 },
+        )
+        controller.restoreSaved()
+        val read = controller.readNotebook()
+        clock = now.plusSeconds(11 * 60)
+        val target = java.nio.file.Files.createTempFile("pj", ".pdf").toFile()
+        val reread = controller.downloadAttachment(read.stamp, "pj-1", "a.pdf", target)
+        assertNotNull(reread)
+        assertNotEquals(read.stamp, reread!!.stamp)
+        assertEquals(2, server.calls.count { it == "Authentification" })
+        // Contenus relus avec la nouvelle session avant le GET.
+        assertEquals(2, server.notebookPayloads.count { it.getJSONObject("Signature").getInt("onglet") == 89 })
+        assertEquals(1, files.size)
+        target.delete()
+        Unit
+    }
+
+    // endregion
+
     companion object {
         const val APP_UUID = "uuid-application-stable"
     }

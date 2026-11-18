@@ -143,4 +143,17 @@ class BackgroundSyncTest {
         val other = FakePronoteServer(token = "jeton-enregistre").apply { failures["Identification"] = 7 }
         assertEquals(BackgroundSync.Result.FAILED, sync(other, vault(other, "jeton-enregistre"), PronoteSessionGuard(), mutableListOf()).run())
     }
+
+    /** Expiration de session : erreur 8 en arrière-plan ⇒ reconnexion par jeton puis synchronisation. */
+    @Test
+    fun expiredSessionErrorEightReconnectsThenSyncs() = runBlocking {
+        val server = FakePronoteServer(token = "jeton-enregistre").lesson("c1", "18/11/2026 08:30:00", "MATHEMATIQUES")
+        server.failures["PageEmploiDuTemps"] = 8
+        val vault = vault(server, "jeton-enregistre")
+        val stored = mutableListOf<List<Lesson>>()
+        assertEquals(BackgroundSync.Result.SYNCED, sync(server, vault, PronoteSessionGuard(), stored).run())
+        assertEquals(2, server.calls.count { it == "Authentification" })
+        assertEquals("jeton-rotation-2", vault.credentials?.password)
+        assertEquals("MATHEMATIQUES", stored.single().single().subject)
+    }
 }

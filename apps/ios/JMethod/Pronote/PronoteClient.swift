@@ -10,6 +10,8 @@ protocol PronoteSessionClient: Actor {
     func download(attachmentId: String, fileName: String, session: UUID, to destination: URL) async throws
     /// Déconnexion : plus aucun téléchargement de cette session.
     func invalidate()
+    /// Identifiant de la session authentifiée (lecture du cahier de textes, téléchargements).
+    func currentSession() -> UUID
 }
 
 /// Lecture du cahier de textes et session qui l'a produite : un téléchargement n'est permis que dans cette session.
@@ -28,6 +30,8 @@ extension PronoteSessionClient {
     }
 
     func invalidate() {}
+
+    func currentSession() -> UUID { UUID() }
 }
 
 /// Client du protocole mobile Pronote, strictement en lecture seule.
@@ -192,6 +196,8 @@ actor PronoteClient: PronoteSessionClient {
         sessionID = UUID()
     }
 
+    func currentSession() -> UUID { sessionID }
+
     /// Lit les cours des `days` prochains jours (aujourd'hui compris) au calendrier de l'établissement.
     func timetable(days: Int = maximumDays, childId: String? = nil, now: Date = Date()) async throws -> [PronoteLesson] {
         await acquire()
@@ -293,7 +299,8 @@ actor PronoteClient: PronoteSessionClient {
         switch status {
         case 200: return
         case 413: throw PronoteFailure.invalid("download-size", NotebookRules.downloadTooLarge)
-        default: throw PronoteFailure.invalid("download", NotebookRules.downloadUnavailable)
+        // Statut non 2xx : la session est peut-être perdue (reconnexion par jeton puis un nouvel essai, côté session).
+        default: throw PronoteFailure.invalid("http-\(status)", NotebookRules.downloadUnavailable)
         }
     }
 
@@ -424,7 +431,7 @@ actor PronoteClient: PronoteSessionClient {
         if let error = json["Erreur"] as? [String: Any] {
             let code = ProtocolJSON.string(error["G"])
             let message = switch code {
-            case "10", "22": "La session Pronote a expiré."
+            case "8", "10", "22": "La session Pronote a expiré."
             case "25": PronoteThrottle.blockedMessage
             default: "Pronote a refusé la requête. Réessaie plus tard sans multiplier les tentatives."
             }

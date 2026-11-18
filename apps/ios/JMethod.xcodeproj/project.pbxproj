@@ -61,6 +61,7 @@
 		B0E6261FE9A452FC17792020 /* PronoteURL.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B4479E6E6705697E2AF988B /* PronoteURL.swift */; };
 		B124384768702827E21EFF1E /* PronoteTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96B2A3369C6383842D256676 /* PronoteTransport.swift */; };
 		B2026DE20FBE058455D7F4D7 /* protocol-vectors.json in Resources */ = {isa = PBXBuildFile; fileRef = 4D0CEBA46777BD986BFACFCD /* protocol-vectors.json */; };
+		B24F3DDFEFF816E4D351A529 /* SessionExpiryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBB46640DD61EF9167363679 /* SessionExpiryTests.swift */; };
 		B6DD0024E0479E7EF5A53A78 /* domain-vectors.json in Resources */ = {isa = PBXBuildFile; fileRef = 3DEC45164EE70C944325FC70 /* domain-vectors.json */; };
 		BC9BC8C2479D83463C7080F6 /* StorageAndModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65969278A632416230C24C94 /* StorageAndModelTests.swift */; };
 		BD140FE13A93848009FAE5EB /* TestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48F7B9D29C682E24738D82A3 /* TestSupport.swift */; };
@@ -173,6 +174,7 @@
 		E6AB624882908E192C946B80 /* JMethodTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = JMethodTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		E7BA9AB4269FEADE998EFAF2 /* Stats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stats.swift; sourceTree = "<group>"; };
 		E96E089466C9C0BE508A501A /* NotebookVectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotebookVectorTests.swift; sourceTree = "<group>"; };
+		EBB46640DD61EF9167363679 /* SessionExpiryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionExpiryTests.swift; sourceTree = "<group>"; };
 		EE53B72F9B8215BBCA50B4AC /* FrenchDate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrenchDate.swift; sourceTree = "<group>"; };
 		F708A17E3589AA5702BFF1FD /* SettingsLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsLogic.swift; sourceTree = "<group>"; };
 		F8E34816E73E4409329A6BFA /* ProtocolJSON.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolJSON.swift; sourceTree = "<group>"; };
@@ -274,6 +276,7 @@
 				E3A2B461DB3494BB11F44C33 /* PronoteTests.swift */,
 				85979BCF46927D316BA47D60 /* ProtocolVectorTests.swift */,
 				967C27C9DDEDDECB71672EFA /* ScreenVectorTests.swift */,
+				EBB46640DD61EF9167363679 /* SessionExpiryTests.swift */,
 				FE6A6A2D229FE8539E3E168A /* SessionTests.swift */,
 				4DD846CF3DF52095F04CAC7F /* StatsSettingsVectorTests.swift */,
 				65969278A632416230C24C94 /* StorageAndModelTests.swift */,
@@ -640,6 +643,7 @@
 				F8725271A6E91CE859F34A79 /* PronoteTests.swift in Sources */,
 				C67FEE5EC4B39254FC31F6E3 /* ProtocolVectorTests.swift in Sources */,
 				6A3665D665D310D864F0340F /* ScreenVectorTests.swift in Sources */,
+				B24F3DDFEFF816E4D351A529 /* SessionExpiryTests.swift in Sources */,
 				F32A9C3626CA76DAB5E8CC3B /* SessionTests.swift in Sources */,
 				C898D5755BAF67C4DA7ADE46 /* StatsSettingsVectorTests.swift in Sources */,
 				BC9BC8C2479D83463C7080F6 /* StorageAndModelTests.swift in Sources */,

@@ -43,6 +43,10 @@ class FakePronoteServer(
     var issued = 0
     /** Code `Erreur.G` renvoyé à la prochaine requête de cette fonction. */
     val failures = mutableMapOf<String, Int>()
+    /** Codes `Erreur.G` renvoyés aux requêtes successives de cette fonction (session expirée répétée). */
+    val failureQueue = mutableMapOf<String, ArrayDeque<Int>>()
+    /** Fonctions dont la prochaine réponse est une page HTML (réponse non JSON). */
+    val htmlOnce = mutableSetOf<String>()
     /** Appelé avant chaque requête (pour simuler une annulation pendant un appel). */
     var beforeRequest: (String) -> Unit = {}
 
@@ -85,7 +89,10 @@ class FakePronoteServer(
         val requestIv = iv
         val clear = PronoteCrypto.decrypt(PronoteCrypto.unhex(envelope.getString("dataSec")), key, requestIv)
         val payload = JSONObject(String(PronoteCrypto.unhex(String(PronoteCrypto.inflate(clear), UTF_8)), UTF_8))
-        failures.remove(function)?.let { code ->
+        if (htmlOnce.remove(function)) {
+            return@PronoteTransport HttpResult(200, emptyMap(), "<html><body>Session expirée</body></html>")
+        }
+        (failures.remove(function) ?: failureQueue[function]?.removeFirstOrNull())?.let { code ->
             return@PronoteTransport HttpResult(200, emptyMap(), JSONObject().put("Erreur", JSONObject().put("G", code)).toString())
         }
         val data = when (function) {
