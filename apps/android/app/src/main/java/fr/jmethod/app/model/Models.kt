@@ -1,0 +1,109 @@
+package fr.jmethod.app.model
+
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+
+/**
+ * Modèle de données au schéma du web (`src/types/index.ts`). Les noms de propriétés sont
+ * identiques (camelCase) pour que la sauvegarde JSON soit échangeable entre web, iOS et Android.
+ * Les champs optionnels du web sont nullables et omis à l’écriture (`explicitNulls = false`).
+ */
+@Serializable
+enum class Phase {
+    @SerialName("encodage") ENCODAGE,
+    @SerialName("consolidation") CONSOLIDATION,
+    @SerialName("recuperation") RECUPERATION,
+}
+
+@Serializable
+enum class RevisionStatus {
+    @SerialName("pending") PENDING,
+    @SerialName("completed") COMPLETED,
+    @SerialName("overdue") OVERDUE,
+}
+
+@Serializable
+data class Subject(
+    val id: String,
+    val name: String,
+    val color: String,
+    val description: String? = null,
+    val isCustom: Boolean? = null,
+)
+
+@Serializable
+data class Course(
+    val id: String,
+    val subjectId: String,
+    val chapter: String,
+    val courseNumber: Int,
+    val title: String,
+    /** YYYY-MM-DD, date du cours (J0). */
+    val date: String,
+    val description: String? = null,
+    val createdAt: String,
+)
+
+@Serializable
+data class Revision(
+    val id: String,
+    val courseId: String,
+    val stepIndex: Int,
+    val stepLabel: String,
+    /** YYYY-MM-DD, date cible de la séance. */
+    val scheduledDate: String,
+    /** YYYY-MM-DD, date réelle de validation. */
+    val completedDate: String? = null,
+    val score: Int? = null,
+    val status: RevisionStatus,
+    val phase: Phase,
+    val adjustedIntervalDays: Int? = null,
+    val isEmergencySession: Boolean? = null,
+)
+
+@Serializable
+data class PronoteEvent(
+    val id: String,
+    val subjectName: String,
+    val matchedSubjectId: String? = null,
+    /** YYYY-MM-DD, heure murale de l’établissement. */
+    val date: String,
+    /** HH:mm */
+    val startTime: String,
+    /** HH:mm, vide si Pronote ne permet pas de la déduire. */
+    val endTime: String,
+    val room: String? = null,
+    val teacher: String? = null,
+    val isCancelled: Boolean,
+    val isCourseCreated: Boolean? = null,
+)
+
+@Serializable
+data class AppSettings(
+    val intervals: List<Int> = DEFAULT_INTERVALS,
+    val sensitivity: Double = 0.4,
+    val emergencyThreshold: Int = 30,
+    val pronoteIcalUrl: String = "",
+    val lastPronoteSync: String? = null,
+    val soundEnabled: Boolean = true,
+    val userName: String = "Élève",
+    val userGrade: String = "3ème",
+)
+
+/**
+ * Document unique persistant de l’app. Il reprend les clés du stockage web et du format
+ * d’export (`version`, `courses`, `revisions`, `subjects`, `settings`) et y ajoute
+ * `pronoteEvents`, `initialized` et `dataVersion`. Le jeton Pronote n’y figure jamais.
+ */
+@Serializable
+data class AppDocument(
+    val version: String = "1.0",
+    val settings: AppSettings = AppSettings(),
+    val subjects: List<Subject> = DEFAULT_SUBJECTS,
+    val courses: List<Course> = emptyList(),
+    val revisions: List<Revision> = emptyList(),
+    val pronoteEvents: List<PronoteEvent> = emptyList(),
+    val initialized: Boolean = false,
+    /** Version des données natives (migrations). Absente des documents antérieurs : 0. */
+    val dataVersion: Int = 0,
+)

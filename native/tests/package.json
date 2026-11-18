@@ -1,0 +1,7 @@
+{
+  "name": "jmethod-native-automation-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {"test": "node --test automation.test.mjs"},
+  "devDependencies": {"playwright-core": "1.58.2"}
+}

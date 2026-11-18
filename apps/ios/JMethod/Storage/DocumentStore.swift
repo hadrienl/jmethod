@@ -1,0 +1,65 @@
+import Foundation
+
+/// Lecture et écriture atomique du document JSON dans Application Support.
+/// Les écritures sont sérialisées par l'acteur ; un numéro de version écarte une sauvegarde plus ancienne arrivée en retard.
+actor DocumentStore {
+    enum Failure: Error, LocalizedError, Equatable {
+        case unreadable
+        case unwritable
+
+        var errorDescription: String? {
+            switch self {
+            case .unreadable: "Tes données enregistrées n’ont pas pu être lues."
+            case .unwritable: "Tes dernières modifications n’ont pas pu être enregistrées."
+            }
+        }
+    }
+
+    nonisolated let url: URL
+    private var lastWrittenVersion = 0
+
+    init(url: URL) { self.url = url }
+
+    static func defaultURL() throws -> URL {
+        let directory = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+        return directory.appendingPathComponent("jmethod-data.json", isDirectory: false)
+    }
+
+    /// Retourne nil si aucun document n'existe encore. Toute autre erreur est remontée : le fichier n'est jamais écrasé
+    /// par des données de démonstration lorsqu'il est seulement illisible (appareil verrouillé, fichier abîmé).
+    func load() throws -> AppDocument? {
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        let data: Data
+        do { data = try Data(contentsOf: url) } catch { throw Failure.unreadable }
+        do { return try Self.decode(data) } catch { throw Failure.unreadable }
+    }
+
+    func save(_ document: AppDocument, version: Int) throws {
+        guard version > lastWrittenVersion else { return }
+        do {
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Self.encode(document).write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            lastWrittenVersion = version
+        } catch {
+            throw Failure.unwritable
+        }
+    }
+
+    /// Met de côté un fichier illisible pour repartir d'un document neuf sans le détruire.
+    func archiveUnreadable() throws {
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        let stamp = Int(Date().timeIntervalSince1970)
+        let destination = url.deletingLastPathComponent().appendingPathComponent("jmethod-data-illisible-\(stamp).json")
+        try FileManager.default.moveItem(at: url, to: destination)
+    }
+
+    static func encode(_ document: AppDocument) throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
+        return try encoder.encode(document)
+    }
+
+    static func decode(_ data: Data) throws -> AppDocument {
+        try JSONDecoder().decode(AppDocument.self, from: data)
+    }
+}

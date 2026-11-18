@@ -1,0 +1,29 @@
+# J-Method — app Android
+
+Application Kotlin / Jetpack Compose (Material 3), `fr.jmethod.app`, Android 8+ (API 26), compile/target API 36. Aucun serveur : données de révision dans un document JSON privé, jeton Pronote chiffré par Android Keystore, sauvegardes Android désactivées.
+
+## Compiler et tester
+
+```sh
+cd apps/android
+export JAVA_HOME="/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home"
+export ANDROID_HOME="$HOME/Library/Android/sdk"
+./gradlew :app:testDebugUnitTest :app:assembleDebug
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+Java 21 est requis (le JBR Java 25 échoue avec le Kotlin DSL de Gradle 8.13). `local.properties` n’est pas versionné.
+
+## Organisation
+
+- `model/` : schéma du web (`src/types`) en kotlinx.serialization, constantes (`src/lib/constants.ts`).
+- `domain/` : algorithme adaptatif, programme du soir, appariement des matières, modèles d’Aujourd’hui, du Planning (`PlanningModel`, `RevisionDetailModel`) et de Mes cours (`CoursesListModel`, `CourseDetailModel`, `CourseEditing` : création, préremplissage depuis un créneau, suppression), validation et aperçu de score. Portés à l’identique, particularités du TypeScript comprises, sauf les écarts volontaires de `native/shared/domain/DEVIATIONS.md` (D1 à D13), appliqués et testés nommément dans `PlanningCoursesVectorsTest`, `StatsSettingsVectorsTest` et `Deviations`. `NotebookVectorsTest` rejoue `native/shared/notebook-vectors.json`.
+- `data/` : document JSON unique écrit atomiquement (`files/jmethod-data.json`), vide au premier lancement (réglages et matières par défaut), migrations (`DataMigrations` : la v1 retire la démo des installations du jalon 1), export compatible `exportAllData`.
+- `pronote/` : protocole mobile, client HTTPS en lecture seule (liste blanche avec `PageCahierDeTexte`, onglets 88/89, six semaines au plus, refus local de toute fonction `Saisie…`), contrôle du bridge, coffre Keystore, contrôleur de connexion (formulaire natif, page officielle masquée, QR automatique, reprise par jeton, synchronisation des 14 prochains jours), cahier de textes (`Notebook.kt` : fenêtre de 28 jours, dates, HTML vers texte sûr, liens `http(s)`, modèle) et téléchargement protégé des pièces jointes (URL construite dans le client puis oubliée, même hôte et cookies de la session, 20 Mo au plus, cache privé `notebook/` effacé à la déconnexion et au changement d’enfant, ouverture par `FileProvider` en lecture seule, HTML et SVG présentés comme texte).
+- `ui/` : écran de connexion (code d’établissement ou adresse, Élève/Parent), chargement pendant la reprise, bandeau hors ligne, Aujourd’hui, Planning (jour, semaine, mois en grille compacte, filtres, détail de séance), Mes cours (liste, recherche, fiche, création plein écran avec DatePicker, suppression confirmée), Réglages (compte Pronote), feu d’artifice Canvas, thème clair violet et citron. Mes progrès (indicateurs, série réelle de régularité, matières à travailler, barres par matière), Réglages complets (compte Pronote, algorithme, paliers, couleurs des matières, export JSON compatible web et restauration validée par le Storage Access Framework, À propos), cahier de textes en lecture seule (depuis Mes cours ou la fiche d’un cours). Chaque onglet a son ViewModel (StateFlow) ; le retour système ramène d’abord à Aujourd’hui.
+
+L’app exige une connexion Pronote : sans jeton (ou jeton refusé), seul l’écran de connexion est affiché ; avec un jeton et sans réseau, l’app s’ouvre sur les données locales avec un bouton Réessayer.
+
+Ressources partagées lues sans copie dans `native/shared/` : `PronoteAutomation.js` est ajouté à l’APK au build ; les tests JVM rejouent `protocol-vectors.json` et `domain/domain-vectors.json`.
+
+« Rester connecté » (activé par défaut) enregistre l’établissement, le type de compte, l’identifiant et le mot de passe, chiffrés par une clé Android Keystore dédiée (AES-GCM), uniquement sur ce téléphone. Si Pronote refuse le jeton, une seule reconnexion silencieuse est tentée au premier plan (page officielle masquée) ; un mot de passe refusé est supprimé. WorkManager synchronise les 14 jours environ toutes les 6 h par jeton seulement (HTTPS natif, verrou partagé avec l’app) ; un jeton refusé en arrière-plan est seulement marqué. Le formulaire préremplit tout ce qui est enregistré ; le mot de passe enregistré reste masqué et n’est jamais révélable (l’icône œil n’apparaît que pour une saisie, et toute modification remplace entièrement le mot de passe enregistré). L’erreur Pronote 25 (trop de tentatives) suspend tout essai automatique (lancement, retour au premier plan, reconnexion silencieuse, WorkManager) pendant au moins une heure ; une seule reconnexion silencieuse automatique par heure. Une connexion par jeton déjà partie va jusqu’à l’enregistrement du jeton renouvelé, même si la reprise est interrompue. L’UUID d’application est généré une fois (Keystore) et réutilisé pour toutes les connexions par QR. La déconnexion supprime jeton, enfant suivi, données web, créneaux importés et la tâche périodique ; elle garde les identifiants pour le préremplissage (sans reconnexion automatique), sauf avec « Se déconnecter et oublier mes identifiants ».

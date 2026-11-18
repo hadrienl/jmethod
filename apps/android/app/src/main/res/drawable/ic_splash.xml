@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Icône de l’écran de démarrage : pastille violette et monogramme. Le système ne garde que le
+  disque central (2/3 du cadre de 108) ; la pastille est donc dessinée dans l’icône elle-même,
+  certaines surcouches ignorant windowSplashScreenIconBackgroundColor.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#6D28D9"
+        android:pathData="M18,54a36,36 0,1 1,72 0a36,36 0,1 1,-72 0z" />
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:scaleX="0.78"
+        android:scaleY="0.78">
+        <path
+            android:pathData="M68,33L68,61A14,14 0,0 1,40 61"
+            android:strokeWidth="11"
+            android:strokeColor="#FFFFFF"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+        <path
+            android:fillColor="#D9F99D"
+            android:pathData="M35,40a8,8 0,1 1,16 0a8,8 0,1 1,-16 0z" />
+    </group>
+</vector>
