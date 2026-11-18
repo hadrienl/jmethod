@@ -123,3 +123,10 @@ Après la validation d’une note depuis la fiche :
 
 ### 8.4 Mes cours
 La fiche d’un cours donne le même accès aux documents et au contenu du cahier (§8.1, points 2 et 3) ; « Valider » ouvre la fiche de la prochaine séance due de ce cours.
+
+### 8.5 Documents proches
+Cas réel (18/11/2026) : la professeure joint le support de deux séances (« cours 3° 4 et 5 nov.odt ») à la seconde seulement ; le cours issu de la première n’a donc aucun document.
+- Dans la fiche de séance (§8.1) et la fiche d’un cours, quand le cours n’a aucun document : la section « Le cours » affiche « Aucun document joint à cette séance dans Pronote ».
+- Toujours, sous les documents du cours : **« Documents proches en <matière> »**, liste des fichiers (pas des liens) joints à d’autres séances de la **même matière normalisée** dans le cahier, à 10 jours au plus avant ou après la date du cours, hors documents déjà joints à ce cours. Sources : documents enregistrés dans les autres cours de la même matière, puis pièces jointes du cahier lu (instantané le plus récent, lu au besoin comme au §8.1). Tri : écart de date croissant, puis séance postérieure avant antérieure, puis ordre d’origine ; 5 au plus, « Afficher tout » au-delà. Chaque ligne : nom, titre lu si connu, « Séance du 5 novembre ».
+- Toucher une ligne ouvre le document dans la feuille (téléchargé au besoin, mêmes règles de taille et de session que §2 et le cahier).
+- Action **« Joindre à ce cours »** sur chaque ligne : copie le fichier dans les documents du cours (nouvel `id`, même nom, `extractedTitle` conservé), sans modifier l’autre cours ; le titre du cours n’est pas changé automatiquement.
