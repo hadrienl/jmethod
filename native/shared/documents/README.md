@@ -8,7 +8,7 @@ Données de test partagées par iOS et Android pour `../notebook-to-course.md` (
 | `make_documents.py` | génère `files/` octet par octet (PDF écrits à la main, zip à horodatage fixe) |
 | `reference.py` | implémentation de référence de §4 et §5.1–5.4, plus `matchSubject` ; calcule **tous** les `expected` |
 | `document-title-vectors.json` | 28 cas : fichier → type, candidats, titre, chapitre, vue Lecture |
-| `../notebook-course-vectors.json` | 13 séances, 5 scénarios : éligibilité, cours créés, numérotation, boutons, proposition 14 jours |
+| `../notebook-course-vectors.json` | 14 séances, 8 scénarios et une migration : clés stables, éligibilité, cours créés, numérotation, boutons, proposition 14 jours |
 
 ## Régénérer
 
@@ -56,35 +56,56 @@ Tous les candidats présents sont listés, y compris ceux qui suivent le candida
 
 Cas couverts : PDF `/Title` (PDFDocEncoding), `/Title` UTF-16 « Microsoft Word - … .docx », titre XMP seul, flux non compressé (grande ligne puis « Nom : »), FlateDecode (« Nom : » d’abord, titre en grand en `TJ`), `/Title` « Document1 » rejeté, `/Title` égal au nom du fichier, PDF chiffré (RC4, mot de passe utilisateur `motdepasse`), PDF illisible ; ODT `dc:title`, premier `text:h`, style automatique hérité de `Title`, niveau 2 avant niveau 1, paquet ODT nommé `.bin` ; ODP (`dc:title` « Présentation1 » rejeté) ; DOCX `dc:title` entre guillemets, `dc:title` = matière, `Heading2` ignoré, runs coupés, `w:del` ; style `Title` ; PPTX `ctrTitle`, ordre `sldIdLst` ≠ noms des fichiers ; TXT avec BOM, Windows-1252/CRLF, en-tête « Nom : », titre > 120 caractères ; MD `# Titre :` ; fichier vide ; PNG non extractible. Chapitres : `Chapitre 2 -`, `Chapitre 5 –`, `CHAP. 2)`, `Séquence IV –`, `Partie 3 :`, `Unité 3 :`, `Thème 2 –`, `Thème 1 :` sans reste (→ titre Pronote), chapitre trouvé sur un autre candidat que le titre retenu, absence → `Sans chapitre`.
 
-## `notebook-course-vectors.json`
+## `notebook-course-vectors.json` (schemaVersion 2)
 
 ```jsonc
 {
   "today": "2026-11-18",
-  "subjects": [ … ],            // DEFAULT_SUBJECTS de domain/constants.json
-  "sessions": [ SessionEntry ], // modèle normalisé de notebook-reference §5, ordre du snapshot (date décroissante)
-  "prefill": [ … ],             // §3 : formulaire prérempli de chaque séance (bouton « Créer un cours »), cours de base
-  "scenarios": [ { "id", "note", "today", "settings", "courses", "notebookImports", "expected" } ]
+  "subjects": [ … ],              // DEFAULT_SUBJECTS de domain/constants.json
+  "subjectNormalization": [ { "input": "Histoire - Géographie", "expected": "histoire geographie" } ],
+  "sessions": [ SessionEntry ],   // instantané de base, modèle de notebook-reference §5, ordre du modèle (date décroissante)
+  "sessionKeys": [ { "id", "date", "subject", "normalizedSubject", "ordinal", "sessionKey" } ],  // une par séance
+  "prefill": [ … ],               // §3 : formulaire prérempli de chaque séance, sur les cours de base
+  "scenarios": [ { "id", "note", "today", "settings", "sessions", "courses", "notebookImports", "expected" } ],
+  "migration": { "input": { "courses", "notebookImports" }, "expected": { "courses", "notebookImports" },
+                 "idempotent": true, "afterMigration": { …scénario… } }
 }
 ```
 
-Champs de test ajoutés aux pièces jointes `kind: "file"` (absents du modèle réel) : `fixture` (chemin relatif à ce dossier : contenu « téléchargé ») ou `downloadError` (`unavailable` = échec de téléchargement, `tooLarge` = plus de 20 Mo). Le `name` de la pièce jointe sert à la détection du type et au candidat 4 ; il diffère volontairement du nom du fichier de `files/`.
+Chaque scénario porte son propre instantané `sessions` (`SessionEntry.id` = `N` Pronote, qui n’est **jamais** une clé). Champs de test ajoutés aux pièces jointes `kind: "file"` (absents du modèle réel) : `fixture` (chemin relatif à ce dossier : contenu « téléchargé ») ou `downloadError` (`unavailable` = échec de téléchargement, `tooLarge` = plus de 20 Mo). Le `name` de la pièce jointe sert à la détection du type et au candidat 4 ; il diffère volontairement du nom du fichier de `files/`.
 
-`prefill[]` : `sessionKey`, `subjectId` (ou `null`), `date`, `chapter`, `title`, `titleSource`, `candidates`, `description`, `principalDocument`, `documents[] {name, mime, size, extractedTitle}`, `skippedAttachments[] {id, name, reason: unavailable | tooLarge | limit}`, `courseNumber` (absent si matière inconnue), calculés sur les `courses` de base.
+`prefill[]` : `sessionKey` (`pn1:…`), `ordinal`, `notebookId` (le `N`, pour information), `subjectId` (ou `null`), `date`, `chapter`, `title`, `titleSource`, `candidates`, `description`, `principalDocument`, `documents[] {name, mime, size, extractedTitle}`, `skippedAttachments[] {id, name, reason: unavailable | tooLarge | limit}`, `courseNumber` (absent si matière inconnue).
 
 `scenarios[].expected` :
 
 | Champ | Contenu |
 | --- | --- |
+| `sessionKeys` | clé de chaque séance de l’instantané du scénario, dans l’ordre |
 | `eligibleSessionKeys` | séances créées, dans l’ordre de traitement |
-| `skipped[] {sessionKey, reason}` | `autoCreateDisabled`, `created`, `dismissed`, `future`, `beforeSince`, `unknownSubject` (une seule raison, dans cet ordre de priorité) |
-| `createdCourses[]` | cours créés : `subjectId`, `chapter`, `courseNumber`, `title`, `date`, `description`, `source`, `documents`, `titleSource`. `id` (`course-nb-<sessionKey>`) est fictif : ne pas le comparer, il sert au scénario `rerun-after-auto` |
+| `skipped[] {sessionKey, reason}` | `autoCreateDisabled`, `created`, `dismissed`, `courseExists`, `future`, `beforeSince`, `unknownSubject` (une seule raison, dans cet ordre de priorité) |
+| `createdCourses[]` | cours créés : `subjectId`, `chapter`, `courseNumber`, `title`, `date`, `createdAt`, `description`, `source {kind, sessionKey, subjectLabel, date, ordinal}`, `documents`, `titleSource`. `id` (`course-nb-<date>-<matière>-<rang>`) est fictif : ne pas le comparer, il sert à enchaîner les scénarios |
 | `notebookImportsAfter` | `{status, courseId}` par `sessionKey` (sans `at`) |
 | `toast` | « N cours créés depuis le cahier de textes », ou `null` |
-| `buttons` | `createCourse` ou `viewCourse` par séance, après la création automatique |
+| `buttons` | `createCourse` ou `viewCourse` par `sessionKey`, après la création automatique |
 | `backfillProposal` | scénario `activation-today` seulement : `from`, `to`, `count`, `sessionKeys`, `message`, `acceptSetsSince` |
 
-Scénarios : `auto-since-nov-12` (5 créations), `activation-today` (2 créations, proposition de 6 séances), `backfill-accepted` (8 créations), `auto-disabled` (aucune), `rerun-after-auto` (relecture après le premier : aucun doublon). Les révisions initiales ne sont pas répétées : elles suivent `generateInitialRevisions` (vecteurs `courseCreate` du domaine).
+Scénarios :
+
+| id | Situation | Résultat |
+| --- | --- | --- |
+| `auto-since-nov-12` | réglage actif depuis le 12/11 ; deux séances de maths le 17/11 (rangs 1 et 2) | 6 créations |
+| `activation-today` | `since = today` | 2 créations, proposition de 7 séances |
+| `backfill-accepted` | `since = today − 14` | 9 créations |
+| `auto-disabled` | réglage désactivé | aucune |
+| `rerun-after-auto` | relecture après le premier | aucune |
+| `new-pronote-session` | même instantané, autres `N`, `lessonId` et identifiants de pièces jointes, libellés « Histoire-Géographie », « Sciences Vie & Terre. » | aucune, mêmes boutons « Voir le cours » |
+| `modified-sessions` | titre, contenus et pièces jointes modifiés par le professeur | aucune (même clé) |
+| `belt-and-braces` | `notebookImports` perdus pour les cours créés | aucune (`courseExists`) |
+| `migration.afterMigration` | instantané de base sur le document migré | 4 créations (voir règle 40) |
+
+Les révisions initiales ne sont pas répétées : elles suivent `generateInitialRevisions` (vecteurs `courseCreate` du domaine).
+
+`migration` : document créé avec les anciennes clés (`18#A1B`, `42#K9Z`, `cours:cours-svt@2026-11-18`), cours `source` sans `ordinal`, deux cours en double après un redémarrage (même date, matière, titre et chapitre), un cours déjà au format `pn1:`, un `dismissed` ancien orphelin et un `dismissed` `pn1:` orphelin. `expected` = document après migration ; migrer `expected` redonne `expected` (vérifié par le générateur).
 
 ## Règles appliquées par la référence
 
@@ -133,11 +154,11 @@ Les points suivants précisent la spécification. Ils sont classés par section 
 
 ### §3–§4 Création
 
-27. **Raison d’exclusion**, une seule, par priorité : `autoCreateDisabled`, `created` (même si le cours n’existe plus), `dismissed`, `future` (`date > today`), `beforeSince` (`date < since`), `unknownSubject`.
+27. **Raison d’exclusion**, une seule, par priorité : `autoCreateDisabled`, `created` (même si le cours n’existe plus), `dismissed`, `courseExists` (règle 36), `future` (`date > today`), `beforeSince` (`date < since`), `unknownSubject`.
 28. **Ordre de création** : date croissante, ordre de la réponse pour une même date. Les numéros sont attribués à la suite : les cours créés dans le même lot se voient (règle `courseCreate` existante : même matière, chapitre égal après `trim` et minuscules, sans repli des accents, `max + 1`). `Sans chapitre` est un chapitre ordinaire, numéroté.
-29. **Proposition « 14 derniers jours »** : séances avec `today − 14 ≤ date ≤ today − 1`, ni `created` ni `dismissed`, **matière reconnue** (les autres ne peuvent pas être créées automatiquement). `count == 0` : pas de dialogue. « Importer » enregistre `notebookAutoCreateSince = today − 14`, puis la règle d’éligibilité ordinaire s’applique (scénario `backfill-accepted`). Les séances du jour sont déjà couvertes par `since = today`.
+29. **Proposition « 14 derniers jours »** : séances avec `today − 14 ≤ date ≤ today − 1`, ni `created` ni `dismissed`, sans cours correspondant (règle 36), **matière reconnue** (les autres ne peuvent pas être créées automatiquement). `count == 0` : pas de dialogue. « Importer » enregistre `notebookAutoCreateSince = today − 14`, puis la règle d’éligibilité ordinaire s’applique (scénario `backfill-accepted`). Les séances du jour sont déjà couvertes par `since = today`.
 30. **Toast** : « 1 cours créé … », « N cours créés … », rien pour 0.
-31. **Bouton** : `viewCourse` si `notebookImports[key].status == created` **et** `courseId` existe dans `courses` ; sinon `createCourse` (y compris `dismissed`).
+31. **Bouton** : `viewCourse` si `notebookImports[key].status == created` **et** `courseId` existe dans `courses`, ou si un cours correspond par sa `source` (règle 36) ; sinon `createCourse` (y compris `dismissed`).
 
 ### §6 Vue « Lecture »
 
@@ -147,6 +168,17 @@ Les points suivants précisent la spécification. Ils sont classés par section 
     - DOCX : `Title`/`Titre` → `heading` 1 ; `HeadingN`/`TitreN` → `heading` N ; paragraphe avec `w:numPr` → `listItem` niveau `ilvl + 1` ; sinon `paragraph` ; tableaux et `w:sdt` parcourus.
     - PPTX : par diapositive (ordre `sldIdLst`), titre → `heading` 1 ; paragraphes d’un espace réservé `body` ou `obj` (un `p:ph` sans `type` vaut `obj`) → `listItem` niveau `lvl + 1`, sauf `a:buNone` ; sous-titre et autres formes → `paragraph`.
     - TXT, MD et PDF n’ont pas de vue Lecture dans les vecteurs.
+
+### §1 Clé stable et migration (spec du 18/11, commit 484aa4d)
+
+33. **Matière normalisée** : forme repliée de la règle 16 (minuscules, NFD, retrait de U+0300–U+036F), puis toute suite de caractères qui ne sont ni lettre ni chiffre (Unicode : `Character.isLetterOrDigit`, Swift `isLetter || isNumber`) → une espace, rognage. Pas de recomposition NFC après le retrait des accents. Les vecteurs n’utilisent que des libellés qui donnent de l’ASCII (« S.V.T. » → `s v t`, « Anglais (LV1) » → `anglais lv1`, `---` → chaîne vide).
+34. **Rang** : compté dans l’instantané **entier** (pas seulement dans la fenêtre d’éligibilité), dans l’ordre du modèle (tri stable par date décroissante, donc ordre de la réponse pour une même date). Les séances ignorées par le modèle (sans date, sans contenu) ne comptent pas. Limite connue : si le professeur supprime la première de deux séances du même jour, la seconde prend le rang 1 et se trouve rattachée au cours de la première.
+35. **`source.ordinal`** est enregistré à la création ; `source.subjectLabel` garde le libellé Pronote brut, la comparaison se fait sur sa forme normalisée.
+36. **Ceinture et bretelles** : correspondance si un cours a `source.kind == "pronote-notebook"`, `source.date` égale, `normalize(source.subjectLabel)` égale et `source.ordinal` égal (entier ; un cours sans `ordinal` ne correspond jamais). Raison d’exclusion `courseExists`, après `created`/`dismissed` (un `dismissed` reste `dismissed` même si un cours correspond). La correspondance n’écrit **pas** d’entrée dans `notebookImports` (scénario `belt-and-braces` : `notebookImportsAfter` inchangé).
+37. **Migration, rang des cours anciens** : sont migrés les cours `pronote-notebook` dont `source.ordinal` n’est pas un entier ; un cours qui a déjà un `ordinal` le garde. Les cours anciens d’un même groupe (date, matière normalisée) sont triés par ordre de création : `createdAt` (jour seulement, donc souvent égal), puis le plus petit `at` des entrées de `notebookImports` qui désignent le cours (absent = en dernier), puis position dans `courses` décroissante (les nouveaux cours sont insérés en tête). Rang = 1, 2, 3… dans cet ordre, **sauf** qu’un cours de même titre et même chapitre (repliés) qu’un cours précédent du groupe reçoit le même rang : ce sont les doublons du bug, qui tombent ainsi sur la même clé. Sans cette règle, un doublon prendrait le rang 2 et empêcherait plus tard la création d’une vraie deuxième séance de ce jour (règle 36).
+38. **Migration, clés** : `source.sessionKey` de chaque cours `pronote-notebook` est réécrite (`pn1:…`). Pour chaque clé désignée par au moins une entrée existante, une seule entrée : `courseId` = le cours le plus ancien de la clé (ordre de la règle 37) ; statut et `at` de l’entrée qui désignait ce cours, sinon `created` et le plus petit `at` des entrées de la clé. Les autres entrées qui désignaient un cours de la clé disparaissent ; aucun cours n’est supprimé (le doublon garde sa `source`, sans entrée).
+39. **Migration, entrées restantes** : une entrée `pn1:` qui ne désigne aucun cours est gardée (`dismissed` récent) ; une entrée d’un autre format est gardée si son `courseId` existe (cours sans `source`), supprimée sinon (ancien `dismissed` orphelin). Les clés de `notebookImports` sont triées. Une migration sur un document déjà migré ne change rien.
+40. **Conséquence assumée** : un ancien `dismissed` orphelin est supprimé, donc la séance correspondante peut être recréée automatiquement si elle est encore dans la fenêtre et après `since` (`migration.afterMigration` : physique-chimie du 13/11 recréée). Un ancien `created` dont le cours a été supprimé hors application disparaît de même.
 
 ## Notes pour les ports
 

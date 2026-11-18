@@ -1174,6 +1174,8 @@ SESSIONS = [
                           [att("pj-17a", "Photo du tableau.png", "schema.png"),
                            att("pj-17b", "Cours fonctions.odt", "odt-heading.odt")], "Exercices"),
                   content("Correction")]},
+    {"id": "cdt-17b", "lessonId": "cours-maths-2", "date": "2026-11-17", "subject": "MATHEMATIQUES",
+     "contents": [content("Calcul mental", "Tables de 7 et de 8.")]},
     {"id": "cdt-16", "lessonId": "cours-ang", "date": "2026-11-16", "subject": "ANGLAIS LV1",
      "contents": [content("Daily routine", "Learn the vocabulary list.")]},
     {"id": "cdt-13", "lessonId": "cours-pc", "date": "2026-11-13", "subject": "PHYSIQUE-CHIMIE",
@@ -1201,24 +1203,80 @@ SESSIONS = [
                           [att("pj-04", "Chapitre_7_-_Statistiques.pdf", "controle_SVT__version_finale.pdf")])]},
 ]
 
+
+# ---- §1 stable session key ---------------------------------------------------
+
+KEY_PREFIX = "pn1:"
+
+
+def normalize_subject(label: str) -> str:
+    """Lowercase, NFD without U+0300–U+036F (fold), every run of
+    non-alphanumeric characters → one space, trimmed."""
+    s = "".join(c if c.isalnum() else " " for c in fold(label or ""))
+    return re.sub(" +", " ", s).strip()
+
+
+def make_key(date: str, subject_norm: str, ordinal: int) -> str:
+    return f"{KEY_PREFIX}{date}|{subject_norm}|{ordinal}"
+
+
+def session_keys(sessions: list[dict]) -> list[dict]:
+    """Rank among sessions of the same date and normalized subject, in
+    snapshot order (the stable date sort keeps the response order)."""
+    counts: dict[tuple[str, str], int] = {}
+    out = []
+    for s in sessions:
+        group = (s["date"], normalize_subject(s["subject"]))
+        counts[group] = counts.get(group, 0) + 1
+        out.append({"id": s["id"], "date": s["date"], "subject": s["subject"], "normalizedSubject": group[1],
+                    "ordinal": counts[group], "sessionKey": make_key(group[0], group[1], counts[group])})
+    return out
+
+
+def is_notebook_course(c: dict) -> bool:
+    return (c.get("source") or {}).get("kind") == "pronote-notebook"
+
+
+def matching_course(key: dict, courses: list[dict]) -> dict | None:
+    """Belt and braces: same source date, normalized subject and ordinal."""
+    for c in courses:
+        src = c.get("source") or {}
+        if is_notebook_course(c) and src.get("date") == key["date"] \
+                and normalize_subject(src.get("subjectLabel", "")) == key["normalizedSubject"] \
+                and src.get("ordinal") == key["ordinal"]:
+            return c
+    return None
+
+
+SUBJECT_NORMALIZATION_INPUTS = [
+    "MATHEMATIQUES", "Mathématiques", "Mathématiques", "HISTOIRE-GEOGRAPHIE", "Histoire - Géographie",
+    "HISTOIRE-GÉOGRAPHIE.", "ED.PHYSIQUE & SPORT.", "  S.V.T.  ", "SCIENCES VIE & TERRE", "Sciences Vie & Terre.",
+    "ANGLAIS LV1", "Anglais (LV1)", "FRANÇAIS", "ÉDUCATION MUSICALE", "ARTS PLA.", "Cours", "", "---",
+]
+
+
+# ---- Base document -------------------------------------------------------------
+
 BASE_COURSES = [
     {"id": "course-hg-ch2", "subjectId": "histoire-geo", "chapter": "Chapitre 2", "courseNumber": 1,
-     "title": "La monarchie absolue", "date": "2026-10-06"},
+     "title": "La monarchie absolue", "date": "2026-10-06", "createdAt": "2026-10-06"},
     {"id": "course-maths-ch3a", "subjectId": "maths", "chapter": "chapitre 3", "courseNumber": 1,
-     "title": "Notion de fonction", "date": "2026-10-13"},
+     "title": "Notion de fonction", "date": "2026-10-13", "createdAt": "2026-10-13"},
     {"id": "course-maths-ch3b", "subjectId": "maths", "chapter": "Chapitre 3", "courseNumber": 4,
-     "title": "Fonctions linéaires", "date": "2026-11-03"},
+     "title": "Fonctions linéaires", "date": "2026-11-03", "createdAt": "2026-11-03"},
     {"id": "course-fr-sans", "subjectId": "francais", "chapter": "Sans chapitre", "courseNumber": 2,
-     "title": "Le conte", "date": "2026-10-20"},
+     "title": "Le conte", "date": "2026-10-20", "createdAt": "2026-10-20"},
     {"id": "course-nb-anglais", "subjectId": "anglais", "chapter": "Sans chapitre", "courseNumber": 1,
-     "title": "Daily routine", "date": "2026-11-16",
-     "source": {"kind": "pronote-notebook", "sessionKey": "cdt-16", "subjectLabel": "ANGLAIS LV1",
-                "date": "2026-11-16"}},
+     "title": "Daily routine", "date": "2026-11-16", "createdAt": "2026-11-16",
+     "source": {"kind": "pronote-notebook", "sessionKey": make_key("2026-11-16", "anglais lv1", 1),
+                "subjectLabel": "ANGLAIS LV1", "date": "2026-11-16", "ordinal": 1}},
 ]
 
 BASE_IMPORTS = {
-    "cdt-16": {"status": "created", "courseId": "course-nb-anglais", "at": "2026-11-16T18:00:00Z"},
-    "cdt-13": {"status": "dismissed", "courseId": "course-deleted-pc", "at": "2026-11-14T18:00:00Z"},
+    make_key("2026-11-16", "anglais lv1", 1):
+        {"status": "created", "courseId": "course-nb-anglais", "at": "2026-11-16T18:00:00Z"},
+    make_key("2026-11-13", "physique chimie", 1):
+        {"status": "dismissed", "courseId": "course-deleted-pc", "at": "2026-11-14T18:00:00Z"},
 }
 
 
@@ -1260,7 +1318,7 @@ def download(session: dict) -> tuple[list[dict], list[dict]]:
     return docs, skipped
 
 
-def prefill(session: dict, subjects: list[dict], courses: list[dict]) -> dict:
+def prefill(session: dict, key: dict, subjects: list[dict], courses: list[dict]) -> dict:
     subject = match_subject(session["subject"], subjects)
     docs, skipped = download(session)
     principal = next((d for d in docs if d["kind"] in EXTRACTIBLE), None)
@@ -1268,7 +1326,9 @@ def prefill(session: dict, subjects: list[dict], courses: list[dict]) -> dict:
     content_title = next((c["title"] for c in session["contents"] if c["title"]), None)
     result = title_pipeline(principal, content_title, names, session["date"])
     out = {
-        "sessionKey": session["id"],
+        "sessionKey": key["sessionKey"],
+        "ordinal": key["ordinal"],
+        "notebookId": session["id"],
         "subjectId": subject["id"] if subject else None,
         "date": session["date"],
         "chapter": result["chapter"],
@@ -1291,12 +1351,19 @@ def add_days(day: str, n: int) -> str:
     return (dt.date.fromisoformat(day) + dt.timedelta(days=n)).isoformat()
 
 
-def skip_reason(session: dict, settings: dict, imports: dict, subjects: list[dict], today: str) -> str | None:
+def import_status(key: dict, imports: dict) -> str | None:
+    return imports.get(key["sessionKey"], {}).get("status")
+
+
+def skip_reason(session: dict, key: dict, settings: dict, imports: dict, courses: list[dict],
+                subjects: list[dict], today: str) -> str | None:
     if not settings.get("notebookAutoCreate"):
         return "autoCreateDisabled"
-    status = imports.get(session["id"], {}).get("status")
+    status = import_status(key, imports)
     if status in ("created", "dismissed"):
         return status
+    if matching_course(key, courses):
+        return "courseExists"
     if session["date"] > today:
         return "future"
     since = settings.get("notebookAutoCreateSince")
@@ -1307,11 +1374,11 @@ def skip_reason(session: dict, settings: dict, imports: dict, subjects: list[dic
     return None
 
 
-def backfill_proposal(sessions, imports, subjects, today) -> dict:
+def backfill_proposal(sessions, imports, courses, subjects, today) -> dict:
     start, end = add_days(today, -BACKFILL_DAYS), add_days(today, -1)
-    keys = [s["id"] for s in sessions
-            if start <= s["date"] <= end and imports.get(s["id"], {}).get("status") not in ("created", "dismissed")
-            and match_subject(s["subject"], subjects) is not None]
+    keys = [k["sessionKey"] for s, k in zip(sessions, session_keys(sessions))
+            if start <= s["date"] <= end and import_status(k, imports) not in ("created", "dismissed")
+            and not matching_course(k, courses) and match_subject(s["subject"], subjects) is not None]
     count = len(keys)
     return {"from": start, "to": end, "count": count, "sessionKeys": keys,
             "message": f"Importer aussi les {count} séances des 14 derniers jours ?" if count else None,
@@ -1324,93 +1391,262 @@ def toast(n: int) -> str | None:
     return f"{n} cours {'créé' if n == 1 else 'créés'} depuis le cahier de textes"
 
 
-def run_scenario(sc: dict, sessions, subjects) -> dict:
-    today = sc["today"]
+def course_id(key: dict) -> str:
+    return f"course-nb-{key['date']}-{key['normalizedSubject'].replace(' ', '-')}-{key['ordinal']}"
+
+
+def run_scenario(sc: dict, subjects) -> dict:
+    today, sessions = sc["today"], sc["sessions"]
+    keys = session_keys(sessions)
     courses = copy.deepcopy(sc["courses"])
     imports = copy.deepcopy(sc["notebookImports"])
     skipped, eligible = [], []
-    for s in sessions:
-        reason = skip_reason(s, sc["settings"], imports, subjects, today)
+    for s, k in zip(sessions, keys):
+        reason = skip_reason(s, k, sc["settings"], imports, courses, subjects, today)
         if reason:
-            skipped.append({"sessionKey": s["id"], "reason": reason})
+            skipped.append({"sessionKey": k["sessionKey"], "reason": reason})
         else:
-            eligible.append(s)
-    eligible.sort(key=lambda s: s["date"])  # stable: response order within a date
+            eligible.append((s, k))
+    eligible.sort(key=lambda sk: sk[0]["date"])  # stable: response order within a date
     created = []
-    for s in eligible:
-        pf = prefill(s, subjects, courses)
-        course = {"id": f"course-nb-{s['id']}", "subjectId": pf["subjectId"], "chapter": pf["chapter"],
+    for s, k in eligible:
+        pf = prefill(s, k, subjects, courses)
+        course = {"id": course_id(k), "subjectId": pf["subjectId"], "chapter": pf["chapter"],
                   "courseNumber": pf["courseNumber"], "title": pf["title"], "date": pf["date"],
-                  "description": pf["description"],
-                  "source": {"kind": "pronote-notebook", "sessionKey": s["id"], "subjectLabel": s["subject"],
-                             "date": s["date"]},
+                  "createdAt": today, "description": pf["description"],
+                  "source": {"kind": "pronote-notebook", "sessionKey": k["sessionKey"], "subjectLabel": s["subject"],
+                             "date": s["date"], "ordinal": k["ordinal"]},
                   "documents": pf["documents"]}
         courses.append(course)
-        created.append({"sessionKey": s["id"], "titleSource": pf["titleSource"], **course})
-        imports[s["id"]] = {"status": "created", "courseId": course["id"]}
+        created.append({"sessionKey": k["sessionKey"], "titleSource": pf["titleSource"], **course})
+        imports[k["sessionKey"]] = {"status": "created", "courseId": course["id"]}
     course_ids = {c["id"] for c in courses}
-    buttons = {s["id"]: "viewCourse" if imports.get(s["id"], {}).get("status") == "created"
-               and imports[s["id"]].get("courseId") in course_ids else "createCourse" for s in sessions}
+
+    def button(k: dict) -> str:
+        entry = imports.get(k["sessionKey"], {})
+        linked = entry.get("status") == "created" and entry.get("courseId") in course_ids
+        return "viewCourse" if linked or matching_course(k, courses) else "createCourse"
+
     return {
-        "eligibleSessionKeys": [s["id"] for s in eligible],
+        "sessionKeys": [k["sessionKey"] for k in keys],
+        "eligibleSessionKeys": [k["sessionKey"] for _, k in eligible],
         "skipped": skipped,
         "createdCourses": created,
         "notebookImportsAfter": {k: {"status": v["status"], "courseId": v.get("courseId")}
                                  for k, v in sorted(imports.items())},
         "toast": toast(len(created)),
-        "buttons": buttons,
+        "buttons": {k["sessionKey"]: button(k) for k in keys},
+        "_courses": courses,
+        "_imports": imports,
     }
+
+
+# ---- Migration of legacy keys ----------------------------------------------------
+
+def migrate(doc: dict) -> dict:
+    """§1 migration, idempotent. doc = {courses, notebookImports}."""
+    courses = copy.deepcopy(doc["courses"])
+    imports = copy.deepcopy(doc["notebookImports"])
+    ids = {c["id"] for c in courses}
+    pointing: dict[str, list[tuple[str, dict]]] = {}
+    for k, e in imports.items():
+        if e.get("courseId") in ids:
+            pointing.setdefault(e["courseId"], []).append((k, e))
+    position = {c["id"]: i for i, c in enumerate(courses)}
+
+    def creation_order(c: dict):
+        ats = sorted(e["at"] for _, e in pointing.get(c["id"], []) if e.get("at"))
+        # createdAt (day), then the import instant, then later in `courses` = older (new courses go first)
+        return (c.get("createdAt") or "", ats[0] if ats else "￿", -position[c["id"]])
+
+    notebook = [c for c in courses if is_notebook_course(c)]
+    groups: dict[tuple[str, str], list[dict]] = {}
+    for c in notebook:
+        groups.setdefault((c["source"]["date"], normalize_subject(c["source"].get("subjectLabel", ""))), []).append(c)
+    for (date, subj), members in groups.items():
+        legacy = sorted((c for c in members if not isinstance(c["source"].get("ordinal"), int)), key=creation_order)
+        signatures: list[tuple[tuple[str, str], int]] = []
+        for c in legacy:
+            sig = (fold(clean_ws(c.get("title", ""))), fold(clean_ws(c.get("chapter", ""))))
+            ordinal = next((o for s, o in signatures if s == sig), None)
+            if ordinal is None:
+                ordinal = len(signatures) + 1
+                signatures.append((sig, ordinal))
+            c["source"]["ordinal"] = ordinal
+        for c in members:
+            c["source"]["sessionKey"] = make_key(date, subj, c["source"]["ordinal"])
+
+    new: dict[str, dict] = {}
+    consumed: set[str] = set()
+    by_key: dict[str, list[dict]] = {}
+    for c in notebook:
+        by_key.setdefault(c["source"]["sessionKey"], []).append(c)
+    for key, members in by_key.items():
+        members.sort(key=creation_order)
+        entries = [(k, e) for c in members for k, e in pointing.get(c["id"], [])]
+        if not entries:
+            continue
+        consumed.update(k for k, _ in entries)
+        oldest = members[0]
+        own = [e for _, e in pointing.get(oldest["id"], [])]
+        entry = {"status": own[0]["status"] if own else "created", "courseId": oldest["id"]}
+        ats = sorted(e["at"] for e in (own or [e for _, e in entries]) if e.get("at"))
+        if ats:
+            entry["at"] = ats[0]
+        new[key] = entry
+    for k, e in imports.items():
+        if k in consumed or k in new:
+            continue
+        if k.startswith(KEY_PREFIX) or e.get("courseId") in ids:
+            new[k] = e
+    return {"courses": courses, "notebookImports": dict(sorted(new.items()))}
+
+
+MIGRATION_INPUT = {
+    "courses": [
+        # New courses are inserted first (web order): the array runs from newest to oldest.
+        {"id": "course-manual", "subjectId": "francais", "chapter": "Grammaire", "courseNumber": 1,
+         "title": "Les propositions relatives", "date": "2026-11-18", "createdAt": "2026-11-18"},
+        {"id": "course-old-maths-dup", "subjectId": "maths", "chapter": "Chapitre 3", "courseNumber": 6,
+         "title": "Les fonctions affines", "date": "2026-11-17", "createdAt": "2026-11-18",
+         "source": {"kind": "pronote-notebook", "sessionKey": "42#K9Z", "subjectLabel": "MATHEMATIQUES",
+                    "date": "2026-11-17"}},
+        {"id": "course-hg-modern", "subjectId": "histoire-geo", "chapter": "Chapitre 2", "courseNumber": 2,
+         "title": "La Révolution", "date": "2026-11-18", "createdAt": "2026-11-18",
+         "source": {"kind": "pronote-notebook", "sessionKey": make_key("2026-11-18", "histoire geographie", 1),
+                    "subjectLabel": "HISTOIRE-GEOGRAPHIE", "date": "2026-11-18", "ordinal": 1}},
+        {"id": "course-old-svt", "subjectId": "svt", "chapter": "Sans chapitre", "courseNumber": 1,
+         "title": "Cours du 18 novembre", "date": "2026-11-18", "createdAt": "2026-11-18",
+         "source": {"kind": "pronote-notebook", "sessionKey": "cours:cours-svt@2026-11-18",
+                    "subjectLabel": "SCIENCES VIE & TERRE", "date": "2026-11-18"}},
+        {"id": "course-old-maths-b", "subjectId": "maths", "chapter": "Sans chapitre", "courseNumber": 1,
+         "title": "Calcul mental", "date": "2026-11-17", "createdAt": "2026-11-17",
+         "source": {"kind": "pronote-notebook", "sessionKey": "18#A2B", "subjectLabel": "MATHEMATIQUES",
+                    "date": "2026-11-17"}},
+        {"id": "course-old-maths-a", "subjectId": "maths", "chapter": "Chapitre 3", "courseNumber": 5,
+         "title": "Les fonctions affines", "date": "2026-11-17", "createdAt": "2026-11-17",
+         "source": {"kind": "pronote-notebook", "sessionKey": "18#A1B", "subjectLabel": "MATHEMATIQUES",
+                    "date": "2026-11-17"}},
+    ] + copy.deepcopy(BASE_COURSES[:4]),
+    "notebookImports": {
+        "18#A1B": {"status": "created", "courseId": "course-old-maths-a", "at": "2026-11-17T18:00:00Z"},
+        "18#A2B": {"status": "created", "courseId": "course-old-maths-b", "at": "2026-11-17T18:00:05Z"},
+        "42#K9Z": {"status": "created", "courseId": "course-old-maths-dup", "at": "2026-11-18T07:30:00Z"},
+        "cours:cours-svt@2026-11-18": {"status": "created", "courseId": "course-old-svt",
+                                       "at": "2026-11-18T07:30:02Z"},
+        "13#P7Q": {"status": "dismissed", "courseId": "course-deleted-pc", "at": "2026-11-14T18:00:00Z"},
+        make_key("2026-11-18", "histoire geographie", 1):
+            {"status": "created", "courseId": "course-hg-modern", "at": "2026-11-18T19:00:00Z"},
+        make_key("2026-11-05", "musique", 1):
+            {"status": "dismissed", "courseId": "course-deleted-mus", "at": "2026-11-06T18:00:00Z"},
+    },
+}
+
+
+def strip_private(e: dict) -> dict:
+    return {k: v for k, v in e.items() if not k.startswith("_")}
 
 
 def build_course_vectors() -> dict:
     constants = json.loads(CONSTANTS.read_text("utf-8"))
     subjects = constants["DEFAULT_SUBJECTS"]
     settings_base = dict(constants["DEFAULT_SETTINGS"])
-    scenarios_in = [
-        ("auto-since-nov-12", "Réglage actif depuis le 12 novembre : éligibilité, dédoublonnage, dismissed, "
-         "matière inconnue, date future, numérotation, limites de fichiers",
-         {"notebookAutoCreate": True, "notebookAutoCreateSince": "2026-11-12"}, BASE_COURSES, BASE_IMPORTS),
-        ("activation-today", "Activation aujourd’hui (since = today) : seules les séances du jour ; "
-         "proposition des 14 derniers jours",
-         {"notebookAutoCreate": True, "notebookAutoCreateSince": TODAY}, BASE_COURSES, BASE_IMPORTS),
-        ("backfill-accepted", "Proposition acceptée : since = today − 14",
-         {"notebookAutoCreate": True, "notebookAutoCreateSince": add_days(TODAY, -BACKFILL_DAYS)},
-         BASE_COURSES, BASE_IMPORTS),
-        ("auto-disabled", "Réglage désactivé (défaut) : aucune création, boutons seulement",
-         {"notebookAutoCreate": False}, BASE_COURSES, BASE_IMPORTS),
-    ]
-    scenarios = []
-    for sid, note, settings, courses, imports in scenarios_in:
+    auto12 = {"notebookAutoCreate": True, "notebookAutoCreateSince": "2026-11-12"}
+
+    def scenario(sid, note, settings, sessions, courses, imports):
         sc = {"id": sid, "note": note, "today": TODAY, "settings": {**settings_base, **settings},
-              "courses": copy.deepcopy(courses), "notebookImports": copy.deepcopy(imports)}
-        sc["expected"] = run_scenario(sc, SESSIONS, subjects)
-        if sid == "activation-today":
-            # Computed before the automatic run of the day (it only counts days before today).
-            sc["expected"]["backfillProposal"] = backfill_proposal(SESSIONS, sc["notebookImports"], subjects, TODAY)
-        scenarios.append(sc)
-    # Second pass after the first scenario: nothing is created twice.
-    first = scenarios[0]
-    rerun = {"id": "rerun-after-auto", "note": "Deuxième lecture après « auto-since-nov-12 » : aucun doublon",
-             "today": TODAY, "settings": copy.deepcopy(first["settings"]),
-             "courses": copy.deepcopy(first["courses"]) + [
-                 {k: v for k, v in c.items() if k not in ("sessionKey", "titleSource")}
-                 for c in first["expected"]["createdCourses"]],
-             "notebookImports": {k: {**v, "at": "2026-11-18T19:00:00Z"}
-                                 for k, v in first["expected"]["notebookImportsAfter"].items()}}
-    rerun["expected"] = run_scenario(rerun, SESSIONS, subjects)
-    assert not rerun["expected"]["createdCourses"]
-    scenarios.append(rerun)
+              "sessions": copy.deepcopy(sessions), "courses": copy.deepcopy(courses),
+              "notebookImports": copy.deepcopy(imports)}
+        sc["expected"] = run_scenario(sc, subjects)
+        return sc
+
+    scenarios = [
+        scenario("auto-since-nov-12", "Réglage actif depuis le 12 novembre : éligibilité, dédoublonnage, dismissed, "
+                 "matière inconnue, date future, deux séances de même date et matière (rangs 1 et 2), "
+                 "numérotation, limites de fichiers", auto12, SESSIONS, BASE_COURSES, BASE_IMPORTS),
+        scenario("activation-today", "Activation aujourd’hui (since = today) : seules les séances du jour ; "
+                 "proposition des 14 derniers jours", {"notebookAutoCreate": True, "notebookAutoCreateSince": TODAY},
+                 SESSIONS, BASE_COURSES, BASE_IMPORTS),
+        scenario("backfill-accepted", "Proposition acceptée : since = today − 14",
+                 {"notebookAutoCreate": True, "notebookAutoCreateSince": add_days(TODAY, -BACKFILL_DAYS)},
+                 SESSIONS, BASE_COURSES, BASE_IMPORTS),
+        scenario("auto-disabled", "Réglage désactivé (défaut) : aucune création, boutons seulement",
+                 {"notebookAutoCreate": False}, SESSIONS, BASE_COURSES, BASE_IMPORTS),
+    ]
+    scenarios[1]["expected"]["backfillProposal"] = backfill_proposal(
+        SESSIONS, BASE_IMPORTS, BASE_COURSES, subjects, TODAY)  # before the automatic run of the day
+
+    first = scenarios[0]["expected"]
+    after_courses = first["_courses"]
+    after_imports = {k: {**v, "at": "2026-11-18T19:00:00Z"} if "at" not in v else v
+                     for k, v in first["_imports"].items()}
+
+    # Same snapshot read in another Pronote session: every N and lessonId changes,
+    # some subject labels are spelled differently.
+    relabel = {"HISTOIRE-GEOGRAPHIE": "Histoire-Géographie", "SCIENCES VIE & TERRE": "Sciences Vie & Terre."}
+    new_session = copy.deepcopy(SESSIONS)
+    for i, s in enumerate(new_session):
+        s["lessonId"] = s["lessonId"] + "-s2"
+        s["subject"] = relabel.get(s["subject"], s["subject"])
+        s["id"] = f"cours:{s['lessonId']}@{s['date']}" if s["id"].startswith("cours:") else f"{900 + i}#S2"
+        for c in s["contents"]:
+            for a in c["attachments"]:
+                a["id"] = a["id"] + "-s2"
+    # The teacher edited two sessions after the first import.
+    modified = copy.deepcopy(SESSIONS)
+    for s in modified:
+        if s["id"] == "cdt-18a":
+            s["contents"][0]["title"] = "La Révolution française (1789-1799)"
+            s["contents"].append(content("Pour aller plus loin", "Regarder la frise chronologique."))
+        if s["id"] == "cdt-17":
+            s["contents"][0]["attachments"] = []
+    lost_imports = {k: v for k, v in after_imports.items() if v["courseId"] in {c["id"] for c in BASE_COURSES}
+                    or v["status"] == "dismissed"}
+
+    scenarios += [
+        scenario("rerun-after-auto", "Deuxième lecture après « auto-since-nov-12 » : aucun doublon",
+                 auto12, SESSIONS, after_courses, after_imports),
+        scenario("new-pronote-session", "Même instantané lu dans une autre session Pronote (N, lessonId et "
+                 "identifiants de pièces jointes différents, libellés de matière écrits autrement) : aucune "
+                 "création, « Voir le cours »", auto12, new_session, after_courses, after_imports),
+        scenario("modified-sessions", "Séances modifiées par le professeur après l’import (titre, contenus, "
+                 "pièces jointes) : même clé, pas de doublon", auto12, modified, after_courses, after_imports),
+        scenario("belt-and-braces", "notebookImports perdus pour les cours créés : la correspondance par "
+                 "source (date, matière normalisée, rang) empêche la recréation", auto12, SESSIONS,
+                 after_courses, lost_imports),
+    ]
+    for sc in scenarios[4:]:
+        assert not sc["expected"]["createdCourses"], sc["id"]
+    assert scenarios[5]["expected"]["buttons"] == first["buttons"]
+
+    migrated = migrate(MIGRATION_INPUT)
+    again = migrate(migrated)
+    assert again == migrated
+    migration_scenario = scenario(
+        "after-migration", "Instantané de base sur le document migré : les cours migrés sont reconnus",
+        auto12, SESSIONS, migrated["courses"], migrated["notebookImports"])
+
     return {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "generator": "native/shared/documents/reference.py",
         "regenerate": "python3 native/shared/documents/reference.py",
         "spec": "native/shared/notebook-to-course.md §1–§5, native/shared/documents/README.md",
         "containsPersonalData": False,
         "today": TODAY,
         "subjects": subjects,
+        "subjectNormalization": [{"input": s, "expected": normalize_subject(s)} for s in SUBJECT_NORMALIZATION_INPUTS],
         "sessions": SESSIONS,
-        "prefill": [prefill(s, subjects, BASE_COURSES) for s in SESSIONS],
-        "scenarios": scenarios,
+        "sessionKeys": session_keys(SESSIONS),
+        "prefill": [prefill(s, k, subjects, BASE_COURSES) for s, k in zip(SESSIONS, session_keys(SESSIONS))],
+        "scenarios": [{**sc, "expected": strip_private(sc["expected"])} for sc in scenarios],
+        "migration": {
+            "note": "Document créé avec les anciennes clés (N, cours:<lessonId>@<date>) → document migré ; "
+                    "une seconde migration ne change rien",
+            "input": MIGRATION_INPUT,
+            "expected": migrated,
+            "idempotent": True,
+            "afterMigration": {**migration_scenario, "expected": strip_private(migration_scenario["expected"])},
+        },
     }
 
 
