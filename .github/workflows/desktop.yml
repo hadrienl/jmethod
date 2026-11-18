@@ -41,7 +41,7 @@ jobs:
           java-version: "21"
       - uses: gradle/actions/setup-gradle@v4
       # Logique, protocole Pronote (vecteurs de native/shared) et app ordinateur.
-      - run: ./gradlew --console=plain :shared:desktopTest :desktopApp:test
+      - run: ./gradlew --console=plain --stacktrace :shared:desktopTest :desktopApp:test
 
   package:
     name: Installeur ${{ matrix.name }}
