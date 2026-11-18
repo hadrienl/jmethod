@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -89,22 +91,34 @@ fun openWith(context: Context, file: File, name: String): Boolean {
     }
 }
 
-/** Visionneuse dans l’app : PDF (PdfRenderer), images, ou vue « Lecture » pour les autres formats. */
+/** Document affiché dans une feuille (fiche de séance ou de cours) : fichier local déjà vérifié. */
+data class SheetDocument(val document: CourseDocument, val file: File)
+
+/**
+ * Visionneuse dans l’app : PDF (PdfRenderer), images, ou vue « Lecture » pour les autres formats.
+ * @param embedded vrai dans une feuille : pas de marges système, le retour est géré par la feuille.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DocumentViewerScreen(document: CourseDocument, file: File, onClose: () -> Unit, modifier: Modifier = Modifier) {
+fun DocumentViewerScreen(document: CourseDocument, file: File, onClose: () -> Unit, modifier: Modifier = Modifier, embedded: Boolean = false) {
     val context = LocalContext.current
-    BackHandler(onBack = onClose)
+    if (!embedded) BackHandler(onBack = onClose)
     val type = remember(file) { DocumentAnalyzer.detect(file, document.name) }
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = if (type == DocType.PDF || type.isImage) JColors.Slate100 else Color.White,
+        contentWindowInsets = if (embedded) WindowInsets(0) else ScaffoldDefaults.contentWindowInsets,
         topBar = {
             TopAppBar(
                 title = { Text(document.name, maxLines = 1, fontWeight = FontWeight.Bold) },
-                navigationIcon = { IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Fermer le document") } },
+                navigationIcon = {
+                    IconButton(onClick = onClose) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = if (embedded) "Revenir à la fiche" else "Fermer le document")
+                    }
+                },
                 actions = { TextButton(onClick = { openWith(context, file, document.name) }) { Text("Ouvrir avec…") } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White),
+                windowInsets = if (embedded) WindowInsets(0) else TopAppBarDefaults.windowInsets,
             )
         },
     ) { padding ->

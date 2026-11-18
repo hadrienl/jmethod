@@ -80,6 +80,8 @@ data class NotebookUiState(
 
 sealed interface NotebookEvent {
     data class Open(val file: File) : NotebookEvent
+    /** Pièce jointe téléchargée depuis une fiche : visionneuse dans la feuille. */
+    data class Preview(val file: File, val name: String) : NotebookEvent
     data class Message(val text: String) : NotebookEvent
     /** Formulaire de création prérempli, documents téléchargés. */
     data class CreateCourse(val draft: NotebookCourseDraft) : NotebookEvent
@@ -185,7 +187,21 @@ class NotebookViewModel(
         }
     }
 
-    fun download(attachment: NotebookAttachment) {
+    /** Lecture discrète pour les fiches (section 8.1) : au plus une tentative toutes les 5 min sans aperçu. */
+    private var lastEnsure: Instant? = null
+
+    fun ensureRead() {
+        val current = state.value
+        if (current.snapshot != null || current.loading) return
+        val now = clock.now()
+        val last = lastEnsure
+        if (last != null && Duration.between(last, now) < ENSURE_INTERVAL) return
+        lastEnsure = now
+        refresh()
+    }
+
+    /** @param inApp vrai depuis une fiche : le fichier s’ouvre dans la visionneuse de la feuille. */
+    fun download(attachment: NotebookAttachment, inApp: Boolean = false) {
         if (attachment.kind != NotebookAttachment.Kind.FILE || state.value.downloadingId != null) return
         val session = stamp ?: return
         val generation = resetCount
@@ -206,7 +222,7 @@ class NotebookViewModel(
                     withContext(Dispatchers.IO) { target.parentFile?.deleteRecursively() }
                     return@launch
                 }
-                events.send(NotebookEvent.Open(target))
+                events.send(if (inApp) NotebookEvent.Preview(target, attachment.name) else NotebookEvent.Open(target))
             } catch (_: CancellationException) {
             } catch (error: Exception) {
                 if (generation == resetCount) {
@@ -448,6 +464,7 @@ class NotebookViewModel(
 
     companion object {
         val AUTO_READ_INTERVAL: Duration = Duration.ofHours(2)
+        val ENSURE_INTERVAL: Duration = Duration.ofMinutes(5)
 
         /** La matière Pronote d’une séance correspond-elle à la matière J-Method ? */
         fun matches(label: String, subjectId: String, subjects: List<Subject>): Boolean = SubjectMatcher.match(label, subjects)?.id == subjectId

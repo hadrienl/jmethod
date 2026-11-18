@@ -282,7 +282,7 @@ private fun SessionCard(
             Text(session.subject, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
             Text(dayLabel(session.date), style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
         }
-        session.contents.forEach { content -> ContentBlock(content, downloading, onDownload, onLink) }
+        session.contents.forEach { content -> NotebookContentBlock(content, downloading, onDownload, onLink) }
         action()
     }
 }
@@ -321,7 +321,7 @@ private fun CourseAction(
 }
 
 @Composable
-private fun ContentBlock(content: NotebookContent, downloading: String?, onDownload: (NotebookAttachment) -> Unit, onLink: (String) -> Unit) {
+internal fun NotebookContentBlock(content: NotebookContent, downloading: String?, onDownload: (NotebookAttachment) -> Unit, onLink: (String) -> Unit) {
     Column(Modifier.padding(top = JSpacing.xs), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         if (content.category.isNotEmpty()) Text(content.category, style = MaterialTheme.typography.labelMedium, color = JColors.Violet800)
         Text(content.title.ifEmpty { "Séance publiée sans titre" }, style = MaterialTheme.typography.titleMedium)
