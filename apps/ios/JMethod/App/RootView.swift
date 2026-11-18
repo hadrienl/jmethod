@@ -21,10 +21,20 @@ struct RootView: View {
             ToastLayer(app: app)
         }
         .tint(Theme.violet)
+        // Retour haptique léger quand une action aboutit (validation, cours créé, réglages enregistrés).
+        .sensoryFeedback(trigger: app.toast) { _, toast in
+            guard let toast else { return nil }
+            return toast.kind == .warning ? .warning : .success
+        }
         .task {
             await app.load()
             #if DEBUG
-            if ProcessInfo.processInfo.arguments.contains("-JMethodOfflinePreview") {
+            let arguments = ProcessInfo.processInfo.arguments
+            if arguments.contains("-JMethodPreviewSignIn") {
+                pronote.enterSignInPreview()
+                return
+            }
+            if arguments.contains("-JMethodOfflinePreview") || PreviewFixture.isEnabled {
                 pronote.enterOfflinePreview()
                 applyPreviewArguments()
                 return
@@ -61,8 +71,9 @@ struct RootView: View {
     }
 
     #if DEBUG
-    /// Vérification visuelle (Debug) : `-JMethodPreviewTab planning|courses|settings`,
-    /// `-JMethodPreviewSheet addCourse|course:<id>|revision:<id>|score:<id>`.
+    /// Vérification visuelle (Debug) : `-JMethodPreviewTab planning|courses|stats|settings`,
+    /// `-JMethodPreviewSheet addCourse|course:<id>|revision:<id>|score:<id>|notebook[:<id>]` ;
+    /// `-JMethodPreviewFixture` charge un document fictif (`PreviewFixture`), `-JMethodPreviewSignIn` l'écran de connexion vide.
     private func applyPreviewArguments() {
         let defaults = UserDefaults.standard
         switch defaults.string(forKey: "JMethodPreviewTab") {
@@ -90,9 +101,8 @@ struct RootView: View {
     @ViewBuilder private var content: some View {
         switch route {
         case .loading:
-            ProgressView("Chargement")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Theme.background)
+            // Même logo, à la même place, que l'écran de lancement : aucune rupture visuelle.
+            LaunchLayout { ProgressView().accessibilityLabel("Chargement") }
         case .resuming:
             ResumingView(pronote: pronote)
         case .loadFailure(let message):
@@ -139,24 +149,42 @@ struct RootView: View {
     }
 }
 
+/// Logo centré comme l'écran de lancement (`UILaunchScreen`), contenu en dessous.
+private struct LaunchLayout<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        ZStack {
+            Theme.background.ignoresSafeArea()
+            BrandMark(size: 96, showsName: false)
+            content
+                .padding(.horizontal, Spacing.l)
+                .frame(maxWidth: 360)
+                .offset(y: 96)
+        }
+    }
+}
+
 /// Reprise de la connexion enregistrée : écran sobre ; après quelques secondes, l'app peut s'ouvrir sans attendre.
 private struct ResumingView: View {
     let pronote: PronoteSession
     @State private var allowSkip = false
 
     var body: some View {
-        VStack(spacing: 20) {
-            BrandMark()
-            ProgressView("Connexion à Pronote…")
-            if allowSkip {
-                Button("Ouvrir sans attendre") { pronote.openWithoutWaiting() }
-                    .buttonStyle(SecondaryButtonStyle())
-                    .frame(maxWidth: 280)
+        LaunchLayout {
+            VStack(spacing: Spacing.m) {
+                ProgressView("Connexion à Pronote…")
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.textSecondary)
+                if allowSkip {
+                    Button("Ouvrir sans attendre") { pronote.openWithoutWaiting() }
+                        .buttonStyle(SecondaryButtonStyle())
+                        .transition(.opacity)
+                }
             }
+            .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(24)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Theme.background)
+        .animation(.easeOut(duration: 0.2), value: allowSkip)
         .task {
             try? await Task.sleep(for: .seconds(10))
             allowSkip = true
@@ -167,13 +195,14 @@ private struct ResumingView: View {
 /// Reconnexion silencieuse avec les identifiants enregistrés : bandeau discret, sans écran de connexion.
 private struct ReconnectingBanner: View {
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Spacing.s) {
             ProgressView()
-            Text("Reconnexion à Pronote…").font(.subheadline)
+            Text("Reconnexion à Pronote…").font(.subheadline).foregroundStyle(Theme.text)
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.horizontal, Spacing.m)
+        .padding(.vertical, Spacing.s)
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         .background(Theme.violetSoft.ignoresSafeArea(edges: .top))
         .overlay(alignment: .bottom) { Divider() }
         .accessibilityElement(children: .combine)
@@ -181,32 +210,44 @@ private struct ReconnectingBanner: View {
 }
 
 /// Bandeau du mode hors ligne : données locales, connexion conservée, nouvel essai possible.
+/// Compact : une ligne de titre et une ligne d'explication, l'explication disparaît aux très grandes tailles de texte.
 private struct OfflineBanner: View {
     let pronote: PronoteSession
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    private var detail: String {
+        pronote.isWorking ? "Connexion à Pronote…"
+            : pronote.isBlocked ? PronoteThrottle.blockedMessage : "Tes données enregistrées restent disponibles."
+    }
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "wifi.slash").foregroundStyle(Theme.warning).accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Hors ligne").font(.subheadline.bold())
-                Text(pronote.isWorking ? "Connexion à Pronote…"
-                     : pronote.isBlocked ? PronoteThrottle.blockedMessage : "Tes données enregistrées restent disponibles.")
-                    .font(.caption).foregroundStyle(Theme.textSecondary)
+        HStack(spacing: Spacing.s) {
+            Image(systemName: "wifi.slash").font(.subheadline.weight(.semibold)).foregroundStyle(Theme.warning).accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Hors ligne").font(.subheadline.weight(.semibold)).foregroundStyle(Theme.text)
+                if !typeSize.isAccessibilitySize || pronote.isBlocked {
+                    Text(detail).font(.caption).foregroundStyle(Theme.textSecondary).lineLimit(2)
+                }
             }
-            .accessibilityElement(children: .combine)
-            Spacer(minLength: 8)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Hors ligne. \(detail)")
+            Spacer(minLength: Spacing.xs)
             if pronote.isWorking {
                 ProgressView()
             } else {
                 Button("Réessayer") { pronote.resumeSavedConnection() }
-                    .font(.subheadline.bold())
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                    .fixedSize()
                     .frame(minWidth: 44, minHeight: 44)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .padding(.horizontal, Spacing.m)
+        .padding(.vertical, Spacing.xxs)
         .background(Theme.warningSoft.ignoresSafeArea(edges: .top))
         .overlay(alignment: .bottom) { Divider() }
+        // Bandeau d'état, comme une barre système : sa taille de texte est plafonnée pour laisser la place au contenu.
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 }
 
@@ -216,17 +257,19 @@ private struct LoadFailureView: View {
     @State private var confirming = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Image(systemName: "exclamationmark.triangle").font(.largeTitle).foregroundStyle(Theme.warning).accessibilityHidden(true)
-            Text("Tes données ne s’ouvrent pas").font(.title2.bold())
+        VStack(alignment: .leading, spacing: Spacing.m) {
+            IconTile(systemName: "exclamationmark.triangle", tint: Theme.warning, background: Theme.warningSoft, size: 56)
+            Text("Tes données ne s’ouvrent pas").font(.title2.bold()).accessibilityAddTraits(.isHeader)
             Text(message).foregroundStyle(Theme.textSecondary)
             Text("Si l’iPhone vient de redémarrer, déverrouille-le puis réessaie. Rien n’a été effacé.")
                 .font(.callout).foregroundStyle(Theme.textSecondary)
             Button("Réessayer") { Task { await app.load() } }.buttonStyle(PrimaryButtonStyle())
             Button("Repartir de zéro") { confirming = true }.buttonStyle(SecondaryButtonStyle())
         }
-        .padding(24)
+        .padding(Spacing.l)
         .frame(maxWidth: 560, maxHeight: .infinity)
+        .frame(maxWidth: .infinity)
+        .background(Theme.background)
         .confirmationDialog("Repartir de zéro ?", isPresented: $confirming, titleVisibility: .visible) {
             Button("Mettre le fichier de côté et repartir", role: .destructive) { Task { await app.startOverAfterUnreadableFile() } }
             Button("Annuler", role: .cancel) {}
@@ -281,31 +324,33 @@ private struct OfficialPageLayer: View {
 
 private struct ToastLayer: View {
     @Bindable var app: AppModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack {
             if let toast = app.toast {
-                HStack(alignment: .top, spacing: 12) {
+                HStack(alignment: .top, spacing: Spacing.s) {
                     Image(systemName: toast.kind == .warning ? "exclamationmark.circle.fill" : "checkmark.circle.fill")
+                        .font(.title3)
                         .foregroundStyle(toast.kind == .warning ? Theme.warning : Theme.success)
                         .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(toast.title).font(.subheadline.bold())
+                    VStack(alignment: .leading, spacing: Spacing.xxs) {
+                        Text(toast.title).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.text)
                         Text(toast.message).font(.footnote).foregroundStyle(Theme.textSecondary)
                     }
                     Spacer(minLength: 0)
                 }
-                .padding(16)
-                .background(Theme.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.border))
-                .shadow(color: .black.opacity(0.12), radius: 16, y: 6)
-                .padding(.horizontal, 16)
+                .padding(Spacing.m)
+                .background(Theme.surface, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: Radius.card, style: .continuous).strokeBorder(Theme.border))
+                .shadow(color: Theme.violetDeep.opacity(0.12), radius: 16, y: 6)
+                .padding(.horizontal, Spacing.m)
                 .frame(maxWidth: 520)
                 .accessibilityElement(children: .combine)
                 .accessibilityAddTraits(.isButton)
                 .accessibilityHint("Touche pour fermer")
                 .onTapGesture { app.toast = nil }
-                .transition(.move(edge: .top).combined(with: .opacity))
+                .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
                 .task(id: toast.id) {
                     AccessibilityNotification.Announcement("\(toast.title). \(toast.message)").post()
                     try? await Task.sleep(for: .seconds(UIAccessibility.isVoiceOverRunning ? 9 : 4.5))
@@ -314,8 +359,8 @@ private struct ToastLayer: View {
             }
             Spacer()
         }
-        .padding(.top, 8)
-        .animation(.easeOut(duration: 0.2), value: app.toast)
+        .padding(.top, Spacing.xs)
+        .animation(.easeOut(duration: reduceMotion ? 0.15 : 0.25), value: app.toast)
         .zIndex(20)
     }
 }

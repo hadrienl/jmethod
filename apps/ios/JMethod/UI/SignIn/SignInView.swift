@@ -20,14 +20,15 @@ struct SignInView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 28) {
-                VStack(alignment: .leading, spacing: 10) {
-                    BrandMark()
-                    Text("Connexion").font(.largeTitle.weight(.heavy)).accessibilityAddTraits(.isHeader)
+            VStack(alignment: .leading, spacing: Spacing.l) {
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    BrandMark(size: 56)
+                        .padding(.bottom, Spacing.xs)
+                    Text("Connexion").font(.largeTitle.weight(.bold)).foregroundStyle(Theme.text).accessibilityAddTraits(.isHeader)
                     Text("Connecte-toi avec ton compte Pronote.").foregroundStyle(Theme.textSecondary)
                 }
 
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: Spacing.m) {
                     LabeledField(title: "Code ou adresse de l’établissement") {
                         TextField("Exemple : abcd1234", text: $schoolInput)
                             .accessibilityLabel("Code ou adresse de l’établissement")
@@ -86,7 +87,7 @@ struct SignInView: View {
                         }
                     }
 
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: Spacing.xxs) {
                         Toggle("Rester connecté", isOn: $remember)
                             .font(.body.weight(.semibold))
                             .tint(Theme.violet)
@@ -99,7 +100,7 @@ struct SignInView: View {
                     }
 
                     Button(action: submit) {
-                        HStack(spacing: 10) {
+                        HStack(spacing: Spacing.s) {
                             if pronote.isWorking { ProgressView().tint(.white) }
                             Text(pronote.isWorking ? pronote.phase.progressLabel : "Se connecter")
                         }
@@ -111,12 +112,13 @@ struct SignInView: View {
                         Label(message, systemImage: "exclamationmark.circle")
                             .font(.subheadline)
                             .foregroundStyle(Theme.danger)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .panel(fill: Theme.dangerSoft)
                             .accessibilityLabel("Erreur : \(message)")
                     }
                 }
             }
-            .padding(24)
+            .padding(.horizontal, Spacing.l)
+            .padding(.vertical, Spacing.l)
             .frame(maxWidth: 520)
             .frame(maxWidth: .infinity)
         }
@@ -158,34 +160,14 @@ struct SignInView: View {
     }
 }
 
-/// Marque J-Method (lettre et point citron), comme le web.
-struct BrandMark: View {
-    var body: some View {
-        HStack(spacing: 12) {
-            (Text("j") + Text("•").foregroundColor(Theme.lime))
-                .font(.system(.title, design: .rounded).weight(.heavy))
-                .foregroundStyle(.white)
-                .frame(width: 48, height: 48)
-                .background(Theme.violet, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .accessibilityHidden(true)
-            Text("J-Method").font(.title2.weight(.heavy))
-        }
-        .accessibilityElement(children: .combine)
-    }
-}
-
 struct LabeledField<Content: View>: View {
     let title: String
     @ViewBuilder let content: Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title).font(.subheadline.weight(.semibold))
-            content
-                .padding(12)
-                .frame(minHeight: 48)
-                .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.border))
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.text)
+            content.inputField(fill: Theme.surface)
         }
     }
 }

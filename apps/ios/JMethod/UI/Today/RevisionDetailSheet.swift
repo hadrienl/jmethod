@@ -26,37 +26,37 @@ struct RevisionDetailSheet: View {
                     Button("Fermer") { dismiss() }.accessibilityLabel("Fermer le détail de la séance")
                 }
             }
+            .navigationTitle("Séance")
             .navigationBarTitleDisplayMode(.inline)
         }
+        .presentationDragIndicator(.visible)
     }
 
     private func content(_ detail: RevisionDetail) -> some View {
         let value = Int(score)
         return ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: Spacing.l) {
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    HStack(spacing: Spacing.xs) {
                         SubjectDot(color: detail.subject.color)
-                        Text(detail.subject.name).font(.subheadline.bold())
+                        Text(detail.subject.name).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.textSecondary)
                     }
-                    Text(detail.title).font(.title2.weight(.heavy)).accessibilityAddTraits(.isHeader)
+                    .accessibilityElement(children: .combine)
+                    Text(detail.title).font(.title2.weight(.bold)).foregroundStyle(Theme.text).accessibilityAddTraits(.isHeader)
                     Text(detail.chapterLine).font(.subheadline).foregroundStyle(Theme.textSecondary)
                 }
 
-                FlowRow(spacing: 12) {
-                    Text(detail.revision.stepLabel).font(.title3.weight(.heavy)).foregroundStyle(Theme.violet)
+                FlowRow(spacing: Spacing.s) {
+                    Text(detail.revision.stepLabel).font(.title3.weight(.bold)).monospacedDigit().foregroundStyle(Theme.violet)
                     PhaseBadge(text: detail.phaseLabel, phase: detail.revision.phase)
                     Text(detail.plannedLine).font(.subheadline).foregroundStyle(Theme.textSecondary)
                 }
-                .padding(16)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Theme.background, in: RoundedRectangle(cornerRadius: 16))
-                .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.border))
+                .panel(padding: Spacing.m)
                 .accessibilityElement(children: .combine)
 
                 if let description = detail.description, !description.isEmpty {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("À revoir").font(.subheadline.bold()).accessibilityAddTraits(.isHeader)
+                    VStack(alignment: .leading, spacing: Spacing.xs) {
+                        Text("À revoir").font(.headline).accessibilityAddTraits(.isHeader)
                         Text(description).font(.subheadline).foregroundStyle(Theme.text)
                     }
                 }
@@ -64,51 +64,57 @@ struct RevisionDetailSheet: View {
                 DisclosureGroup(isExpanded: $historyExpanded) {
                     if let empty = detail.historyEmpty {
                         Text(empty).font(.subheadline).foregroundStyle(Theme.textSecondary)
-                            .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8)
+                            .frame(maxWidth: .infinity, alignment: .leading).padding(.top, Spacing.xs)
                     } else {
                         VStack(alignment: .leading, spacing: 0) {
                             ForEach(detail.history) { item in
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(item.label).font(.subheadline.bold())
+                                    Text(item.label).font(.subheadline.weight(.semibold))
                                     Text(item.detail).font(.subheadline).foregroundStyle(Theme.textSecondary)
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.vertical, 10)
+                                .padding(.vertical, Spacing.s)
                                 .accessibilityElement(children: .combine)
                                 if item.id != detail.history.last?.id { Divider() }
                             }
                         }
-                        .padding(.top, 8)
+                        .padding(.top, Spacing.xxs)
                     }
                 } label: {
                     Text(detail.historyTitle).font(.body.weight(.semibold)).foregroundStyle(Theme.text).frame(minHeight: 44)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 6)
-                .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.border))
+                .tint(Theme.violetDark)
+                .padding(.horizontal, Spacing.m)
+                .padding(.vertical, Spacing.xxs)
+                .overlay(RoundedRectangle(cornerRadius: Radius.panel, style: .continuous).strokeBorder(Theme.border))
 
                 if let completed = detail.completedLine {
                     Label(completed, systemImage: "checkmark.circle.fill")
+                        .font(.subheadline.weight(.semibold))
                         .foregroundStyle(Theme.success)
-                        .padding(16)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Theme.successSoft, in: RoundedRectangle(cornerRadius: 14))
+                        .panel(padding: Spacing.m, fill: Theme.successSoft)
                 } else {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Ta mémorisation : \(value)/100").font(.subheadline.weight(.semibold))
+                    VStack(alignment: .leading, spacing: Spacing.s) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text("Ta mémorisation").font(.subheadline.weight(.semibold))
+                            Spacer(minLength: Spacing.xs)
+                            Text("\(value)/100").font(.headline).monospacedDigit().foregroundStyle(Theme.violetDark)
+                                .contentTransition(.numericText(value: Double(value)))
+                        }
+                        .accessibilityHidden(true)
                         Slider(value: $score, in: 0...100, step: Double(Constants.scoreStep))
                             .tint(Theme.violet)
                             .accessibilityLabel("Ta mémorisation")
                             .accessibilityValue("\(value) sur 100")
                             .onChange(of: score) { _, _ in confirming = false }
                         Text("50 conserve le rythme prévu. Ta note ajuste les prochaines révisions.")
-                            .font(.caption).foregroundStyle(Theme.textSecondary)
+                            .font(.footnote).foregroundStyle(Theme.textSecondary)
                     }
-                    .padding(16)
-                    .background(Theme.background, in: RoundedRectangle(cornerRadius: 16))
+                    .panel(padding: Spacing.m)
+                    .sensoryFeedback(.selection, trigger: value)
 
                     if confirming {
-                        VStack(alignment: .leading, spacing: 12) {
+                        VStack(alignment: .leading, spacing: Spacing.s) {
                             Text("Terminer cette séance avec \(value)/100 ?").font(.headline).accessibilityAddTraits(.isHeader)
                             Text("Elle sera enregistrée comme faite aujourd’hui et les prochaines dates seront ajustées.")
                                 .font(.subheadline).foregroundStyle(Theme.textSecondary)
@@ -119,18 +125,20 @@ struct RevisionDetailSheet: View {
                             .buttonStyle(PrimaryButtonStyle())
                             Button("Revenir") { confirming = false }.buttonStyle(SecondaryButtonStyle())
                         }
-                        .padding(16)
-                        .background(Theme.violetSoft, in: RoundedRectangle(cornerRadius: 16))
-                        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.violetLight))
+                        .panel(padding: Spacing.m, fill: Theme.violetSoft, stroke: Theme.violetLight)
+                        .transition(.opacity)
                     } else {
                         Button { confirming = true } label: {
-                            Label("Valider la séance", systemImage: "checkmark.circle")
+                            Label("Valider la séance", systemImage: "checkmark")
                         }
                         .buttonStyle(PrimaryButtonStyle())
                     }
                 }
             }
-            .padding(20)
+            .padding(.horizontal, Spacing.screen)
+            .padding(.top, Spacing.xs)
+            .padding(.bottom, Spacing.l)
+            .animation(.easeOut(duration: 0.2), value: confirming)
         }
         .background(Theme.surface)
     }

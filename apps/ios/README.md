@@ -24,4 +24,16 @@ Accès : sans connexion active, seul l'écran de connexion s'affiche. Avec un je
 
 Le script `native/shared/PronoteAutomation.js` est intégré tel quel au bundle.
 
+Tests de fumée et captures d'écran (`JMethodUITests`, schéma séparé `JMethodUITests` pour garder les tests unitaires rapides) : chaque test lance l'app en Debug avec `-JMethodPreviewFixture`, un document fictif calculé autour du jour réel et écrit dans un fichier temporaire distinct (ni le document de l'utilisateur, ni ses préférences, ni Pronote ne sont lus ou modifiés). Ils parcourent les cinq onglets et les trois modes du Planning, font défiler jusqu'en bas, ouvrent chaque feuille, saisissent dans le formulaire de création (clavier), valident une séance, affichent l'écran de connexion (`-JMethodPreviewSignIn`, aucun identifiant prérempli) et reprennent l'essentiel en Dynamic Type « Accessibilité XL ». Les captures sont jointes au résultat ; pour les écrire aussi en PNG :
+
+```sh
+TEST_RUNNER_JMETHOD_SCREENSHOT_DIR=/chemin/captures TEST_RUNNER_JMETHOD_SCREENSHOT_PREFIX=clair \
+xcodebuild test -project apps/ios/JMethod.xcodeproj -scheme JMethodUITests \
+  -destination 'platform=iOS Simulator,name=iPhone 18 Pro' -derivedDataPath apps/ios/DerivedData
+```
+
+`TEST_RUNNER_JMETHOD_UI_TEXT_SIZE=xl` passe toute la série en très grande taille de texte. L'app assume un thème clair (`UIUserInterfaceStyle = Light`, comme le web et Android) : en apparence sombre du système, elle reste identique.
+
+Design : jetons dans `JMethod/UI/Theme.swift` (palette, espacements 4/8/12/16/24/32, rayons, styles de texte système) et composants partagés (`surface`, `panel`, `inputField`, boutons principal/secondaire/teinté, `Tag`, `IconTile`, `SectionHeader`, `EmptyState`). L'icône (claire, sombre et teintée) et le logo de l'écran de lancement sont dessinés par `Tools/make-icons.swift` (CoreGraphics) : `swift apps/ios/Tools/make-icons.swift apps/ios/JMethod/Assets.xcassets`.
+
 Vérification visuelle sur simulateur : en build Debug seulement, l'argument de lancement `-JMethodOfflinePreview` ouvre l'app hors ligne sur les données locales (aucune connexion ni requête Pronote). Les données d'essai se déposent dans le conteneur de l'app (`xcrun simctl get_app_container booted fr.jmethod.app data`, fichier `Library/Application Support/jmethod-data.json`) ; elles restent fictives et hors du dépôt.

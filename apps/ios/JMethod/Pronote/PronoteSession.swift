@@ -90,6 +90,10 @@ final class PronoteSession {
     /// Incrémenté à la déconnexion : un jeton renouvelé par une connexion antérieure n'est plus enregistré.
     @ObservationIgnored private var epoch = 0
     @ObservationIgnored private var resumed = false
+    #if DEBUG
+    /// Aperçu Debug (`-JMethodOfflinePreview`, `-JMethodPreviewFixture`, `-JMethodPreviewSignIn`) : aucune connexion automatique.
+    @ObservationIgnored private var previewOnly = false
+    #endif
     /// Une connexion par jeton est en vol (premier plan ou arrière-plan) : aucune autre n'est lancée en parallèle.
     @ObservationIgnored private var tokenLoginInFlight = false
     /// Une seule reconnexion silencieuse par jeton refusé ; remis à zéro quand un nouveau jeton est obtenu.
@@ -178,6 +182,10 @@ final class PronoteSession {
 
     /// Retour au premier plan : reconnexion différée (jeton refusé en arrière-plan) ou synchronisation après 6 h.
     func foregroundActivated(now: Date = Date()) {
+        #if DEBUG
+        // Aperçus Debug : aucune connexion automatique au retour au premier plan.
+        if previewOnly { return }
+        #endif
         guard resumed, !isWorking, !tokenLoginInFlight, !webActive, !throttle.isBlocked(now: now) else { return }
         if vault.needsSilentRelogin && vault.autoReloginEnabled {
             handleRefusedToken()
@@ -208,7 +216,18 @@ final class PronoteSession {
     /// ouvre l'app hors ligne sur les données locales, sans connexion ni requête Pronote.
     func enterOfflinePreview() {
         resumed = true
+        previewOnly = true
         access = .offline
+    }
+
+    /// Vérification visuelle de l'écran de connexion (`-JMethodPreviewSignIn`, Debug) : aucune reprise, et rien
+    /// d'enregistré n'est prérempli à l'écran (le trousseau n'est ni lu de nouveau ni modifié).
+    func enterSignInPreview() {
+        resumed = true
+        previewOnly = true
+        school = nil
+        savedLogin = nil
+        access = .signedOut
     }
     #endif
 

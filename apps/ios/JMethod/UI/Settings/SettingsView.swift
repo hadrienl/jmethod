@@ -31,6 +31,7 @@ struct SettingsView: View {
     @State private var exporting: JSONExportDocument?
     @State private var importing = false
     @State private var pendingImport: Backup.Accepted?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var current: Draft {
         // Un brouillon périmé (réglages changés ailleurs, restauration) repart des réglages enregistrés.
@@ -47,7 +48,7 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: Spacing.m) {
                     PronoteAccountSection(app: app, pronote: pronote)
                     algorithm
                     intervals
@@ -55,15 +56,16 @@ struct SettingsView: View {
                     backup
                     about
                 }
-                .padding(16)
-                .frame(maxWidth: 720)
-                .frame(maxWidth: .infinity)
+                .screenContent()
             }
             .background(Theme.background)
             .navigationTitle("Réglages")
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                if current.dirty { unsavedBar }
+                if current.dirty {
+                    unsavedBar.transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+                }
             }
+            .animation(.easeOut(duration: 0.2), value: current.dirty)
         }
         .sheet(item: $colorFor) { subject in
             ColorSheet(subject: subject) { color in
@@ -99,10 +101,10 @@ struct SettingsView: View {
     private var algorithm: some View {
         let value = current
         return section("Algorithme adaptatif", subtitle: "Point pivot à 50 : règle l’espacement des séances et le seuil de rattrapage.") {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
                 HStack(alignment: .firstTextBaseline) {
                     Text("Sensibilité de l’espacement : \(SettingsLogic.jsNumber(value.sensitivity))").font(.subheadline.weight(.semibold))
-                    Spacer(minLength: 8)
+                    Spacer(minLength: Spacing.xs)
                     Text(SettingsLogic.sensitivityLabel(value.sensitivity)).font(.caption.monospacedDigit()).foregroundStyle(Theme.textSecondary)
                 }
                 Slider(value: Binding(get: { value.sensitivity }, set: { newValue in edit { $0.sensitivity = SettingsLogic.snapSensitivity(newValue) } }),
@@ -120,10 +122,9 @@ struct SettingsView: View {
                 .font(.caption2).foregroundStyle(Theme.textSecondary)
                 .accessibilityHidden(true)
             }
-            .padding(14)
-            .background(Theme.background, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .panel()
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
                 Text(SettingsLogic.thresholdLabel(value.threshold)).font(.subheadline.weight(.semibold))
                 Slider(value: Binding(get: { value.threshold }, set: { newValue in edit { $0.threshold = SettingsLogic.snapThreshold(newValue) } }),
                        in: SettingsLogic.thresholdRange, step: SettingsLogic.thresholdStep)
@@ -131,10 +132,9 @@ struct SettingsView: View {
                     .accessibilityLabel("Seuil de rattrapage")
                     .accessibilityValue("Moins de \(SettingsLogic.jsNumber(value.threshold)) sur 100")
                 Text("Toute note inférieure à ce seuil programme une séance de rattrapage le lendemain (J+1).")
-                    .font(.caption).foregroundStyle(Theme.textSecondary)
+                    .font(.footnote).foregroundStyle(Theme.textSecondary)
             }
-            .padding(14)
-            .background(Theme.background, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .panel()
         }
     }
 
@@ -142,34 +142,32 @@ struct SettingsView: View {
         let value = current
         let canRemove = value.intervals.count > SettingsLogic.removeRequiresMoreThan
         return section("Intervalles des J", subtitle: "Paliers de révision appliqués à chaque nouveau cours. Les cours existants gardent leur calendrier.") {
-            FlowRow(spacing: 8) {
+            FlowRow(spacing: Spacing.xs) {
                 ForEach(value.intervals, id: \.self) { interval in
-                    HStack(spacing: 2) {
-                        Text("J\(interval)").font(.subheadline.weight(.bold).monospacedDigit()).padding(.leading, 12)
-                            .padding(.trailing, SettingsLogic.removeButtonShown(interval) ? 0 : 12)
+                    HStack(spacing: 0) {
+                        Text("J\(interval)").font(.subheadline.weight(.semibold).monospacedDigit()).padding(.leading, Spacing.s)
+                            .padding(.trailing, SettingsLogic.removeButtonShown(interval) ? 0 : Spacing.s)
                         if SettingsLogic.removeButtonShown(interval) {
                             Button { edit { $0.intervals = SettingsLogic.removeInterval($0.intervals, value: interval) } } label: {
-                                Image(systemName: "xmark").font(.caption.weight(.bold)).frame(width: 36, height: 44)
+                                Image(systemName: "xmark").font(.caption2.weight(.bold)).foregroundStyle(Theme.textMuted).frame(width: 36, height: 44)
+                                    .contentShape(Rectangle())
                             }
                             .disabled(!canRemove)
                             .accessibilityLabel("Retirer le palier J\(interval)")
                         }
                     }
                     .frame(minHeight: 44)
-                    .background(Theme.background, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.border))
+                    .background(Theme.background, in: Capsule())
+                    .overlay(Capsule().strokeBorder(Theme.border))
                 }
             }
             if !canRemove {
                 Text("Il faut garder au moins deux paliers.").font(.caption).foregroundStyle(Theme.textSecondary)
             }
-            HStack(spacing: 8) {
+            HStack(spacing: Spacing.xs) {
                 TextField("Nouveau J", text: Binding(get: { current.newInterval }, set: { text in edit { $0.newInterval = text } }), prompt: Text("ex. : 120"))
                     .keyboardType(.numberPad)
-                    .padding(.horizontal, 12)
-                    .frame(minHeight: 44)
-                    .background(Theme.background, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.border))
+                    .inputField()
                 Button("Ajouter") {
                     // Comme le web : le champ n'est vidé que si le palier est ajouté.
                     edit { draft in
@@ -185,6 +183,7 @@ struct SettingsView: View {
             }
             Button("Rétablir les valeurs initiales") { edit { $0.intervals = SettingsLogic.resetIntervals() } }
                 .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Theme.violetDark)
                 .frame(minHeight: 44)
         }
     }
@@ -194,31 +193,35 @@ struct SettingsView: View {
             if app.document.subjects.isEmpty {
                 Text("Aucune matière.").font(.subheadline).foregroundStyle(Theme.textSecondary)
             }
-            ForEach(app.document.subjects) { subject in
-                Button { colorFor = subject } label: {
-                    HStack(spacing: 12) {
-                        Circle().fill(Color(hex: subject.color)).frame(width: 24, height: 24)
-                            .overlay(Circle().strokeBorder(Theme.border))
-                        Text(subject.name).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.text)
-                        Spacer(minLength: 8)
-                        Text(subject.color.uppercased()).font(.caption.monospaced()).foregroundStyle(Theme.textSecondary)
-                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(Theme.textMuted)
+            VStack(spacing: 0) {
+                ForEach(app.document.subjects) { subject in
+                    Button { colorFor = subject } label: {
+                        HStack(spacing: Spacing.s) {
+                            Circle().fill(Color(hex: subject.color)).frame(width: 24, height: 24)
+                                .overlay(Circle().strokeBorder(.black.opacity(0.08)))
+                            Text(subject.name).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.text)
+                            Spacer(minLength: Spacing.xs)
+                            Text(subject.color.uppercased()).font(.caption.monospaced()).foregroundStyle(Theme.textMuted)
+                            Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Theme.textMuted)
+                        }
+                        .padding(.horizontal, Spacing.s)
+                        .frame(minHeight: 48)
+                        .contentShape(Rectangle())
                     }
-                    .padding(.horizontal, 12)
-                    .frame(minHeight: 48)
-                    .background(Theme.background, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(subject.name), couleur \(subject.color)")
+                    .accessibilityHint("Changer la couleur")
+                    if subject.id != app.document.subjects.last?.id { Divider().padding(.leading, 48) }
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("\(subject.name), couleur \(subject.color)")
-                .accessibilityHint("Changer la couleur")
             }
+            .background(Theme.background, in: RoundedRectangle(cornerRadius: Radius.panel, style: .continuous))
         }
     }
 
     private var backup: some View {
         section("Sauvegarde et export", subtitle: "Tes données sont enregistrées uniquement sur cet iPhone. Exporte une copie pour les garder ou les ouvrir dans J-Method sur le web.") {
             Text("\(app.document.courses.count) cours et \(app.document.revisions.count) séance\(app.document.revisions.count > 1 ? "s" : "") enregistré\(app.document.revisions.count > 1 ? "es" : "e").")
-                .font(.caption).foregroundStyle(Theme.textSecondary)
+                .font(.footnote).foregroundStyle(Theme.textSecondary)
             Button {
                 exporting = JSONExportDocument(text: app.exportText())
             } label: {
@@ -230,14 +233,21 @@ struct SettingsView: View {
             }
             .buttonStyle(SecondaryButtonStyle())
             Text("Une restauration remplace tes cours et tes séances ; une confirmation est demandée avant. Ton emploi du temps Pronote est conservé.")
-                .font(.caption).foregroundStyle(Theme.textSecondary)
+                .font(.footnote).foregroundStyle(Theme.textSecondary)
         }
     }
 
     private var about: some View {
         section("À propos") {
-            Text("J-Method, version \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—")")
-                .font(.subheadline.weight(.semibold))
+            HStack(spacing: Spacing.s) {
+                BrandMark(size: 40, showsName: false)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("J-Method").font(.cardTitle)
+                    Text("Version \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—")")
+                        .font(.footnote).foregroundStyle(Theme.textSecondary)
+                }
+            }
+            .accessibilityElement(children: .combine)
             Text("J-Method lit Pronote en lecture seule : emploi du temps et cahier de textes. Rien n’est jamais modifié ni envoyé dans Pronote.")
                 .font(.subheadline).foregroundStyle(Theme.textSecondary)
             Text("Tes cours, tes séances et tes réglages restent sur cet iPhone, sans compte ni serveur J-Method. Tes identifiants Pronote sont chiffrés dans le trousseau de l’iPhone, sans iCloud.")
@@ -246,39 +256,37 @@ struct SettingsView: View {
     }
 
     private var unsavedBar: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Spacing.s) {
             Text("Modifications non enregistrées").font(.subheadline.weight(.semibold))
-            Spacer(minLength: 8)
+            Spacer(minLength: Spacing.xs)
             Button("Annuler") { draft = nil }
                 .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Theme.violetDark)
                 .frame(minHeight: 44)
             Button("Enregistrer") {
                 let value = current
                 app.saveSettings(sensitivity: value.sensitivity, emergencyThreshold: value.threshold, intervals: value.intervals)
                 draft = nil
             }
-            .font(.subheadline.weight(.bold))
+            .font(.subheadline.weight(.semibold))
             .foregroundStyle(.white)
-            .padding(.horizontal, 16)
+            .padding(.horizontal, Spacing.m)
             .frame(minHeight: 44)
-            .background(Theme.violet, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .background(Theme.violet, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.horizontal, Spacing.m)
+        .padding(.vertical, Spacing.xs)
         .background(.regularMaterial)
         .overlay(alignment: .top) { Divider() }
         .accessibilityElement(children: .contain)
     }
 
     private func section<Content: View>(_ title: String, subtitle: String? = nil, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title).font(.title3.weight(.heavy)).accessibilityAddTraits(.isHeader)
-                if let subtitle { Text(subtitle).font(.subheadline).foregroundStyle(Theme.textSecondary) }
-            }
+        VStack(alignment: .leading, spacing: Spacing.s) {
+            SectionHeader(title: title, subtitle: subtitle)
             content()
         }
-        .surface(padding: 16)
+        .surface()
     }
 
     // MARK: Restauration
@@ -349,8 +357,14 @@ private struct ColorSheet: View {
         let valid = SettingsLogic.isValidColor(hex)
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 48), spacing: 8)], spacing: 8) {
+                VStack(alignment: .leading, spacing: Spacing.m) {
+                    HStack(spacing: Spacing.s) {
+                        Circle().fill(Color(hex: valid ? hex : subject.color)).frame(width: 32, height: 32)
+                            .overlay(Circle().strokeBorder(.black.opacity(0.08)))
+                            .accessibilityHidden(true)
+                        Text(subject.name).font(.headline)
+                    }
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 48), spacing: Spacing.xs)], spacing: Spacing.xs) {
                         ForEach(SettingsLogic.palette, id: \.self) { color in
                             let selected = color.caseInsensitiveCompare(hex) == .orderedSame
                             Button { hex = color } label: {
@@ -364,27 +378,20 @@ private struct ColorSheet: View {
                             .accessibilityAddTraits(selected ? .isSelected : [])
                         }
                     }
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: Spacing.xs) {
                         Text("Code couleur").font(.subheadline.weight(.semibold))
                         TextField("Code couleur", text: Binding(get: { hex }, set: { hex = String($0.trimmingCharacters(in: .whitespaces).prefix(7)) }), prompt: Text("#RRGGBB"))
                             .textInputAutocapitalization(.characters)
                             .autocorrectionDisabled()
                             .font(.body.monospaced())
-                            .padding(.horizontal, 12)
-                            .frame(minHeight: 44)
-                            .background(Theme.background, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(valid ? Theme.border : Theme.danger))
+                            .inputField(invalid: !valid)
                         if !valid { Text("Format attendu : #RRGGBB").font(.caption).foregroundStyle(Theme.danger) }
-                    }
-                    HStack(spacing: 12) {
-                        Circle().fill(Color(hex: valid ? hex : subject.color)).frame(width: 28, height: 28).accessibilityHidden(true)
-                        Text(subject.name).font(.headline)
                     }
                     Button("Appliquer") { onApply(hex) }
                         .buttonStyle(PrimaryButtonStyle())
                         .disabled(!valid)
                 }
-                .padding(20)
+                .padding(Spacing.m)
             }
             .navigationTitle("Couleur : \(subject.name)")
             .navigationBarTitleDisplayMode(.inline)
@@ -393,6 +400,7 @@ private struct ColorSheet: View {
             }
         }
         .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
     }
 }
 
@@ -403,8 +411,8 @@ private struct PronoteAccountSection: View {
     @State private var confirmingDisconnect = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Pronote").font(.title3.weight(.heavy)).accessibilityAddTraits(.isHeader)
+        VStack(alignment: .leading, spacing: Spacing.s) {
+            SectionHeader(title: "Pronote")
             status
             if let children = pronote.account?.children, children.count > 1 {
                 Picker("Élève suivi", selection: Binding(
@@ -437,9 +445,9 @@ private struct PronoteAccountSection: View {
             .buttonStyle(PrimaryButtonStyle())
             .disabled(pronote.isWorking)
             Button("Se déconnecter", role: .destructive) { confirmingDisconnect = true }
-                .frame(maxWidth: .infinity, minHeight: 44)
+                .buttonStyle(DestructiveTextButtonStyle())
         }
-        .surface(padding: 16)
+        .surface()
         .confirmationDialog("Se déconnecter de Pronote ?", isPresented: $confirmingDisconnect, titleVisibility: .visible) {
             Button("Se déconnecter", role: .destructive) { Task { await pronote.disconnect(forgetLogin: false) } }
             Button("Se déconnecter et oublier mes identifiants", role: .destructive) { Task { await pronote.disconnect(forgetLogin: true) } }
@@ -451,13 +459,13 @@ private struct PronoteAccountSection: View {
 
     @ViewBuilder private var status: some View {
         if pronote.access == .connected {
-            VStack(alignment: .leading, spacing: 4) {
-                Label("Connecté", systemImage: "checkmark.circle.fill").font(.subheadline.bold()).foregroundStyle(Theme.success)
-                if let name = pronote.account?.name, !name.isEmpty { Text(name).font(.title3.bold()) }
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
+                Label("Connecté", systemImage: "checkmark.circle.fill").font(.subheadline.weight(.semibold)).foregroundStyle(Theme.success)
+                if let name = pronote.account?.name, !name.isEmpty { Text(name).font(.headline) }
             }
         } else {
-            VStack(alignment: .leading, spacing: 4) {
-                Label("Hors ligne", systemImage: "wifi.slash").font(.subheadline.bold()).foregroundStyle(Theme.warning)
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
+                Label("Hors ligne", systemImage: "wifi.slash").font(.subheadline.weight(.semibold)).foregroundStyle(Theme.warning)
                 Text("Pronote n’a pas pu être joint. Tes données enregistrées restent disponibles.")
                     .font(.subheadline).foregroundStyle(Theme.textSecondary)
             }

@@ -19,7 +19,7 @@ struct AddCourseSheet: View {
 
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
+                VStack(alignment: .leading, spacing: Spacing.l) {
                     Text("J-Method programme automatiquement \(milestones > 1 ? "les \(milestones) échéances" : "l’échéance") de révision de ce cours.")
                         .font(.subheadline).foregroundStyle(Theme.textSecondary)
 
@@ -27,7 +27,7 @@ struct AddCourseSheet: View {
                         if app.document.subjects.isEmpty {
                             Text("Aucune matière disponible.").font(.subheadline).foregroundStyle(Theme.danger)
                         }
-                        FlowRow(spacing: 8) {
+                        FlowRow(spacing: Spacing.xs) {
                             ForEach(app.document.subjects) { subject in
                                 FilterChip(title: subject.name, color: subject.color, selected: draft.subjectId == subject.id) {
                                     app.courseDraft.subjectId = subject.id
@@ -37,25 +37,26 @@ struct AddCourseSheet: View {
                     }
 
                     section("Chapitre") {
-                        HStack(alignment: .top, spacing: 12) {
+                        HStack(alignment: .top, spacing: Spacing.s) {
                             TextField("Chapitre", text: $app.courseDraft.chapter, prompt: Text("ex : Arithmétique, Guerre froide…"))
                                 .textInputAutocapitalization(.sentences)
                                 .focused($focus, equals: .chapter)
                                 .submitLabel(.next)
                                 .onSubmit { focus = .title }
-                                .fieldStyle()
+                                .accessibilityIdentifier("course-chapter")
+                                .inputField()
                             VStack(spacing: 2) {
                                 Text("C\(number)").font(.headline.monospacedDigit()).foregroundStyle(Theme.violetDark)
                                 Text("Numéro").font(.caption2).foregroundStyle(Theme.textMuted)
                             }
                             .frame(minWidth: 64, minHeight: 48)
-                            .background(Theme.violetSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .background(Theme.violetSoft, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
                             .accessibilityElement(children: .combine)
                             .accessibilityLabel("Numéro attribué automatiquement : C\(number)")
                         }
                         if !suggestions.isEmpty {
-                            Text("Chapitres existants :").font(.caption).foregroundStyle(Theme.textSecondary)
-                            FlowRow(spacing: 8) {
+                            Text("Chapitres existants :").font(.footnote).foregroundStyle(Theme.textSecondary)
+                            FlowRow(spacing: Spacing.xs) {
                                 ForEach(suggestions, id: \.self) { chapter in
                                     FilterChip(title: chapter, selected: false) { app.courseDraft.chapter = chapter }
                                         .accessibilityHint("Reprend ce chapitre")
@@ -70,7 +71,8 @@ struct AddCourseSheet: View {
                             .focused($focus, equals: .title)
                             .submitLabel(.next)
                             .onSubmit { focus = .notes }
-                            .fieldStyle()
+                            .accessibilityIdentifier("course-title")
+                            .inputField()
                     }
 
                     section("Date du cours (J0)") {
@@ -82,34 +84,44 @@ struct AddCourseSheet: View {
                             .tint(Theme.violet)
                             .frame(minHeight: 44)
                         Text("La première séance (Découvrir, J0) est programmée ce jour-là.")
-                            .font(.caption).foregroundStyle(Theme.textSecondary)
+                            .font(.footnote).foregroundStyle(Theme.textSecondary)
                     }
 
                     section("Notes ou notions clés (facultatif)") {
                         TextField("Notes ou notions clés", text: $app.courseDraft.description, prompt: Text("ex : Définitions p. 45, exercices 12 et 14…"), axis: .vertical)
                             .lineLimit(2...6)
                             .focused($focus, equals: .notes)
-                            .fieldStyle()
-                    }
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Button {
-                            if app.createCourse() { dismiss() }
-                        } label: {
-                            Label("Créer le cours C\(number)", systemImage: "plus")
-                        }
-                        .buttonStyle(PrimaryButtonStyle())
-                        .disabled(!canSubmit)
-                        if !canSubmit {
-                            Text("Indique une matière, un chapitre et un titre pour créer le cours.")
-                                .font(.caption).foregroundStyle(Theme.textSecondary)
-                        }
+                            .accessibilityIdentifier("course-notes")
+                            .inputField()
                     }
                 }
-                .padding(20)
+                .padding(.horizontal, Spacing.screen)
+                .padding(.top, Spacing.xs)
+                .padding(.bottom, Spacing.l)
             }
             .scrollDismissesKeyboard(.interactively)
             .background(Theme.surface)
+            // Action principale toujours visible, au-dessus du clavier.
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    Button {
+                        if app.createCourse() { dismiss() }
+                    } label: {
+                        Label("Créer le cours C\(number)", systemImage: "plus")
+                    }
+                    .buttonStyle(PrimaryButtonStyle())
+                    .disabled(!canSubmit)
+                    if !canSubmit {
+                        Text("Indique une matière, un chapitre et un titre pour créer le cours.")
+                            .font(.footnote).foregroundStyle(Theme.textSecondary)
+                    }
+                }
+                .padding(.horizontal, Spacing.screen)
+                .padding(.vertical, Spacing.s)
+                .frame(maxWidth: .infinity)
+                .background(.bar)
+                .overlay(alignment: .top) { Divider() }
+            }
             .navigationTitle("Nouveau cours")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -128,22 +140,10 @@ struct AddCourseSheet: View {
     }
 
     private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title.uppercased()).font(.caption.weight(.bold)).tracking(0.8).foregroundStyle(Theme.textSecondary)
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.text)
                 .accessibilityAddTraits(.isHeader)
             content()
         }
-    }
-}
-
-private extension View {
-    func fieldStyle() -> some View {
-        self
-            .font(.body)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-            .frame(minHeight: 48)
-            .background(Theme.background, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.border))
     }
 }

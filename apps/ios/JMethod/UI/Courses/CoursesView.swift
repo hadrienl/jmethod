@@ -15,19 +15,17 @@ struct CoursesView: View {
             Group {
                 if document.courses.isEmpty {
                     ScrollView {
-                        VStack(spacing: 16) {
-                            NotebookCard { app.presented = .notebook(subjectId: nil) }
+                        VStack(spacing: Spacing.m) {
                             EmptyCourses(app: app, onShowPlanning: onShowPlanning)
+                            NotebookCard { app.presented = .notebook(subjectId: nil) }
                         }
-                            .padding(16)
-                            .frame(maxWidth: 720)
-                            .frame(maxWidth: .infinity)
+                        .screenContent()
                     }
                 } else {
                     ScrollView {
-                        VStack(alignment: .leading, spacing: 16) {
-                            NotebookCard { app.presented = .notebook(subjectId: nil) }
+                        VStack(alignment: .leading, spacing: Spacing.m) {
                             SubjectChips(subjects: document.subjects, selection: $subjectId)
+                            NotebookCard { app.presented = .notebook(subjectId: nil) }
                             if list.empty {
                                 NoMatch { search = ""; subjectId = nil }
                             } else {
@@ -36,16 +34,14 @@ struct CoursesView: View {
                                 }
                             }
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .frame(maxWidth: 720)
-                        .frame(maxWidth: .infinity)
+                        .screenContent()
                     }
                     .searchable(text: $search, placement: .navigationBarDrawer(displayMode: .always), prompt: "Cours, chapitre, C1, C14…")
                 }
             }
             .background(Theme.background)
             .navigationTitle(list.header)
+            .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button { app.openAddCourse() } label: {
@@ -64,26 +60,18 @@ private struct NotebookCard: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 14) {
-                Image(systemName: "text.book.closed")
-                    .font(.title3)
-                    .foregroundStyle(Theme.violet)
-                    .frame(width: 44, height: 44)
-                    .background(Theme.violetTrack, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .accessibilityHidden(true)
+            HStack(spacing: Spacing.s) {
+                IconTile(systemName: "text.book.closed")
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Cahier de textes").font(.headline).foregroundStyle(Theme.text)
-                    Text("Contenus de séance et devoirs publiés dans Pronote").font(.caption).foregroundStyle(Theme.textSecondary)
+                    Text("Cahier de textes").font(.cardTitle).foregroundStyle(Theme.text)
+                    Text("Contenus de séance et devoirs publiés dans Pronote").font(.footnote).foregroundStyle(Theme.textSecondary)
                         .multilineTextAlignment(.leading)
                 }
-                Spacer(minLength: 8)
-                Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(Theme.textMuted).accessibilityHidden(true)
+                Spacer(minLength: Spacing.xs)
+                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Theme.textMuted).accessibilityHidden(true)
             }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.border))
-            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .surface(padding: Spacing.s)
+            .contentShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
@@ -101,15 +89,10 @@ private struct EmptyCourses: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            VStack(alignment: .leading, spacing: 12) {
-                Image(systemName: "books.vertical")
-                    .font(.system(size: 34, weight: .regular))
-                    .foregroundStyle(Theme.violet)
-                    .frame(width: 64, height: 64)
-                    .background(Theme.violetTrack, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    .accessibilityHidden(true)
-                Text("Ajoute ton premier cours").font(.title2.weight(.heavy)).accessibilityAddTraits(.isHeader)
+        VStack(alignment: .leading, spacing: Spacing.m) {
+            VStack(alignment: .leading, spacing: Spacing.s) {
+                IconTile(systemName: "books.vertical", size: 56)
+                Text("Ajoute ton premier cours").font(.title2.weight(.bold)).accessibilityAddTraits(.isHeader)
                 Text("Après chaque cours, note son chapitre et son titre : J-Method programme aussitôt tes séances Découvrir, S’entraîner et Se tester.")
                     .font(.subheadline).foregroundStyle(Theme.textSecondary)
                 Button { app.openAddCourse() } label: {
@@ -119,8 +102,8 @@ private struct EmptyCourses: View {
             }
             .surface()
 
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Depuis ton emploi du temps").font(.headline).accessibilityAddTraits(.isHeader)
+            VStack(alignment: .leading, spacing: Spacing.s) {
+                Text("Depuis ton emploi du temps").font(.cardTitle).accessibilityAddTraits(.isHeader)
                 if upcoming.isEmpty {
                     Text("Aucun créneau Pronote à venir pour l’instant. Mets à jour l’emploi du temps dans Réglages.")
                         .font(.subheadline).foregroundStyle(Theme.textSecondary)
@@ -146,8 +129,8 @@ private struct UpcomingSlot: View {
     let onAdd: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            HStack(spacing: Spacing.xs) {
                 SubjectDot(color: subject?.color ?? "#CBD5E1", size: 10)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(event.subjectName).font(.subheadline.weight(.bold))
@@ -158,9 +141,7 @@ private struct UpcomingSlot: View {
             .accessibilityElement(children: .combine)
             AddCourseFromSlotButton(subjectName: event.subjectName, action: onAdd)
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.background, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .panel()
     }
 }
 
@@ -170,7 +151,7 @@ private struct SubjectChips: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: Spacing.xs) {
                 FilterChip(title: "Toutes", selected: selection == nil) { selection = nil }
                 ForEach(subjects) { subject in
                     FilterChip(title: subject.name, color: subject.color, selected: selection == subject.id) { selection = subject.id }
@@ -178,6 +159,7 @@ private struct SubjectChips: View {
             }
             .padding(.vertical, 2)
         }
+        .scrollClipDisabled()
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Filtrer par matière")
     }
@@ -187,16 +169,9 @@ private struct NoMatch: View {
     let onReset: () -> Void
 
     var body: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "magnifyingglass").font(.largeTitle).foregroundStyle(Theme.textMuted).accessibilityHidden(true)
-            Text("Aucun cours trouvé").font(.headline)
-            Text("Essaie de modifier ta recherche ou tes filtres.").font(.subheadline).foregroundStyle(Theme.textSecondary)
+        EmptyState(systemImage: "magnifyingglass", title: "Aucun cours trouvé", message: "Essaie de modifier ta recherche ou tes filtres.") {
             Button("Effacer la recherche et les filtres", action: onReset).buttonStyle(SecondaryButtonStyle())
         }
-        .multilineTextAlignment(.center)
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 20)
-        .surface()
     }
 }
 
@@ -206,21 +181,22 @@ private struct SubjectCoursesCard: View {
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4)) : AnyLayout(HStackLayout(spacing: 10))
+        VStack(alignment: .leading, spacing: Spacing.m) {
+            let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: Spacing.xxs))
+                : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: Spacing.xs))
             layout {
-                HStack(spacing: 10) {
-                    SubjectDot(color: group.subject.color, size: 14)
-                    Text(group.subject.name).font(.title3.weight(.heavy))
+                HStack(spacing: Spacing.xs) {
+                    SubjectDot(color: group.subject.color, size: 12)
+                    Text(group.subject.name).font(.sectionTitle).foregroundStyle(Theme.text)
                 }
-                Text(group.countLabel).font(.subheadline).foregroundStyle(Theme.textSecondary)
+                Text(group.countLabel).font(.subheadline).foregroundStyle(Theme.textMuted)
             }
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
             ForEach(group.chapters) { chapter in
-                VStack(alignment: .leading, spacing: 8) {
-                    (Text("Chapitre : ").foregroundColor(Theme.textSecondary) + Text(chapter.chapter).bold())
-                        .font(.subheadline)
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    (Text("Chapitre : ").foregroundColor(Theme.textMuted) + Text(chapter.chapter).foregroundColor(Theme.textSecondary).bold())
+                        .font(.footnote)
                         .accessibilityAddTraits(.isHeader)
                     ForEach(chapter.cards) { card in
                         CourseCard(card: card) { onOpen(card.course) }
@@ -228,7 +204,7 @@ private struct SubjectCoursesCard: View {
                 }
             }
         }
-        .surface(padding: 14)
+        .surface()
     }
 }
 
@@ -238,39 +214,36 @@ private struct CourseCard: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(card.badge)
-                        .font(.caption.weight(.bold).monospacedDigit())
-                        .foregroundStyle(Theme.violetDark)
-                        .padding(.horizontal, 8).padding(.vertical, 3)
-                        .background(Theme.violetSoft, in: RoundedRectangle(cornerRadius: 6))
-                    Spacer(minLength: 8)
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
+                    Tag(text: card.badge)
+                    Text(card.course.title).font(.body.weight(.semibold)).foregroundStyle(Theme.text).multilineTextAlignment(.leading)
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Theme.textMuted)
+                }
+                FlowRow(spacing: Spacing.s) {
+                    Label(card.dateLine, systemImage: "calendar")
                     if let score = card.lastScoreLine {
-                        Text(score).font(.caption.weight(.semibold)).foregroundStyle(Theme.success)
+                        Text(score).foregroundStyle(Theme.success).fontWeight(.semibold)
                     }
                 }
-                Text(card.course.title).font(.body.weight(.bold)).foregroundStyle(Theme.text).multilineTextAlignment(.leading)
-                Label(card.dateLine, systemImage: "calendar").font(.caption).foregroundStyle(Theme.textSecondary)
-                HStack {
-                    Text("Progression").font(.caption).foregroundStyle(Theme.textSecondary)
-                    Spacer()
-                    Text(card.counter).font(.caption.weight(.bold).monospacedDigit()).foregroundStyle(Theme.text)
+                .font(.footnote)
+                .foregroundStyle(Theme.textSecondary)
+                HStack(spacing: Spacing.s) {
+                    ProgressBar(percent: card.progress, height: 6)
+                    Text(card.counter).font(.footnote.weight(.semibold).monospacedDigit()).foregroundStyle(Theme.text).fixedSize()
                 }
-                ProgressBar(percent: card.progress)
                 if let next = card.next {
                     HStack {
-                        Label(next.label, systemImage: "clock").font(.caption).foregroundStyle(Theme.textSecondary)
-                        Spacer()
-                        Text(next.date).font(.caption).foregroundStyle(Theme.textMuted)
+                        Label(next.label, systemImage: "clock").foregroundStyle(Theme.textSecondary)
+                        Spacer(minLength: Spacing.xs)
+                        Text(next.date).foregroundStyle(Theme.textMuted)
                     }
+                    .font(.footnote)
                 }
             }
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.background, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.border))
-            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .panel()
+            .contentShape(RoundedRectangle(cornerRadius: Radius.panel, style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)

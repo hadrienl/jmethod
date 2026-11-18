@@ -7,7 +7,11 @@ struct JMethodApp: App {
     @State private var notebook: NotebookModel
 
     init() {
+        #if DEBUG
+        let model = PreviewFixture.isEnabled ? PreviewFixture.makeModel() : AppModel.live()
+        #else
         let model = AppModel.live()
+        #endif
         let session = PronoteSession(app: model)
         _app = State(initialValue: model)
         _pronote = State(initialValue: session)

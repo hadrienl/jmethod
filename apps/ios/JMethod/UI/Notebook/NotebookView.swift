@@ -30,17 +30,17 @@ struct NotebookView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    Text("Contenus de séance, devoirs et pièces jointes publiés dans Pronote, en lecture seule. Rien n’est modifié dans Pronote et aucun cours n’est créé automatiquement.")
-                        .font(.subheadline).foregroundStyle(Theme.textSecondary)
+                VStack(alignment: .leading, spacing: Spacing.m) {
+                    Label("Lecture seule : rien n’est modifié dans Pronote et aucun cours n’est créé automatiquement.", systemImage: "lock")
+                        .font(.footnote).foregroundStyle(Theme.textSecondary)
                     if let subjectName {
                         Button { model.subjectId = nil } label: {
-                            HStack(spacing: 6) {
+                            HStack(spacing: Spacing.xs) {
                                 Text(subjectName).font(.subheadline.weight(.semibold))
                                 Image(systemName: "xmark").font(.caption.weight(.bold))
                             }
                             .foregroundStyle(Theme.violetDeep)
-                            .padding(.horizontal, 14)
+                            .padding(.horizontal, Spacing.m)
                             .frame(minHeight: 44)
                             .background(Theme.violetTrack, in: Capsule())
                         }
@@ -49,19 +49,19 @@ struct NotebookView: View {
                         .accessibilityHint("Affiche toutes les matières")
                     }
                     if let error = model.error {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text(error).font(.subheadline).foregroundStyle(Theme.danger)
+                        VStack(alignment: .leading, spacing: Spacing.s) {
+                            Label(error, systemImage: "exclamationmark.circle").font(.subheadline).foregroundStyle(Theme.danger)
                             Button("Réessayer") { model.refresh() }.buttonStyle(SecondaryButtonStyle())
                         }
-                        .padding(16)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Theme.dangerSoft, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .panel(padding: Spacing.m, fill: Theme.dangerSoft)
                     }
                     if model.loading {
-                        HStack(spacing: 12) {
+                        HStack(spacing: Spacing.s) {
                             ProgressView()
-                            Text("Lecture du cahier de textes…").font(.subheadline)
+                            Text("Lecture du cahier de textes…").font(.subheadline).foregroundStyle(Theme.textSecondary)
                         }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, Spacing.l)
                         .accessibilityElement(children: .combine)
                     }
                     if let snapshot = model.snapshot {
@@ -71,6 +71,7 @@ struct NotebookView: View {
                             Text("Devoirs (\(homework.count))").tag(NotebookModel.Tab.homework)
                         }
                         .pickerStyle(.segmented)
+                        .sensoryFeedback(.selection, trigger: model.tab)
                         if model.tab == .contents {
                             if sessions.isEmpty { empty("Aucun contenu de cours publié sur cette période.") }
                             ForEach(sessions) { SessionCard(session: $0, model: model, openLink: open) }
@@ -80,9 +81,7 @@ struct NotebookView: View {
                         }
                     }
                 }
-                .padding(16)
-                .frame(maxWidth: 720)
-                .frame(maxWidth: .infinity)
+                .screenContent()
             }
             .background(Theme.background)
             .navigationTitle("Cahier de textes")
@@ -113,31 +112,27 @@ struct NotebookView: View {
     }
 
     private func summary(_ snapshot: NotebookSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Spacing.xxs) {
             Text("\(sessions.count) \(sessions.count > 1 ? "séances publiées" : "séance publiée") · \(homework.count) \(homework.count > 1 ? "devoirs" : "devoir") · \(attachmentCount) \(attachmentCount > 1 ? "pièces jointes et liens" : "pièce jointe ou lien")")
-                .font(.subheadline.weight(.bold))
+                .font(.subheadline.weight(.semibold))
             Text("Du \(FrenchDate.format(snapshot.from, "dd/MM/yyyy")) au \(FrenchDate.format(snapshot.to, "dd/MM/yyyy"))")
-                .font(.caption).foregroundStyle(Theme.textSecondary)
+                .font(.footnote).foregroundStyle(Theme.textSecondary)
             if snapshot.skippedEntries > 0 {
                 Text(snapshot.skippedEntries > 1
                      ? "\(snapshot.skippedEntries) entrées sans date exploitable n’ont pas été affichées."
                      : "1 entrée sans date exploitable n’a pas été affichée.")
-                    .font(.caption).foregroundStyle(Theme.warning)
+                    .font(.footnote).foregroundStyle(Theme.warning)
             }
             if !snapshot.homeworkAvailable {
-                Text("Le travail à faire n’est pas disponible pour ce compte.").font(.caption).foregroundStyle(Theme.textSecondary)
+                Text("Le travail à faire n’est pas disponible pour ce compte.").font(.footnote).foregroundStyle(Theme.textSecondary)
             }
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.border))
+        .surface()
         .accessibilityElement(children: .combine)
     }
 
     private func empty(_ text: String) -> some View {
-        Text(text).font(.subheadline).foregroundStyle(Theme.textSecondary).multilineTextAlignment(.center)
-            .frame(maxWidth: .infinity).padding(24)
+        EmptyState(systemImage: "tray", title: "Rien pour l’instant", message: text)
     }
 }
 
@@ -148,11 +143,8 @@ private struct NotebookCard<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) { content }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.border))
+        VStack(alignment: .leading, spacing: Spacing.xs) { content }
+            .surface()
     }
 }
 
@@ -164,16 +156,16 @@ private struct SessionCard: View {
     var body: some View {
         NotebookCard {
             HStack(alignment: .firstTextBaseline) {
-                Text(session.subject).font(.headline)
-                Spacer(minLength: 8)
-                Text(dayLabel(session.date)).font(.caption).foregroundStyle(Theme.textSecondary)
+                Text(session.subject).font(.cardTitle)
+                Spacer(minLength: Spacing.xs)
+                Text(dayLabel(session.date)).font(.footnote).foregroundStyle(Theme.textSecondary)
             }
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
             ForEach(Array(session.contents.enumerated()), id: \.offset) { _, content in
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: Spacing.xs) {
                     if !content.category.isEmpty {
-                        Text(content.category).font(.caption.weight(.semibold)).foregroundStyle(Theme.violetDark)
+                        Tag(text: content.category)
                     }
                     Text(content.title.isEmpty ? "Séance publiée sans titre" : content.title).font(.body.weight(.semibold))
                     if !content.description.isEmpty {
@@ -181,7 +173,7 @@ private struct SessionCard: View {
                     }
                     LinksAndAttachments(links: content.links, attachments: content.attachments, model: model, openLink: openLink)
                 }
-                .padding(.top, 4)
+                .padding(.top, Spacing.xxs)
             }
         }
     }
@@ -195,9 +187,9 @@ private struct HomeworkCard: View {
     var body: some View {
         NotebookCard {
             HStack(alignment: .firstTextBaseline) {
-                Text(item.subject).font(.headline)
-                Spacer(minLength: 8)
-                Text("Pour le \(FrenchDate.format(item.dueDate, "EEEE d MMMM"))").font(.caption).foregroundStyle(Theme.textSecondary)
+                Text(item.subject).font(.cardTitle)
+                Spacer(minLength: Spacing.xs)
+                Text("Pour le \(FrenchDate.format(item.dueDate, "EEEE d MMMM"))").font(.footnote).foregroundStyle(Theme.textSecondary)
             }
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
@@ -226,7 +218,7 @@ private struct LinksAndAttachments: View {
                 if let url = attachment.url { linkButton(attachment.name, url: url) }
             case .file:
                 Button { model.download(attachment) } label: {
-                    HStack(spacing: 10) {
+                    HStack(spacing: Spacing.s) {
                         if model.downloadingId == attachment.id {
                             ProgressView()
                         } else {
@@ -235,13 +227,8 @@ private struct LinksAndAttachments: View {
                         Text(attachment.name).lineLimit(2).multilineTextAlignment(.leading)
                         Spacer(minLength: 0)
                     }
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Theme.violetDark)
-                    .padding(.horizontal, 14)
-                    .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
-                    .background(Theme.violetSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(TintedButtonStyle())
                 .disabled(model.downloadingId != nil)
                 .accessibilityLabel("Ouvrir la pièce jointe : \(attachment.name)")
             }

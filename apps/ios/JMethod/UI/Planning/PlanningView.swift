@@ -20,21 +20,12 @@ struct PlanningView: View {
                                     subjects: document.subjects, pronoteEvents: document.pronoteEvents)
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    let headerLayout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(spacing: 8))
-                    headerLayout {
-                        Picker("Période affichée", selection: $mode) {
-                            ForEach(PlanningScreen.Mode.allCases) { Text($0.label).tag($0) }
-                        }
-                        .pickerStyle(.segmented)
-                        Button("Aujourd’hui") { anchor = nil }
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(Theme.violetDark)
-                            .padding(.horizontal, 12)
-                            .frame(minHeight: 44)
-                            .background(Theme.violetSoft, in: Capsule())
-                            .accessibilityHint("Revient à la période d’aujourd’hui")
+                VStack(alignment: .leading, spacing: Spacing.m) {
+                    Picker("Période affichée", selection: $mode) {
+                        ForEach(PlanningScreen.Mode.allCases) { Text($0.label).tag($0) }
                     }
+                    .pickerStyle(.segmented)
+                    .sensoryFeedback(.selection, trigger: mode)
 
                     PeriodBar(period: screen.period.capitalizedFirst, onPrevious: { move(-1) }, onNext: { move(1) })
 
@@ -67,14 +58,17 @@ struct PlanningView: View {
                         }
                     }
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 12)
-                .frame(maxWidth: 720)
-                .frame(maxWidth: .infinity)
+                .screenContent()
             }
             .background(Theme.background)
             .navigationTitle("Planning")
-            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Aujourd’hui") { anchor = nil }
+                        .disabled(anchor == nil)
+                        .accessibilityHint("Revient à la période d’aujourd’hui")
+                }
+            }
         }
         #if DEBUG
         .onAppear {
@@ -96,9 +90,9 @@ private struct PeriodBar: View {
     let onNext: () -> Void
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: Spacing.xxs) {
             Button(action: onPrevious) {
-                Image(systemName: "chevron.left").font(.body.weight(.semibold)).frame(width: 44, height: 44)
+                Image(systemName: "chevron.left").font(.body.weight(.semibold)).frame(width: 44, height: 44).contentShape(Rectangle())
             }
             .foregroundStyle(Theme.violetDark)
             .accessibilityLabel("Période précédente")
@@ -110,13 +104,14 @@ private struct PeriodBar: View {
                 .frame(maxWidth: .infinity)
                 .accessibilityAddTraits([.isHeader, .updatesFrequently])
             Button(action: onNext) {
-                Image(systemName: "chevron.right").font(.body.weight(.semibold)).frame(width: 44, height: 44)
+                Image(systemName: "chevron.right").font(.body.weight(.semibold)).frame(width: 44, height: 44).contentShape(Rectangle())
             }
             .foregroundStyle(Theme.violetDark)
             .accessibilityLabel("Période suivante")
         }
-        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.border))
+        .padding(.horizontal, Spacing.xxs)
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: Radius.panel, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Radius.panel, style: .continuous).strokeBorder(Theme.border))
     }
 }
 
@@ -130,8 +125,8 @@ private struct FiltersBar: View {
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
-            HStack(spacing: 8) { subjectMenu; phaseMenu }
-            VStack(alignment: .leading, spacing: 8) { subjectMenu; phaseMenu }
+            HStack(spacing: Spacing.xs) { subjectMenu; phaseMenu }
+            VStack(alignment: .leading, spacing: Spacing.xs) { subjectMenu; phaseMenu }
         }
     }
 
@@ -160,16 +155,16 @@ private struct FiltersBar: View {
     }
 
     private func menuLabel(title: String, value: String, active: Bool) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: Spacing.xxs + 2) {
             Text("\(title) :").foregroundStyle(Theme.textSecondary)
             Text(value).fontWeight(.semibold).foregroundStyle(active ? Theme.violetDeep : Theme.text).lineLimit(1)
-            Image(systemName: "chevron.up.chevron.down").font(.caption).foregroundStyle(Theme.textMuted)
+            Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.semibold)).foregroundStyle(Theme.textMuted)
         }
         .font(.subheadline)
-        .padding(.horizontal, 12)
+        .padding(.horizontal, Spacing.s)
         .frame(minHeight: 44)
-        .background(active ? Theme.violetTrack : Theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(active ? Theme.violet : Theme.border))
+        .background(active ? Theme.violetTrack : Theme.surface, in: Capsule())
+        .overlay(Capsule().strokeBorder(active ? Theme.violet : Theme.border, lineWidth: active ? 1.5 : 1))
     }
 }
 
@@ -182,9 +177,7 @@ private struct NoCourseHint: View {
         }
         .font(.subheadline)
         .foregroundStyle(Theme.violetDeep)
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.violetSoft, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .panel(padding: Spacing.s, fill: Theme.violetSoft)
     }
 }
 
@@ -201,30 +194,30 @@ struct PlanningDaySection: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
+        VStack(alignment: .leading, spacing: Spacing.s) {
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
                 Text(day.heading.capitalizedFirst)
-                    .font(.headline)
+                    .font(.cardTitle)
                     .foregroundStyle(day.outsideMonth == true ? Theme.textMuted : Theme.text)
                     .accessibilityAddTraits(.isHeader)
-                Spacer(minLength: 8)
+                Spacer(minLength: Spacing.xs)
                 Text(day.countLabel)
-                    .font(.caption.weight(day.isToday ? .bold : .regular))
+                    .font(.footnote.weight(day.isToday ? .semibold : .regular))
                     .foregroundStyle(day.isToday ? Theme.violetDark : Theme.textSecondary)
             }
 
             if let summary = day.timetableSummary {
                 DisclosureGroup(isExpanded: $timetableExpanded) {
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: Spacing.xxs) {
                         ForEach(day.events) { item in
                             TimetableRow(item: item, subject: item.subjectId.flatMap(app.subject(id:))) {
                                 app.openAddCourse(from: item.event)
                             }
                         }
                     }
-                    .padding(.top, 8)
+                    .padding(.top, Spacing.xs)
                 } label: {
-                    Label(summary, systemImage: "calendar")
+                    Label(summary, systemImage: "clock")
                         .font(.subheadline)
                         .foregroundStyle(Theme.textSecondary)
                         .frame(minHeight: 44, alignment: .leading)
@@ -240,13 +233,7 @@ struct PlanningDaySection: View {
                 }
             }
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .strokeBorder(day.isToday ? Theme.violet : Theme.border, lineWidth: day.isToday ? 2 : 1)
-        )
+        .surface(highlighted: day.isToday)
     }
 }
 
@@ -257,25 +244,26 @@ private struct TimetableRow: View {
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
-            HStack(spacing: 8) {
+            HStack(spacing: Spacing.xs) {
                 label
-                Spacer(minLength: 8)
+                Spacer(minLength: Spacing.xs)
                 if item.canAddCourse { AddCourseFromSlotButton(subjectName: item.event.subjectName, compact: true, action: onAdd) }
             }
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
                 label
                 if item.canAddCourse { AddCourseFromSlotButton(subjectName: item.event.subjectName, action: onAdd) }
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.leading, Spacing.s)
+        .padding(.trailing, Spacing.xxs)
+        .padding(.vertical, Spacing.xxs)
         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-        .background(Theme.background, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(Theme.background, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
     }
 
     private var label: some View {
-        HStack(spacing: 8) {
-            SubjectDot(color: subject?.color ?? "#CBD5E1", size: 10)
+        HStack(spacing: Spacing.xs) {
+            SubjectDot(color: subject?.color ?? "#CBD5E1", size: 8)
             Text(item.label)
                 .font(.subheadline)
                 .foregroundStyle(item.event.isCancelled ? Theme.textMuted : Theme.text)
@@ -290,38 +278,43 @@ private struct TimetableRow: View {
 private struct PlanningTile: View {
     let tile: PlanningScreen.Tile
     let action: () -> Void
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
+        let shape = RoundedRectangle(cornerRadius: Radius.panel, style: .continuous)
         Button(action: action) {
             HStack(spacing: 0) {
-                Rectangle().fill(Color(hex: tile.subject.color)).frame(width: 5).accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(tile.subject.name).font(.subheadline.weight(.bold)).foregroundStyle(Theme.text)
-                        Spacer(minLength: 8)
-                        Text(tile.revision.stepLabel)
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(Theme.violetDark)
-                            .padding(.horizontal, 8).padding(.vertical, 3)
-                            .background(Theme.violetSoft, in: RoundedRectangle(cornerRadius: 6))
+                Rectangle().fill(Color(hex: tile.subject.color)).frame(width: 4).accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: Spacing.xxs) {
+                    HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
+                        Text(tile.subject.name).font(.footnote.weight(.semibold)).foregroundStyle(Theme.textSecondary).layoutPriority(1)
+                        Spacer(minLength: Spacing.xs)
+                        Text(tile.revision.stepLabel).font(.footnote.weight(.bold).monospacedDigit()).foregroundStyle(Theme.violetDark)
                     }
-                    PhaseBadge(text: tile.phaseLine, phase: tile.revision.phase)
-                    Text(tile.course.title).font(.body.weight(.bold)).foregroundStyle(Theme.text).multilineTextAlignment(.leading)
-                    Text(tile.course.chapter).font(.caption).foregroundStyle(Theme.textSecondary)
-                    if tile.done {
-                        Label(tile.footer, systemImage: "checkmark.circle.fill")
-                            .font(.caption.weight(.semibold)).foregroundStyle(Theme.success)
-                    } else {
-                        Text(tile.footer).font(.caption.weight(.semibold)).foregroundStyle(Theme.violetDark)
+                    Text(tile.course.title).font(.body.weight(.semibold)).foregroundStyle(tile.done ? Theme.textSecondary : Theme.text)
+                        .multilineTextAlignment(.leading)
+                    Text(tile.course.chapter).font(.footnote).foregroundStyle(Theme.textMuted)
+                    let footerLayout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: Spacing.xs))
+                        : AnyLayout(HStackLayout(spacing: Spacing.xs))
+                    footerLayout {
+                        PhaseBadge(text: tile.phaseLine, phase: tile.revision.phase)
+                        if !typeSize.isAccessibilitySize { Spacer(minLength: Spacing.xs) }
+                        if tile.done {
+                            Label(tile.footer, systemImage: "checkmark.circle.fill")
+                                .font(.footnote.weight(.semibold)).foregroundStyle(Theme.success)
+                        } else {
+                            Text(tile.footer).font(.footnote.weight(.semibold)).foregroundStyle(Theme.violetDark)
+                        }
                     }
+                    .padding(.top, Spacing.xxs)
                 }
-                .padding(12)
+                .padding(Spacing.s)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .background(tile.done ? Theme.background : Theme.surface)
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.border))
-            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .clipShape(shape)
+            .overlay(shape.strokeBorder(Theme.border))
+            .contentShape(shape)
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
@@ -341,22 +334,20 @@ private struct MonthGrid: View {
     private let initials = ["L", "M", "M", "J", "V", "S", "D"]
 
     var body: some View {
-        VStack(spacing: 6) {
-            HStack(spacing: 4) {
+        VStack(spacing: Spacing.xs) {
+            HStack(spacing: Spacing.xxs) {
                 ForEach(0..<7, id: \.self) { index in
                     Text(initials[index]).font(.caption.weight(.semibold)).foregroundStyle(Theme.textMuted).frame(maxWidth: .infinity)
                 }
             }
             .accessibilityHidden(true)
-            LazyVGrid(columns: columns, spacing: 4) {
+            LazyVGrid(columns: columns, spacing: Spacing.xxs) {
                 ForEach(days) { day in
                     MonthCell(day: day, selected: day.date == selected) { onSelect(day.date) }
                 }
             }
         }
-        .padding(10)
-        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Theme.border))
+        .surface(padding: Spacing.s)
     }
 }
 
@@ -388,7 +379,8 @@ private struct MonthCell: View {
             }
             .frame(maxWidth: .infinity, minHeight: 44)
             .background(selected ? Theme.violet : day.isToday ? Theme.violetTrack : Color.clear,
-                        in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+            .contentShape(Rectangle())
             .opacity(day.outsideMonth == true && !selected ? 0.6 : 1)
         }
         .buttonStyle(.plain)
