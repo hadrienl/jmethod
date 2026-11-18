@@ -184,6 +184,9 @@ class ProtocolVectorsTest {
         assertEquals("https://school.index-education.net/pronote/eleve.html", PronotePolicy.normalizedAddress("http://school.index-education.net/pronote/"))
         assertEquals("https://school.index-education.net/pronote/eleve.html", PronotePolicy.normalizedAddress("school.index-education.net/pronote"))
         assertEquals("https://school.index-education.net/pronote/parent.html", PronotePolicy.normalizedAddress("https://school.index-education.net/pronote/mobile.parent.html?fd=1#x"))
+        // L’ENT redirige l’adresse nue vers son CAS : le formulaire natif charge la connexion directe Pronote.
+        assertEquals("https://school.index-education.net/pronote/parent.html?login=true", PronotePolicy.directLoginPage("https://school.index-education.net/pronote/parent.html"))
+        assertEquals("https://school.index-education.net/pronote/eleve.html?login=true", PronotePolicy.directLoginPage("https://school.index-education.net/pronote/eleve.html?p=daCas#x"))
         assertEquals("https://school.index-education.net/pronote/parent.html", PronotePolicy.normalizedAddress("HTTPS://School.Index-Education.net/pronote/parent.html?login=true"))
         assertEquals("", PronotePolicy.normalizedAddress("   "))
         PronotePolicy.validatedUrl(PronotePolicy.normalizedAddress("school.index-education.net"))

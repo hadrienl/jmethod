@@ -192,6 +192,19 @@ fun LoginScreen(viewModel: PronoteViewModel, state: PronoteUiState) {
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Brand() }
             SectionCard(padding = JSpacing.xl) {
                 Text("Connexion à Pronote", style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() })
+                var showHelp by rememberSaveable { mutableStateOf(false) }
+                Column {
+                    Text(
+                        "Utilise ton identifiant et ton mot de passe Pronote, pas ceux d’ÉduConnect.",
+                        style = MaterialTheme.typography.bodyMedium, color = JColors.Slate600,
+                    )
+                    TextButton(
+                        onClick = { showHelp = true },
+                        contentPadding = PaddingValues(horizontal = 0.dp),
+                        modifier = Modifier.heightIn(min = 48.dp),
+                    ) { Text("En savoir plus", fontWeight = FontWeight.Bold) }
+                }
+                if (showHelp) SignInHelpSheet(onDismiss = { showHelp = false })
                 OutlinedTextField(
                     value = form.school,
                     onValueChange = controller::onSchoolChange,

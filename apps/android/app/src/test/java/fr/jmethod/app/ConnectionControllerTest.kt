@@ -140,7 +140,7 @@ class ConnectionControllerTest {
         }
         controller.submitCredentials()
         assertEquals("", controller.uiState.value.form.password)
-        assertEquals(pageUrl, page.loaded.last())
+        assertEquals("$pageUrl?login=true", page.loaded.last())
         assertFalse(controller.uiState.value.showBrowser)
         controller.onPageStarted()
         controller.onPageFinished(pageUrl)
@@ -202,7 +202,7 @@ class ConnectionControllerTest {
         controller.onUsernameChange("u")
         controller.onPasswordChange("p")
         controller.submitCredentials()
-        assertEquals("$origin/pronote/parent.html", page.loaded.single())
+        assertEquals("$origin/pronote/parent.html?login=true", page.loaded.single())
         assertEquals(AccountType.PARENT, controller.uiState.value.form.accountType)
     }
 
@@ -396,7 +396,7 @@ class ConnectionControllerTest {
         val controller = controller(FakePronoteServer(token = "jeton-qr"), page, FakeVault(), mutableListOf())
         val nonce = submit(controller, page, password = "faux")
         send(controller, message("error", nonce) { put("code", "LOGIN_REJECTED") })
-        assertEquals("Pronote a refusé l’identifiant ou le mot de passe. Vérifie-les puis réessaie.", controller.uiState.value.formError)
+        assertEquals("Pronote a refusé l’identifiant ou le mot de passe. Utilise ceux de Pronote, pas ceux d’ÉduConnect, puis réessaie.", controller.uiState.value.formError)
         assertFalse(controller.uiState.value.browserStarted)
         assertEquals(AccessPhase.SIGNED_OUT, controller.uiState.value.access)
 
@@ -455,7 +455,7 @@ class ConnectionControllerTest {
         controller.start()
         // Jeton refusé : parcours masqué avec les identifiants enregistrés, sans écran de connexion.
         assertNull(vault.credentials)
-        assertEquals(pageUrl, page.loaded.single())
+        assertEquals("$pageUrl?login=true", page.loaded.single())
         val state = controller.uiState.value
         assertEquals(AccessPhase.CHECKING, state.access)
         assertTrue(state.reconnecting)
@@ -615,7 +615,7 @@ class ConnectionControllerTest {
         vault.markNeedsRelogin()
         controller.onForeground()
         assertNull(vault.credentials)
-        assertEquals(pageUrl, page.loaded.single())
+        assertEquals("$pageUrl?login=true", page.loaded.single())
         assertTrue(controller.uiState.value.reconnecting)
         assertEquals(AccessPhase.CONNECTED, controller.uiState.value.access)
     }
@@ -761,13 +761,13 @@ class ConnectionControllerTest {
         assertEquals(AccessPhase.OFFLINE, controller.uiState.value.access)
         assertTrue(controller.uiState.value.isError)
         controller.retry()
-        assertEquals(pageUrl, page.loaded.single())
+        assertEquals("$pageUrl?login=true", page.loaded.single())
 
         val later = FakePage()
         val allowed = MemoryThrottle().apply { recordSilentAttempt(now.minusSeconds(3700)) }
         val second = controller(server, later, savedVault(server, token = "jeton-perime"), mutableListOf(), storedLogin(), throttle = allowed)
         second.start()
-        assertEquals(pageUrl, later.loaded.single())
+        assertEquals("$pageUrl?login=true", later.loaded.single())
         assertEquals(now, allowed.lastSilentAttempt())
     }
 
