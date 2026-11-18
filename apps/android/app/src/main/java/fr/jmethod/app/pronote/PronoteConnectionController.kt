@@ -290,7 +290,7 @@ class PronoteConnectionController(
             return
         }
         if (automatic && !throttle.silentAllowed(now())) {
-            signedOut("Ta connexion à Pronote a expiré. Reconnecte-toi pour continuer.")
+            if (canReconnectSilently()) silentDeferred() else signedOut("Ta connexion à Pronote a expiré. Reconnecte-toi pour continuer.")
             return
         }
         val stored = loginStore?.load()
@@ -614,16 +614,37 @@ class PronoteConnectionController(
         session = null
         synchronized(guard.vaultLock) { vault.clear() }
         state.update { it.copy(hasSavedSession = false, account = null) }
-        if (!silentUsed && state.value.hasStoredPassword && loginStore?.load()?.autoReconnect == true &&
-            !throttle.isBlocked(now()) && throttle.silentAllowed(now())
-        ) {
-            // Lancé hors du traitement en cours, qui est invalidé par la nouvelle tentative.
-            scope.launch { startSilent(automatic = true) }
+        if (canReconnectSilently()) {
+            when {
+                throttle.isBlocked(now()) -> showBlocked()
+                // Reconnexion silencieuse déjà faite ou plafond horaire : hors ligne, « Réessayer » reste possible.
+                silentUsed || !throttle.silentAllowed(now()) -> silentDeferred()
+                // Lancé hors du traitement en cours, qui est invalidé par la nouvelle tentative.
+                else -> scope.launch { startSilent(automatic = true) }
+            }
         } else {
             val mfa = error is PronoteException && error.code == "mfa"
             signedOut(if (mfa) messageFor(error, "") else "Ta connexion à Pronote a expiré. Reconnecte-toi pour continuer.")
         }
         return true
+    }
+
+    /** Identifiants enregistrés et reconnexion automatique permise (pas de déconnexion volontaire). */
+    private fun canReconnectSilently() =
+        state.value.hasStoredPassword && loginStore?.load()?.let { it.autoReconnect && it.username != null && it.password != null } == true
+
+    /**
+     * Reconnexion silencieuse automatique non autorisée pour l’instant : l’app s’ouvre hors ligne sur les
+     * données locales, avec le bandeau et « Réessayer » (comme iOS). L’écran de connexion est réservé à
+     * l’absence de connexion enregistrée, à la déconnexion volontaire et au mot de passe refusé.
+     */
+    private fun silentDeferred() {
+        session = null
+        state.update {
+            it.copy(browserStarted = false, showBrowser = false, busy = false, reconnecting = false, isError = true,
+                access = AccessPhase.OFFLINE, title = "Reconnexion en attente",
+                message = "Ta connexion à Pronote a expiré. Touche Réessayer pour te reconnecter.")
+        }
     }
 
     private fun offlineTitle(error: Exception) = if (error is IOException) "Hors ligne" else "Pronote indisponible"

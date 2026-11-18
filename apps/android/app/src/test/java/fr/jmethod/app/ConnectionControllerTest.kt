@@ -757,7 +757,11 @@ class ConnectionControllerTest {
         val controller = controller(server, page, savedVault(server, token = "jeton-perime"), mutableListOf(), storedLogin(), throttle = throttle)
         controller.start()
         assertTrue(page.loaded.isEmpty())
-        assertEquals(AccessPhase.SIGNED_OUT, controller.uiState.value.access)
+        // Comme iOS : hors ligne sur les données locales, pas l’écran de connexion ; « Réessayer » reste possible.
+        assertEquals(AccessPhase.OFFLINE, controller.uiState.value.access)
+        assertTrue(controller.uiState.value.isError)
+        controller.retry()
+        assertEquals(pageUrl, page.loaded.single())
 
         val later = FakePage()
         val allowed = MemoryThrottle().apply { recordSilentAttempt(now.minusSeconds(3700)) }
