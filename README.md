@@ -1,67 +1,46 @@
 # J-Method
 
-POC web d’un assistant de révision pour collégiens et lycéens, basé sur la méthode des J. Objectif à terme : applications iOS et Android.
+Assistant de révision pour collégiens et lycéens, basé sur la méthode des J : chaque soir, l’app prépare les révisions du lendemain (Découvrir, S’entraîner, Se tester) et adapte les intervalles à l’autoévaluation.
 
-## Version de test
+Deux applications natives indépendantes, sans serveur : les données restent sur le téléphone.
 
-https://hadrienl.github.io/jmethod/
+| Plateforme | Dossier | Pile |
+|---|---|---|
+| iOS 17+ | [`apps/ios`](apps/ios/README.md) | SwiftUI, Observation, XcodeGen |
+| Android 8+ (API 26) | [`apps/android`](apps/android/README.md) | Kotlin, Jetpack Compose, Material 3 |
 
-Chaque push sur `main` déclenche la compilation et la publication via GitHub Actions. Le build Pages utilise la base `/jmethod/`. Les données de chaque testeur restent dans son navigateur.
+## Fonctionnalités
 
-## Démarrer
+- **Connexion Pronote** en lecture seule : code d’établissement, identifiant et mot de passe dans un formulaire natif ; la page officielle est utilisée masquée pour associer l’app, puis un client HTTPS natif lit les données. « Rester connecté » garde les identifiants chiffrés sur l’appareil (Keychain, Android Keystore). Synchronisation en arrière-plan.
+- **Aujourd’hui** : le programme du soir pour le lendemain, l’emploi du temps de demain, l’autoévaluation de 0 à 100 et la replanification adaptative.
+- **Planning** : jour, semaine, mois, filtres, détail d’une séance.
+- **Mes cours** : création (y compris depuis un créneau Pronote), fiche, historique, suppression.
+- **Mes progrès** et **Réglages** : indicateurs, algorithme, paliers, couleurs des matières, sauvegarde et restauration JSON.
+- **Cahier de textes** : contenus de séance, devoirs et pièces jointes, en lecture seule.
 
-```sh
-npm ci
-npm run setup:pronote
-npm run dev
-```
-
-Ouvrir http://localhost:5173, puis **Réglages → Connecter Pronote par QR code**. Importe une capture du QR d’ajout de compte généré dans Pronote et saisis le même code temporaire à quatre chiffres. Les 14 prochains jours sont importés dans le planning et les cours de demain.
-
-`npm run dev` lance l’interface et le connecteur Python local (127.0.0.1:8766). `npm run dev:web` lance uniquement l’interface. Le service garde la session Pronote en mémoire pendant huit heures au maximum ; un arrêt du service nécessite une nouvelle connexion. Les créneaux importés restent dans le navigateur. Aucun QR, mot de passe ou jeton n’est sauvegardé dans le projet.
-
-La connexion QR est locale pour ce POC. Elle n’est pas disponible sur GitHub Pages. Les comptes hébergés sur `*.index-education.net` sont pris en charge ; les hébergements personnalisés et l’enregistrement de périphériques de confiance ne le sont pas encore.
+## Compiler
 
 ```sh
-npm run build
-npm run preview
+# iOS
+xcodegen generate --spec apps/ios/project.yml
+open apps/ios/JMethod.xcodeproj
+
+# Android (Java 21)
+cd apps/android && ./gradlew :app:testDebugUnitTest :app:assembleDebug
 ```
 
-## Prototype
+Les détails (signature, appareils, tests d’interface) sont dans le README de chaque app.
 
-- Aujourd’hui : révisions du lendemain à préparer ce soir, progression de la soirée et séances regroupées par matière. Les séances antérieures non terminées restent visibles.
-- Planning : jour, semaine et mois avec filtres.
-- Mes cours : création, détail, historique et suppression.
-- Mes progrès : indicateurs de suivi.
-- Réglages : intervalles, adaptation, matières et sauvegarde JSON.
-- Autoévaluation de 0 à 100 : adaptation des intervalles autour du pivot 50, séance de rattrapage sous le seuil configuré.
-- Connexion Pronote par QR dans la version locale, synchronisation de l’emploi du temps en lecture seule et sélection de l’enfant pour les comptes parents.
-- Aperçu du cahier de textes réel : contenus publiés, devoirs et pièces jointes téléchargeables, sans création automatique de fiches de révision.
-- Emploi du temps iCal du lendemain et jeu de démonstration.
+## Organisation du dépôt
 
-Le premier lancement installe des **données de démonstration**. Les données restent dans le stockage local du navigateur ; aucun compte ou serveur de synchronisation n’est implémenté.
+- `apps/` : les deux applications.
+- `native/shared/` : ce que les deux apps partagent — script d’automatisation de la page Pronote, contrat du pont WebView, références du protocole (emploi du temps, cahier de textes) et vecteurs de test synthétiques.
+- `native/shared/domain/` : vecteurs de parité de la logique métier, rejoués par les tests Swift et JVM, et [écarts volontaires](native/shared/domain/DEVIATIONS.md).
+- `native/ios`, `native/android`, `native/tests` : POC de connexion qui a validé l’approche.
+- `docs/` : plan de développement, direction de design, programme du soir.
 
-## Direction visuelle
+## Historique
 
-Thème clair violet et citron, textes directs, étapes Découvrir / S’entraîner / Se tester et navigation adaptée aux petits écrans. Voir [les références et choix de design](docs/design-direction.md).
+L’app a d’abord été prototypée en web (React, connecteur Python local). Ce POC a été retiré du dépôt une fois les apps natives livrées ; il reste disponible au tag [`web-poc-final`](https://github.com/hadrienl/jmethod/tree/web-poc-final), qui est aussi la source des vecteurs de parité.
 
-## Limites du POC
-
-- La récupération directe du flux Pronote dépend des règles CORS du serveur distant. Pas de synchronisation automatique en arrière-plan.
-- Le parseur iCal ne couvre pas l’intégralité du format (notamment les récurrences et fuseaux nommés).
-- Les boutons « Faire le point » ouvrent l’autoévaluation ; pas de quiz ni d’exercices générés.
-- Les imports JSON et les cas particuliers de replanification doivent être renforcés avant usage réel.
-- Pas encore de PWA installable avec fonctionnement hors ligne, ni de projet mobile natif.
-- Audit d’accessibilité complet et tests avec des ados à prévoir.
-
-## Stack
-
-React 19, TypeScript, Vite, Tailwind CSS, date-fns et lucide-react.
-
-## Tests du connecteur
-
-```sh
-npm run test:pronote
-```
-
-Tests du mode lecture seule, des sessions et des protections du service local. Voir [le connecteur Pronote](docs/pronote-unofficial.md).
+Le protocole Pronote utilisé n’est pas officiel. Les apps n’envoient aucune requête d’écriture et ne stockent ni QR code ni donnée de compte dans le dépôt.

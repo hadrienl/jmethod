@@ -1,6 +1,6 @@
 # Écarts volontaires des apps natives par rapport au web
 
-Règle : les apps natives reproduisent le web à l’identique pour les calculs, l’ordre et les données (algorithme adaptatif, programme du soir, planning, numérotation, import/export). Elles **ne recopient pas les défauts d’affichage évidents** listés ici. iOS et Android appliquent exactement la même liste ; un cas de vecteur touché par un écart est ignoré par son nom, avec un renvoi à la ligne correspondante, et remplacé par un test natif du comportement corrigé. Ces écarts sont à corriger aussi côté web, puis les vecteurs seront régénérés.
+Règle : les apps natives reproduisent le web à l’identique pour les calculs, l’ordre et les données (algorithme adaptatif, programme du soir, planning, numérotation, import/export). Elles **ne recopient pas les défauts d’affichage évidents** listés ici. iOS et Android appliquent exactement la même liste ; un cas de vecteur touché par un écart est ignoré par son nom, avec un renvoi à la ligne correspondante, et remplacé par un test natif du comportement corrigé. Le POC web a été retiré du dépôt (tag `web-poc-final`) : ces écarts sont désormais le comportement de référence.
 
 | # | Écran | Web | Apps natives |
 |---|---|---|---|

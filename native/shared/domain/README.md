@@ -1,5 +1,8 @@
 # Vecteurs de la logique métier
 
+> **POC web supprimé.** Le code TypeScript qui produisait ces vecteurs a été retiré du dépôt ; il reste disponible au tag `web-poc-final`. Les vecteurs sont désormais **figés** et font foi pour iOS et Android. Pour les régénérer : `git worktree add ../jmethod-web web-poc-final`, puis `npm ci && npm run vectors:domain` dans ce dossier, et recopier `native/shared/domain/*.json` ici. Toute évolution de la logique se fait désormais dans les deux apps, en mettant à jour les vecteurs à la main avec un test natif.
+
+
 Les apps natives (`apps/ios`, `apps/android`) portent à l’identique la logique métier du web. Ce dossier contient des vecteurs produits **en exécutant le vrai code TypeScript** de `src/`. Les tests Swift et JVM les rejouent.
 
 | Fichier | Rôle |

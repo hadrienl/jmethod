@@ -1,5 +1,8 @@
 # Cahier de textes : référence native (jalon 5, lecture seule)
 
+> **POC web supprimé.** `notebook-vectors.py` et le connecteur Python `scripts/pronote_notebook.py` ont été retirés ; ils restent au tag `web-poc-final`. `notebook-vectors.json` est figé et fait foi.
+
+
 Aperçu en lecture seule du cahier de textes PRONOTE dans les apps natives : contenus de séance, devoirs avec échéance, pièces jointes et liens, téléchargement protégé. Ce document complète `protocol-reference.md` (transport, chiffrement, signature parent) et `CONTRACT.md`. Il décrit le comportement du connecteur web (`scripts/pronote_notebook.py`, `scripts/pronote_server.py`, `src/components/PronoteNotebookPreview.tsx`) et de pronotepy 2.15.7 (`clients.py`, `dataClasses.py`), puis les règles natives quand elles s’en écartent. Le protocole n’est pas officiel et dépend des versions de PRONOTE.
 
 Vecteurs : `notebook-vectors.json`, générés par `notebook-vectors.py` (voir la fin du document).

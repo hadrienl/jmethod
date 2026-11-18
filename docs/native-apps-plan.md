@@ -1,10 +1,10 @@
 # Apps natives J-Method — plan de développement
 
-Objectif : porter le POC web (`src/`) en deux applications natives indépendantes, **SwiftUI** (`apps/ios`) et **Kotlin / Jetpack Compose** (`apps/android`), avec la connexion Pronote validée par le POC (`native/`). Pas de serveur J-Method : les données restent sur le téléphone.
+Objectif : porter le POC web (`src/`, retiré du dépôt depuis, disponible au tag `web-poc-final`) en deux applications natives indépendantes, **SwiftUI** (`apps/ios`) et **Kotlin / Jetpack Compose** (`apps/android`), avec la connexion Pronote validée par le POC (`native/`). Pas de serveur J-Method : les données restent sur le téléphone.
 
 ## Principes
 
-- **Parité fonctionnelle avec le web**, livrée par jalons testables sur téléphone. Le web reste la référence de comportement tant qu’un jalon n’a pas tranché autrement.
+- **Parité fonctionnelle avec le web**, livrée par jalons testables sur téléphone. Les cinq jalons sont livrés ; le POC web a ensuite été retiré, et les vecteurs figés de `native/shared/domain` font foi.
 - **Une seule logique métier, deux implémentations.** L’algorithme adaptatif, le programme du soir, l’appariement des matières et le parseur iCal sont portés à l’identique. Leur parité est vérifiée par des vecteurs générés depuis le code TypeScript (`native/shared/domain/`), exécutés par les tests Swift et JVM.
 - **Données** : un document JSON local au schéma du web (`src/types`, export de `src/lib/storage.ts`), écrit de façon atomique dans le stockage privé de l’app. La sauvegarde JSON est donc échangeable entre web, iOS et Android. Le jeton Pronote reste dans le Keychain / Keystore, jamais dans ce document.
 - **Dates** : jours calendaires au fuseau Europe/Paris, chaînes `YYYY-MM-DD` comme le web. Le programme du soir prépare le lendemain (voir `docs/evening-workflow.md`).
