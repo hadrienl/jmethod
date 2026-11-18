@@ -124,7 +124,12 @@ class PronoteClient(
     /** Horloge du contrôle d’inactivité (injectée par les tests). */
     private val clock: () -> java.time.Instant = { java.time.Instant.now() },
 ) {
-    enum class Mode { QR, TOKEN }
+    /**
+     * QR et TOKEN : protocole mobile (page `mobile.*.html`, jeton renouvelé à chaque connexion).
+     * PASSWORD : connexion directe par identifiant et mot de passe sur la page web `?login=true`
+     * (app ordinateur, sans page officielle ni jeton mobile).
+     */
+    enum class Mode { QR, TOKEN, PASSWORD }
 
     var credentials: Credentials = credentials
         private set
@@ -137,6 +142,8 @@ class PronoteClient(
     private var compressed = false
     private var encrypted = false
     private val cookies = linkedMapOf<String, String>()
+    /** Navigateur annoncé : mobile pour le protocole mobile, ordinateur pour la connexion directe. */
+    private var userAgent = USER_AGENT
     /** Instant du dernier appel réussi ; `null` avant la première connexion. */
     @Volatile
     var lastCallAt: java.time.Instant? = null
@@ -169,7 +176,7 @@ class PronoteClient(
 
     private fun request(method: String, url: String, body: String? = null): HttpResult {
         if (!url.startsWith("$origin/")) throw PronoteException("origin", "Requête hors établissement refusée.")
-        val headers = linkedMapOf("User-Agent" to USER_AGENT, "Accept" to if (method == "GET") "text/html" else "application/json")
+        val headers = linkedMapOf("User-Agent" to userAgent, "Accept" to if (method == "GET") "text/html" else "application/json")
         if (method == "POST") headers["Content-Type"] = "application/json"
         if (cookies.isNotEmpty()) headers["Cookie"] = cookieHeader()
         val response = transport.request(method, url, body, headers)
@@ -251,8 +258,12 @@ class PronoteClient(
         order = 1
         key = PronoteCrypto.md5(byteArrayOf())
         iv = PronoteCrypto.zeroIv
+        userAgent = if (mode == Mode.PASSWORD) DESKTOP_USER_AGENT else USER_AGENT
         PronotePolicy.validatedUrl(credentials.url)
         attributes = PronotePolicy.parseStart(request("GET", credentials.url).body)
+        // Pages mobile et web 2026 : `CoA`/`CrA` activent compression et chiffrement ; absents, les
+        // échanges sont en clair (la page web `?login=true` envoie `{"h":…,"d":true,"a":3}`).
+        val web = mode == Mode.PASSWORD
         compressed = attributes.optBoolean("CoA", false)
         encrypted = attributes.optBoolean("CrA", false)
         val temporary = ByteArray(16).also { SecureRandom().nextBytes(it) }
@@ -271,10 +282,12 @@ class PronoteClient(
             JSONObject().put("genreConnexion", 0).put("genreEspace", attributes.getInt("a")).put("identifiant", credentials.username)
                 .put("pourENT", false).put("enConnexionAuto", false).put("demandeConnexionAuto", false)
                 .put("demandeConnexionAppliMobile", mode == Mode.QR).put("demandeConnexionAppliMobileJeton", mode == Mode.QR)
-                .put("enConnexionAppliMobile", mode == Mode.TOKEN).put("uuidAppliMobile", credentials.uuid).put("loginTokenSAV", ""),
+                .put("enConnexionAppliMobile", mode == Mode.TOKEN).put("uuidAppliMobile", if (web) "" else credentials.uuid).put("loginTokenSAV", ""),
         )
-        val username = if (identification.optBoolean("modeCompLog")) credentials.username.lowercase() else credentials.username
-        val password = if (identification.optBoolean("modeCompMdp")) credentials.password.lowercase() else credentials.password
+        // Page web : `modeCompLog`/`modeCompMdp` valent 0 ou 1 (observé en 2026) ; vrais au sens de pronotepy.
+        fun caseInsensitive(name: String) = identification.optBoolean(name) || (web && identification.optInt(name, 0) != 0)
+        val username = if (caseInsensitive("modeCompLog")) credentials.username.lowercase() else credentials.username
+        val password = if (caseInsensitive("modeCompMdp")) credentials.password.lowercase() else credentials.password
         val authKey = PronoteCrypto.md5((username + PronoteCrypto.sha256Upper(identification.optString("alea") + password)).toByteArray(UTF_8))
         val challenge = PronoteCrypto.hex(PronoteCrypto.encrypt(identification.getString("challenge").toByteArray(UTF_8), authKey, iv))
         val auth = call("Authentification", JSONObject().put("connexion", 0).put("challenge", challenge).put("espace", attributes.getInt("a")))
@@ -390,7 +403,7 @@ class PronoteClient(
         if (!NotebookRules.isDownloadableId(id)) throw PronoteException("download", DOWNLOAD_UNAVAILABLE)
         val url = NotebookRules.downloadUrl(root, NotebookRules.encryptedId(id, key, iv, doublePadding), name, attributes.getLong("h"))
         if (!url.startsWith("$origin/")) throw PronoteException("origin", "Requête hors établissement refusée.")
-        val headers = linkedMapOf("User-Agent" to USER_AGENT)
+        val headers = linkedMapOf("User-Agent" to userAgent)
         if (cookies.isNotEmpty()) headers["Cookie"] = cookieHeader()
         when (files.download(url, headers, NotebookRules.MAX_DOWNLOAD_BYTES, target)) {
             200 -> {}
@@ -401,6 +414,8 @@ class PronoteClient(
 
     companion object {
         const val USER_AGENT = "iPhone"
+        /** Navigateur d’ordinateur pour la page web (`eleve.html?login=true`), comme pronotepy. */
+        const val DESKTOP_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:135.0) Gecko/20100101 Firefox/135.0"
         const val DOWNLOAD_UNAVAILABLE = "Document indisponible. Actualise le cahier de textes puis réessaie."
     }
 }

@@ -49,6 +49,17 @@ class FakePronoteServer(
     val htmlOnce = mutableSetOf<String>()
     /** Appelé avant chaque requête (pour simuler une annulation pendant un appel). */
     var beforeRequest: (String) -> Unit = {}
+    /** Pages chargées par GET et navigateurs annoncés (connexion directe ou mobile). */
+    val pages = mutableListOf<String>()
+    val userAgents = mutableListOf<String?>()
+    /** Charges `Identification` reçues. */
+    val identifications = mutableListOf<JSONObject>()
+    /** `modeCompLog` renvoyé par Identification (booléen côté mobile, 0/1 côté page web). */
+    var modeCompLog: Any = false
+    /** Page web sans chiffrement ni compression (`Start({"h":…,"d":true,"a":3})`, observé en 2026). */
+    var plainWeb = false
+    private var mobileLogin = true
+    private val plain get() = plainWeb && !mobileLogin
 
     private val premierLundi = LocalDate.of(2026, 8, 31)
     val lessons = mutableListOf<JSONObject>()
@@ -73,22 +84,30 @@ class FakePronoteServer(
 
     private fun weekOf(date: LocalDate) = 1 + (ChronoUnit.DAYS.between(premierLundi, date) / 7).toInt()
 
-    val transport = PronoteTransport { method, url, body, _ ->
+    val transport = PronoteTransport { method, url, body, headers ->
         if (offline) throw java.io.IOException("réseau indisponible")
         require(url.startsWith("$origin/"))
         if (method == "GET") {
             beforeRequest("GET")
+            pages += url
+            userAgents += headers["User-Agent"]
             key = PronoteCrypto.md5(byteArrayOf())
             iv = PronoteCrypto.zeroIv
-            return@PronoteTransport HttpResult(200, mapOf("Set-Cookie" to listOf("sid=abc; Path=/")), "<script>Start({h:424242,a:3,CrA:true,CoA:true,http:false})</script>")
+            mobileLogin = url.substringAfterLast('/').startsWith("mobile.")
+            val start = if (plain) """Start ({"h":424242,"d":true,"a":3})""" else "Start({h:424242,a:3,CrA:true,CoA:true,http:false})"
+            return@PronoteTransport HttpResult(200, mapOf("Set-Cookie" to listOf("sid=abc; Path=/")), "<script>$start</script>")
         }
         val envelope = JSONObject(body!!)
         val function = envelope.getString("id")
         beforeRequest(function)
         calls += function
         val requestIv = iv
-        val clear = PronoteCrypto.decrypt(PronoteCrypto.unhex(envelope.getString("dataSec")), key, requestIv)
-        val payload = JSONObject(String(PronoteCrypto.unhex(String(PronoteCrypto.inflate(clear), UTF_8)), UTF_8))
+        val payload = if (plain) {
+            envelope.getJSONObject("dataSec")
+        } else {
+            val clear = PronoteCrypto.decrypt(PronoteCrypto.unhex(envelope.getString("dataSec")), key, requestIv)
+            JSONObject(String(PronoteCrypto.unhex(String(PronoteCrypto.inflate(clear), UTF_8)), UTF_8))
+        }
         if (htmlOnce.remove(function)) {
             return@PronoteTransport HttpResult(200, emptyMap(), "<html><body>Session expirée</body></html>")
         }
@@ -105,8 +124,9 @@ class FakePronoteServer(
                     .put("General", JSONObject().put("PremierLundi", JSONObject().put("_T", 7).put("V", "31/08/2026")).put("ListeHeuresFin", JSONObject().put("V", grid)))
             }
             "Identification" -> {
+                identifications += payload.getJSONObject("data")
                 challenge = "défi-${calls.size}"
-                JSONObject().put("challenge", challenge).put("alea", "sel").put("modeCompLog", false).put("modeCompMdp", false)
+                JSONObject().put("challenge", challenge).put("alea", "sel").put("modeCompLog", modeCompLog).put("modeCompMdp", false)
             }
             "Authentification" -> {
                 authKey = PronoteCrypto.md5((username + PronoteCrypto.sha256Upper("sel$token")).toByteArray(UTF_8))
@@ -117,9 +137,11 @@ class FakePronoteServer(
                     val secret = (1..16).joinToString(",")
                     pendingKey = PronoteCrypto.md5(ByteArray(16) { (it + 1).toByte() })
                     issued++
-                    token = "jeton-rotation-$issued"
+                    // Le jeton ne tourne qu’en connexion mobile ; la connexion directe garde son mot de passe.
+                    val mobile = identifications.lastOrNull()?.let { it.optBoolean("demandeConnexionAppliMobile") || it.optBoolean("enConnexionAppliMobile") } ?: true
+                    if (mobile) token = "jeton-rotation-$issued"
                     JSONObject().put("cle", PronoteCrypto.hex(PronoteCrypto.encrypt(secret.toByteArray(UTF_8), authKey, iv)))
-                        .put("jetonConnexionAppliMobile", token)
+                        .also { if (mobile) it.put("jetonConnexionAppliMobile", token) }
                         .also { result -> doubleAuth?.let { result.put("actionsDoubleAuth", JSONObject().put("V", "[$it]")) } }
                 }
             }
@@ -151,6 +173,10 @@ class FakePronoteServer(
                 JSONObject().put("ListeCours", list)
             }
             else -> error("Fonction inattendue : $function")
+        }
+        if (plain) {
+            pendingKey?.let { key = it; pendingKey = null }
+            return@PronoteTransport HttpResult(200, emptyMap(), JSONObject().put("id", function).put("dataSec", JSONObject().put("data", data)).toString())
         }
         val response = PronoteCrypto.encrypt(PronoteCrypto.deflate(JSONObject().put("data", data).toString().toByteArray(UTF_8)), key, iv)
         pendingKey?.let { key = it; pendingKey = null }

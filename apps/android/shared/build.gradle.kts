@@ -68,3 +68,9 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 }
+
+// Essai réel optionnel contre la démonstration publique d’Index Education (jamais en CI) :
+// ./gradlew :shared:desktopTest -Pjmethod.demoLogin=true --tests '*DemoLoginTest*'
+tasks.withType<Test>().configureEach {
+    providers.gradleProperty("jmethod.demoLogin").orNull?.let { systemProperty("jmethod.demoLogin", it) }
+}

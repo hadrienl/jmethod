@@ -35,6 +35,13 @@ interface OfficialPage {
     fun clearBrowsingData()
 }
 
+/**
+ * Parcours de connexion. OFFICIAL_PAGE (Android, iOS) : page officielle masquée, QR, protocole mobile
+ * et jeton. DIRECT (ordinateur) : identifiant et mot de passe envoyés par le protocole natif à la page
+ * `?login=true`, sans page officielle ni jeton ; la session vit en mémoire le temps du lancement.
+ */
+enum class LoginFlow { OFFICIAL_PAGE, DIRECT }
+
 /** Type d’espace Pronote : page `eleve.html` ou `parent.html`. */
 enum class AccountType(val page: String) { STUDENT("eleve.html"), PARENT("parent.html") }
 
@@ -131,7 +138,13 @@ class PronoteConnectionController(
     private val throttle: PronoteThrottle = MemoryThrottle(),
     /** UUID d’application stable, utilisé pour toutes les connexions par QR. */
     private val appUuid: () -> String = { UUID.randomUUID().toString() },
+    private val loginFlow: LoginFlow = LoginFlow.OFFICIAL_PAGE,
+    /** Appareil dans les messages : « ce téléphone » ou « cet ordinateur ». */
+    private val device: String = "ce téléphone",
 ) {
+    private val direct = loginFlow == LoginFlow.DIRECT
+    /** Reconnexion d’une session établie : par jeton (mobile) ou par mot de passe (connexion directe). */
+    private val reloginMode = if (direct) PronoteClient.Mode.PASSWORD else PronoteClient.Mode.TOKEN
     private val state = MutableStateFlow(PronoteUiState())
     val uiState: StateFlow<PronoteUiState> = state.asStateFlow()
 
@@ -232,7 +245,12 @@ class PronoteConnectionController(
         }
         val (url, uri, type) = target
         state.update { it.copy(form = it.form.copy(password = "", passwordFromStore = false, accountType = type), formError = null) }
-        open(url, uri, login to secret, silentAttempt = false, login = SavedLogin(form.school.trim(), type, login, secret), stayConnected = form.stayConnected)
+        val saved = SavedLogin(form.school.trim(), type, login, secret)
+        if (direct) {
+            openDirect(url, uri, login to secret, silentAttempt = false, login = saved, stayConnected = form.stayConnected)
+        } else {
+            open(url, uri, login to secret, silentAttempt = false, login = saved, stayConnected = form.stayConnected)
+        }
     }
 
     /** Adresse validée ; la page d’une adresse complète prime sur le choix Élève/Parent. */
@@ -289,7 +307,9 @@ class PronoteConnectionController(
             showBlocked()
             return
         }
-        if (automatic && !throttle.silentAllowed(now())) {
+        // Ordinateur : la connexion au lancement est voulue par l’utilisateur (il ouvre l’app), elle
+        // n’est pas soumise au plafond horaire des reconnexions silencieuses ; l’erreur 25 reste bloquante.
+        if (automatic && !(direct && state.value.access == AccessPhase.CHECKING) && !throttle.silentAllowed(now())) {
             if (canReconnectSilently()) silentDeferred() else signedOut("Ta connexion à Pronote a expiré. Reconnecte-toi pour continuer.")
             return
         }
@@ -304,7 +324,75 @@ class PronoteConnectionController(
         silentUsed = true
         throttle.recordSilentAttempt(now())
         state.update { it.copy(reconnecting = true) }
-        open(target.first, target.second, username to password, silentAttempt = true)
+        if (direct) {
+            openDirect(target.first, target.second, username to password, silentAttempt = true)
+        } else {
+            open(target.first, target.second, username to password, silentAttempt = true)
+        }
+    }
+
+    /**
+     * Connexion directe (ordinateur) : FonctionParametres, Identification et Authentification par le
+     * protocole natif sur `<page>?login=true`, puis les mêmes lectures que le mobile. Le mot de passe
+     * n’est gardé qu’en mémoire pour les reconnexions de la session (et dans le coffre du système si
+     * « Rester connecté » est activé).
+     */
+    private fun openDirect(
+        url: String,
+        uri: URI,
+        credentials: Pair<String, String>,
+        silentAttempt: Boolean,
+        login: SavedLogin? = null,
+        stayConnected: Boolean = false,
+    ) {
+        invalidate()
+        silent = silentAttempt
+        attemptLogin = login
+        attemptStayConnected = stayConnected
+        val attempt = generation.incrementAndGet()
+        origin = uri.scheme + "://" + uri.authority
+        state.update {
+            it.copy(browserStarted = false, showBrowser = false, busy = true, isError = false, formError = null,
+                title = if (silent) "Reconnexion à Pronote" else "Connexion à Pronote", message = "Connexion en cours…")
+        }
+        val keepChild = silentAttempt
+        activeJob = scope.launch {
+            try {
+                val binding = Binding(attempt)
+                val connection = guard.mutex.withLock {
+                    withContext(io) {
+                        val start = Credentials(PronotePolicy.directLoginPage(url), credentials.first, credentials.second, uuid = "")
+                        PronoteClient(binding.transport, start, binding.save, now).also { it.login(PronoteClient.Mode.PASSWORD) }
+                    }
+                }
+                if (attempt != generation.get()) return@launch
+                // Nouveau compte saisi : l’enfant suivi est oublié ; reconnexion du même compte : il est gardé.
+                if (!keepChild) synchronized(guard.vaultLock) { if (attempt == generation.get()) vault.saveSelectedChildId(null) }
+                rememberLogin()
+                binding.adopted = true
+                val adopted = Session(connection, binding)
+                session = adopted
+                silent = false
+                state.update { it.copy(hasSavedSession = true, form = it.form.copy(password = "", passwordFromStore = false)) }
+                sync(attempt, adopted)
+            } catch (_: CancellationException) {
+            } catch (error: Exception) {
+                noteThrottle(error)
+                if (attempt != generation.get()) return@launch
+                when {
+                    error is PronoteException && error.code == "login" -> rejected()
+                    error is PronoteException && error.code == "mfa" -> failure(DIRECT_MFA)
+                    else -> failure(messageFor(error, "La connexion à Pronote n’a pas abouti. Réessaie dans quelques instants."), offline = error is IOException)
+                }
+            }
+        }
+        // Délai maximal de la tentative : au-delà, elle est abandonnée comme sur mobile.
+        scope.launch {
+            delay(90_000)
+            if (attempt == generation.get() && session?.binding?.attempt != attempt && activeJob?.isActive == true) {
+                failure("Pronote n’a pas répondu à temps. Vérifie l’établissement et ta connexion internet, puis réessaie.", offline = true)
+            }
+        }
     }
 
     fun onPageStarted() {
@@ -496,7 +584,7 @@ class PronoteConnectionController(
     private fun loginByToken(binding: Binding, client: PronoteClient) {
         binding.tokenLogin = true
         try {
-            client.login(PronoteClient.Mode.TOKEN)
+            client.login(reloginMode)
         } finally {
             binding.tokenLogin = false
         }
@@ -690,7 +778,7 @@ class PronoteConnectionController(
         page.release()
         state.update {
             it.copy(access = AccessPhase.OFFLINE, browserStarted = false, showBrowser = false, isError = true, title = "Synchronisation interrompue",
-                message = "Les données enregistrées sur ce téléphone sont affichées. Réessaie quand tu veux.")
+                message = "Les données enregistrées sur $device sont affichées. Réessaie quand tu veux.")
         }
     }
 
@@ -849,6 +937,7 @@ class PronoteConnectionController(
 
     /** Messages sans détail technique ; les codes internes ne sont jamais affichés. */
     private fun messageFor(error: Exception, fallback: String): String = when {
+        error is PronoteException && error.code == "mfa" && direct -> DIRECT_MFA
         error is PronoteException && error.code == "mfa" ->
             "Pronote demande une vérification de sécurité. Reconnecte-toi pour la terminer."
         error is PronoteException && error.code == PronoteThrottle.BLOCKED_CODE -> PronoteThrottle.BLOCKED_MESSAGE
@@ -919,7 +1008,7 @@ class PronoteConnectionController(
                 hasStoredPassword = kept?.password != null, reconnecting = false, isError = false, access = AccessPhase.SIGNED_OUT,
                 title = "Tu es déconnecté", formError = null,
                 form = if (kept != null) prefilled(it.form, kept) else it.form.copy(username = "", password = "", passwordFromStore = false),
-                message = "Ton emploi du temps importé a été retiré de ce téléphone. Tes cours et tes révisions restent enregistrés.")
+                message = "Ton emploi du temps importé a été retiré de $device. Tes cours et tes révisions restent enregistrés.")
         }
         scope.launch { clearLessons() }
     }
@@ -932,6 +1021,8 @@ class PronoteConnectionController(
 
     private companion object {
         const val NOTEBOOK_OFFLINE = "Le cahier de textes se lit avec ta connexion Pronote. Actualise depuis les Réglages ou réessaie quand tu es en ligne."
+        const val DIRECT_MFA = "Ton compte Pronote demande une double authentification (code personnel ou appareil de confiance). " +
+            "J-Method sur ordinateur ne la prend pas encore en charge : utilise l’app sur ton téléphone en attendant."
         const val REJECTED = "Pronote a refusé l’identifiant ou le mot de passe. Utilise ceux de Pronote, pas ceux d’ÉduConnect, puis réessaie."
         val FOREGROUND_SYNC_AFTER: Duration = Duration.ofHours(6)
     }
