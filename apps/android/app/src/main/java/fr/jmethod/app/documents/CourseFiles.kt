@@ -87,7 +87,9 @@ class CourseCreator(private val repository: AppRepository, private val clock: Ap
     private fun allowed(document: fr.jmethod.app.model.AppDocument, source: CourseSource, expectation: Expectation): Boolean {
         val entry = document.notebookImports[source.sessionKey]
         return when (expectation) {
-            Expectation.Automatic -> document.settings.notebookAutoCreate == true && entry == null
+            // Ceinture et bretelles : aucun cours existant pour la même séance (date, matière, rang).
+            Expectation.Automatic -> document.settings.notebookAutoCreate == true && entry == null &&
+                fr.jmethod.app.domain.NotebookCourses.courseFor(source, document.courses) == null
             is Expectation.Manual -> entry == expectation.seen &&
                 !(entry?.status == NotebookImport.CREATED && document.courses.any { it.id == entry.courseId })
         }
@@ -165,6 +167,8 @@ data class NotebookCourseDraft(
     val notice: String?,
     /** Entrée `notebookImports` de la séance au moment du clic (`null` = jamais importée). */
     val seenImport: NotebookImport? = null,
+    /** Rang de la séance parmi celles de même date et même matière. */
+    val ordinal: Int = 1,
 ) {
-    val source get() = CourseSource(fr.jmethod.app.domain.NotebookCourses.SOURCE_KIND, sessionKey, subjectLabel, date)
+    val source get() = CourseSource(fr.jmethod.app.domain.NotebookCourses.SOURCE_KIND, sessionKey, subjectLabel, date, ordinal)
 }

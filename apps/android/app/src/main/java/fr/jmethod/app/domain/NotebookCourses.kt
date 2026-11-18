@@ -2,6 +2,8 @@ package fr.jmethod.app.domain
 
 import fr.jmethod.app.model.AppSettings
 import fr.jmethod.app.model.Course
+import fr.jmethod.app.model.CourseSource
+import fr.jmethod.app.pronote.NotebookRules
 import fr.jmethod.app.model.NotebookImport
 import fr.jmethod.app.model.Subject
 import fr.jmethod.app.pronote.NotebookSnapshot
@@ -32,6 +34,26 @@ object NotebookCourses {
         data class View(val courseId: String) : ImportState
     }
 
+    /** Clé stable de la séance (section 1) : `pn1:<date>|<matière normalisée>|<rang>`. */
+    fun sessionKey(session: SessionEntry): String = session.key
+
+    /**
+     * Ceinture et bretelles (section 1) : cours existant issu du cahier pour la même date, la même
+     * matière normalisée et le même rang, quelle que soit sa clé.
+     */
+    fun courseFor(date: String, subjectLabel: String, ordinal: Int, courses: List<Course>): Course? {
+        val subject = NotebookRules.normalizeSubject(subjectLabel)
+        return courses.firstOrNull { course ->
+            val source = course.source
+            source != null && source.kind == SOURCE_KIND && source.date == date && source.ordinal == ordinal &&
+                NotebookRules.normalizeSubject(source.subjectLabel) == subject
+        }
+    }
+
+    fun courseFor(session: SessionEntry, courses: List<Course>): Course? = courseFor(session.date.toString(), session.subject, session.ordinal, courses)
+
+    fun courseFor(source: CourseSource, courses: List<Course>): Course? = source.ordinal?.let { courseFor(source.date, source.subjectLabel, it, courses) }
+
     /** Règle 31 : `viewCourse` si `created` et le cours existe ; sinon `createCourse`. */
     fun importState(sessionKey: String, imports: Map<String, NotebookImport>, courses: List<Course>): ImportState {
         val entry = imports[sessionKey] ?: return ImportState.Create(dismissed = false)
@@ -43,10 +65,25 @@ object NotebookCourses {
         }
     }
 
+    /** Règle 31 avec la ceinture et bretelles : un cours existant pour la même séance donne « Voir le cours ». */
+    fun importState(session: SessionEntry, imports: Map<String, NotebookImport>, courses: List<Course>): ImportState {
+        val state = importState(session.key, imports, courses)
+        if (state is ImportState.View) return state
+        return courseFor(session, courses)?.let { ImportState.View(it.id) } ?: state
+    }
+
     /** Règle 27 : une seule raison d’exclusion, par priorité ; `null` si la séance est éligible. */
-    fun skipReason(session: SessionEntry, settings: AppSettings, imports: Map<String, NotebookImport>, subjects: List<Subject>, today: LocalDate): String? {
+    fun skipReason(
+        session: SessionEntry,
+        settings: AppSettings,
+        imports: Map<String, NotebookImport>,
+        subjects: List<Subject>,
+        today: LocalDate,
+        courses: List<Course> = emptyList(),
+    ): String? {
         if (settings.notebookAutoCreate != true) return "autoCreateDisabled"
-        imports[session.id]?.status?.let { if (it == NotebookImport.CREATED || it == NotebookImport.DISMISSED) return it }
+        imports[session.key]?.status?.let { if (it == NotebookImport.CREATED || it == NotebookImport.DISMISSED) return it }
+        if (courseFor(session, courses) != null) return "courseExists"
         if (session.date.isAfter(today)) return "future"
         settings.notebookAutoCreateSince?.let(FrenchDates::parse)?.let { if (session.date.isBefore(it)) return "beforeSince" }
         if (SubjectMatcher.match(session.subject, subjects) == null) return "unknownSubject"
@@ -54,8 +91,14 @@ object NotebookCourses {
     }
 
     /** Règle 28 : séances éligibles, date croissante, ordre de la réponse pour une même date. */
-    fun eligible(snapshot: NotebookSnapshot, settings: AppSettings, imports: Map<String, NotebookImport>, subjects: List<Subject>, today: LocalDate): List<SessionEntry> =
-        snapshot.sessions.filter { skipReason(it, settings, imports, subjects, today) == null }.sortedBy { it.date }
+    fun eligible(
+        snapshot: NotebookSnapshot,
+        settings: AppSettings,
+        imports: Map<String, NotebookImport>,
+        subjects: List<Subject>,
+        today: LocalDate,
+        courses: List<Course> = emptyList(),
+    ): List<SessionEntry> = snapshot.sessions.filter { skipReason(it, settings, imports, subjects, today, courses) == null }.sortedBy { it.date }
 
     data class Backfill(val from: LocalDate, val to: LocalDate, val sessionKeys: List<String>) {
         val count get() = sessionKeys.size
@@ -63,15 +106,80 @@ object NotebookCourses {
     }
 
     /** Règle 29 : `today − 14 ≤ date ≤ today − 1`, ni `created` ni `dismissed`, matière reconnue. */
-    fun backfill(snapshot: NotebookSnapshot, imports: Map<String, NotebookImport>, subjects: List<Subject>, today: LocalDate): Backfill {
+    fun backfill(snapshot: NotebookSnapshot, imports: Map<String, NotebookImport>, subjects: List<Subject>, today: LocalDate, courses: List<Course> = emptyList()): Backfill {
         val from = today.minusDays(BACKFILL_DAYS)
         val to = today.minusDays(1)
         val keys = snapshot.sessions.filter { session ->
             !session.date.isBefore(from) && !session.date.isAfter(to) &&
-                imports[session.id]?.status.let { it != NotebookImport.CREATED && it != NotebookImport.DISMISSED } &&
+                imports[session.key]?.status.let { it != NotebookImport.CREATED && it != NotebookImport.DISMISSED } &&
+                courseFor(session, courses) == null &&
                 SubjectMatcher.match(session.subject, subjects) != null
-        }.map { it.id }
+        }.map { it.key }
         return Backfill(from, to, keys)
+    }
+
+    data class KeyMigration(val courses: List<Course>, val imports: Map<String, NotebookImport>)
+
+    /**
+     * Migration des anciennes clés (`N` de session Pronote) vers `pn1:` (section 1, règles 37 à 39 du
+     * README des documents, port de `reference.py`), idempotente. Aucun cours n’est supprimé.
+     */
+    fun migrateKeys(courses: List<Course>, imports: Map<String, NotebookImport>): KeyMigration {
+        val ids = courses.mapTo(HashSet()) { it.id }
+        // Entrées qui désignent chaque cours existant, dans l’ordre de `notebookImports`.
+        val pointing = LinkedHashMap<String, MutableList<Pair<String, NotebookImport>>>()
+        imports.forEach { (key, entry) -> entry.courseId?.takeIf { it in ids }?.let { pointing.getOrPut(it) { mutableListOf() } += key to entry } }
+        val position = courses.withIndex().associate { (index, course) -> course.id to index }
+        // Ordre de création : `createdAt` (jour), plus petit `at` des entrées (absent = en dernier), position décroissante.
+        val creationOrder = compareBy<Course>(
+            { it.createdAt },
+            { course -> pointing[course.id].orEmpty().map { it.second.at }.filter { it.isNotEmpty() }.minOrNull() ?: "\uFFFF" },
+            { -position.getValue(it.id) },
+        )
+        val notebookIds = courses.filter { it.source?.kind == SOURCE_KIND }.mapTo(LinkedHashSet()) { it.id }
+        val ordinals = HashMap<String, Int>()
+        val keys = HashMap<String, String>()
+        courses.filter { it.id in notebookIds }
+            .groupBy { it.source!!.date to NotebookRules.normalizeSubject(it.source!!.subjectLabel) }
+            .forEach { (group, members) ->
+                val (date, subject) = group
+                // Doublons de l’ancien bug (même titre et même chapitre) : même rang.
+                val signatures = mutableListOf<Pair<Pair<String, String>, Int>>()
+                members.filter { it.source!!.ordinal == null }.sortedWith(creationOrder).forEach { course ->
+                    val signature = fold(cleanWhitespace(course.title)) to fold(cleanWhitespace(course.chapter))
+                    val ordinal = signatures.firstOrNull { it.first == signature }?.second
+                        ?: (signatures.size + 1).also { signatures += signature to it }
+                    ordinals[course.id] = ordinal
+                }
+                members.forEach { course ->
+                    val ordinal = ordinals[course.id] ?: course.source!!.ordinal!!
+                    ordinals[course.id] = ordinal
+                    keys[course.id] = NotebookRules.sessionKey(date, subject, ordinal)
+                }
+            }
+        val migrated = courses.map { course ->
+            val key = keys[course.id] ?: return@map course
+            val source = course.source!!
+            if (source.sessionKey == key && source.ordinal == ordinals[course.id]) course
+            else course.copy(source = source.copy(sessionKey = key, ordinal = ordinals[course.id]))
+        }
+        val result = HashMap<String, NotebookImport>()
+        val consumed = HashSet<String>()
+        migrated.filter { it.id in notebookIds }.groupBy { keys.getValue(it.id) }.forEach { (key, members) ->
+            val sorted = members.sortedWith(creationOrder)
+            val entries = sorted.flatMap { pointing[it.id].orEmpty() }
+            if (entries.isEmpty()) return@forEach
+            entries.forEach { consumed += it.first }
+            val oldest = sorted.first()
+            val own = pointing[oldest.id].orEmpty().map { it.second }
+            val at = (own.ifEmpty { entries.map { it.second } }).map { it.at }.filter { it.isNotEmpty() }.minOrNull().orEmpty()
+            result[key] = NotebookImport(own.firstOrNull()?.status ?: NotebookImport.CREATED, oldest.id, at)
+        }
+        imports.forEach { (key, entry) ->
+            if (key in consumed || key in result) return@forEach
+            if (key.startsWith(NotebookRules.KEY_PREFIX) || entry.courseId in ids) result[key] = entry
+        }
+        return KeyMigration(migrated, result.toSortedMap().let { LinkedHashMap(it) })
     }
 
     /** Règle 30. */

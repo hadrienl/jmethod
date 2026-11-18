@@ -24,7 +24,15 @@ object DataMigrations {
     fun migrate(document: AppDocument): AppDocument {
         var current = document
         if (current.dataVersion < 1) current = removeLegacyDemo(current).copy(dataVersion = 1)
+        current = migrateNotebookKeys(current)
         return current
+    }
+
+    /** Clés de séance du cahier de textes : anciennes clés `N` vers `pn1:` (idempotent, aussi après un import). */
+    fun migrateNotebookKeys(document: AppDocument): AppDocument {
+        val migration = fr.jmethod.app.domain.NotebookCourses.migrateKeys(document.courses, document.notebookImports)
+        if (migration.courses == document.courses && migration.imports == document.notebookImports) return document
+        return document.copy(courses = migration.courses, notebookImports = migration.imports)
     }
 
     /** v1 : retire les cours, révisions (validations et rattrapages compris) et créneaux de démonstration. */

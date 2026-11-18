@@ -42,12 +42,12 @@ class CourseDocumentsTest {
     fun newFieldsSurviveExportAndRestore() {
         val course = Course(
             "course-1", "maths", "Chapitre 4", 1, "Les fractions", "2026-11-18", null, "2026-11-18",
-            source = CourseSource("pronote-notebook", "cdt-20", "MATHEMATIQUES", "2026-11-18"),
+            source = CourseSource("pronote-notebook", "pn1:2026-11-18|mathematiques|1", "MATHEMATIQUES", "2026-11-18", 1),
             documents = listOf(CourseDocument("doc-1", "Les fractions.odt", DocType.ODT.mime, 1941, "documents/course-1/doc-1.odt", "Les fractions")),
         )
         val imports = mapOf(
-            "cdt-20" to NotebookImport(NotebookImport.CREATED, "course-1", "2026-11-18T19:02:11Z"),
-            "cdt-13" to NotebookImport(NotebookImport.DISMISSED, "course-x", "2026-11-14T18:00:00Z"),
+            "pn1:2026-11-18|mathematiques|1" to NotebookImport(NotebookImport.CREATED, "course-1", "2026-11-18T19:02:11Z"),
+            "pn1:2026-11-13|mathematiques|1" to NotebookImport(NotebookImport.DISMISSED, "course-x", "2026-11-14T18:00:00Z"),
         )
         val document = AppDocument(
             courses = listOf(course), notebookImports = imports,

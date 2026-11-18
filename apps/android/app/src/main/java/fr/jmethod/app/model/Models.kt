@@ -56,6 +56,8 @@ data class CourseSource(
     val subjectLabel: String,
     /** YYYY-MM-DD, date de la séance. */
     val date: String,
+    /** Rang de la séance parmi celles de même date et même matière (clé `pn1:`). */
+    val ordinal: Int? = null,
 )
 
 @Serializable

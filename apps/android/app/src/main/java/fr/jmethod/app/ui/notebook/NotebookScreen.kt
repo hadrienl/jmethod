@@ -242,7 +242,7 @@ fun NotebookScreen(ui: NotebookUiState, viewModel: NotebookViewModel, snackbar: 
                     if (sessions.isEmpty()) item(key = "no-session") { Empty("Aucun contenu de cours publié sur cette période.") }
                     items(sessions, key = { "s-" + it.id }) { session ->
                         SessionCard(session, state.downloadingId, viewModel::download, { url -> openLink(context, url) }) {
-                            CourseAction(ui.importStates[session.id], state.preparingSessionId == session.id, state.preparingSessionId != null,
+                            CourseAction(ui.importStates[session.key], state.preparingSessionId == session.id, state.preparingSessionId != null,
                                 onCreate = { viewModel.prepareCourse(session) }, onView = viewModel::viewCourse)
                         }
                     }

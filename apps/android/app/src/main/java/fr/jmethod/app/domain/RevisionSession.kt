@@ -86,7 +86,8 @@ object RevisionSession {
      */
     fun notebookPart(course: Course, snapshot: NotebookSnapshot?): NotebookPart? {
         val source = course.source ?: return null
-        val session = snapshot?.sessions?.firstOrNull { it.id == source.sessionKey }
+        // Séance d’origine retrouvée par sa clé stable (date, matière, rang), jamais par le `N` de session.
+        val session = snapshot?.sessions?.firstOrNull { it.key == source.sessionKey }
         val imported = course.documents.orEmpty().mapTo(HashSet()) { it.name }
         val contents = session?.contents?.map { content ->
             content.copy(attachments = content.attachments.filter { it.kind != NotebookAttachment.Kind.FILE || it.name !in imported })

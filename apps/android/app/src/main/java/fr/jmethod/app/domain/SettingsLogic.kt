@@ -122,7 +122,7 @@ object ImportExport {
                 notebookImports = notebookImports ?: document.notebookImports,
                 initialized = true,
                 dataVersion = DataMigrations.CURRENT_VERSION,
-            )
+            ).let(DataMigrations::migrateNotebookKeys)
         }
 
         data class Rejected(val title: String, val message: String) : Result

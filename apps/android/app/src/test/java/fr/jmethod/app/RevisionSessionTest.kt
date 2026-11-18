@@ -134,7 +134,7 @@ class RevisionSessionTest {
 
     @Test
     fun notebookPartShowsTheOriginSessionWithoutImportedFiles() {
-        val source = CourseSource("pronote-notebook", "cdt-1", "MATHEMATIQUES", "2026-12-01")
+        val source = CourseSource("pronote-notebook", "pn1:2026-12-01|mathematiques|1", "MATHEMATIQUES", "2026-12-01", 1)
         val imported = course("a", "maths", source = source, documents = listOf(doc("fiche.pdf")))
         val content = NotebookContent(
             "Fractions", "Lire la leçon", emptyList(), "Cours",

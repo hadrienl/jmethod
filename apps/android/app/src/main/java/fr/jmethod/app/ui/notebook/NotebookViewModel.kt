@@ -118,7 +118,7 @@ class NotebookViewModel(
             subjects = document.subjects,
             subjectName = current.subjectId?.let { id -> document.subjects.firstOrNull { it.id == id }?.name },
             importStates = current.snapshot?.sessions.orEmpty().associate {
-                it.id to NotebookCourses.importState(it.id, document.notebookImports, document.courses)
+                it.key to NotebookCourses.importState(it, document.notebookImports, document.courses)
             },
             autoCreate = document.settings.notebookAutoCreate == true,
         )
@@ -310,7 +310,8 @@ class NotebookViewModel(
             },
         )
         return NotebookCourseDraft(
-            sessionKey = session.id,
+            sessionKey = session.key,
+            ordinal = session.ordinal,
             subjectId = subject?.id,
             subjectLabel = session.subject,
             date = session.date.toString(),
@@ -330,7 +331,7 @@ class NotebookViewModel(
         viewModelScope.launch {
             try {
                 // État vu au clic : si la séance est créée ou supprimée pendant la préparation, rien ne sera écrit.
-                val seen = repository.current().notebookImports[session.id]
+                val seen = repository.current().notebookImports[session.key]
                 val subjects = repository.current().subjects
                 val (documents, failed) = prepareDocuments(session, subjects)
                 if (generation != resetCount) return@launch
@@ -357,7 +358,7 @@ class NotebookViewModel(
         if (document.settings.notebookAutoCreate != true) return
         importMutex.withLock {
             val current = repository.current()
-            val sessions = NotebookCourses.eligible(snapshot, current.settings, current.notebookImports, current.subjects, clock.today())
+            val sessions = NotebookCourses.eligible(snapshot, current.settings, current.notebookImports, current.subjects, clock.today(), current.courses)
             var created = 0
             for (session in sessions) {
                 val (documents, failed) = try {
@@ -403,7 +404,7 @@ class NotebookViewModel(
                 lastAutoRead = clock.now()
                 val snapshot = readForCourses()
                 val document = repository.current()
-                val offer = NotebookCourses.backfill(snapshot, document.notebookImports, document.subjects, today)
+                val offer = NotebookCourses.backfill(snapshot, document.notebookImports, document.subjects, today, document.courses)
                 if (offer.count > 0) state.update { it.copy(importOffer = offer.count) } else autoImport(snapshot)
             } catch (_: CancellationException) {
             } catch (error: Exception) {
@@ -430,7 +431,7 @@ class NotebookViewModel(
         viewModelScope.launch {
             try {
                 val snapshot = readForCourses()
-                val session = snapshot.sessions.firstOrNull { it.id == key }
+                val session = snapshot.sessions.firstOrNull { it.key == key }
                 val attachment = session?.contents?.flatMap { it.attachments }?.firstOrNull { it.kind == NotebookAttachment.Kind.FILE && it.name == document.name }
                 if (attachment == null) {
                     events.send(NotebookEvent.Message("Ce document n’est plus dans le cahier de textes (28 derniers jours) : il ne peut pas être retéléchargé."))

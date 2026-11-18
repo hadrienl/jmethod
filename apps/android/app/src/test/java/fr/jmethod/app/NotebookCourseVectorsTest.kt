@@ -8,6 +8,10 @@ import fr.jmethod.app.domain.NotebookCourses
 import fr.jmethod.app.domain.SubjectMatcher
 import fr.jmethod.app.model.AppSettings
 import fr.jmethod.app.model.Course
+import fr.jmethod.app.model.CourseSource
+import fr.jmethod.app.model.AppDocument
+import fr.jmethod.app.data.DataMigrations
+import fr.jmethod.app.pronote.NotebookRules
 import fr.jmethod.app.model.NotebookImport
 import fr.jmethod.app.model.Subject
 import fr.jmethod.app.pronote.NotebookAttachment
@@ -130,7 +134,8 @@ class NotebookCourseVectorsTest {
     )
 
     private val rawSessions by lazy { courses.getJSONArray("sessions").objects() }
-    private val sessions by lazy { rawSessions.map(::session) }
+    /** Rangs comptés sur l’instantané entier, dans l’ordre du modèle (règle 34). */
+    private val sessions by lazy { NotebookRules.withOrdinals(rawSessions.map(::session)) }
 
     private data class Download(val name: String, val bytes: ByteArray, val analysis: DocumentAnalysis)
 
@@ -177,8 +182,18 @@ class NotebookCourseVectorsTest {
 
     private fun course(raw: JSONObject) = Course(
         raw.getString("id"), raw.getString("subjectId"), raw.getString("chapter"), raw.getInt("courseNumber"), raw.getString("title"),
-        raw.getString("date"), null, raw.getString("date"),
+        raw.getString("date"), raw.str("description"), raw.str("createdAt") ?: raw.getString("date"),
+        source = raw.optJSONObject("source")?.let { src ->
+            CourseSource(
+                src.getString("kind"), src.getString("sessionKey"), src.getString("subjectLabel"), src.getString("date"),
+                if (src.has("ordinal") && !src.isNull("ordinal")) src.getInt("ordinal") else null,
+            )
+        },
     )
+
+    private fun imports(raw: JSONObject): MutableMap<String, NotebookImport> = raw.keys().asSequence().associateWith { key ->
+        raw.getJSONObject(key).let { NotebookImport(it.getString("status"), it.str("courseId"), it.optString("at")) }
+    }.toMutableMap()
 
     private fun documentsEqual(label: String, expected: JSONArray, actual: List<JSONObject>) {
         assertEquals(label, expected.length(), actual.size)
@@ -195,7 +210,9 @@ class NotebookCourseVectorsTest {
         for ((index, expected) in expectedList.withIndex()) {
             val session = sessions[index]
             val label = expected.getString("sessionKey")
-            assertEquals(label, session.id)
+            assertEquals(label, session.key)
+            assertEquals(label, expected.getInt("ordinal"), session.ordinal)
+            assertEquals(label, expected.getString("notebookId"), session.id)
             val actual = prefill(rawSessions[index], session)
             assertEquals(label, expected.str("subjectId"), actual.subjectId)
             assertEquals(label, expected.getString("date"), session.date.toString())
@@ -220,73 +237,117 @@ class NotebookCourseVectorsTest {
     )
 
     @Test
+    fun subjectNormalizationAndSessionKeys() {
+        courses.getJSONArray("subjectNormalization").objects().forEach {
+            assertEquals(it.getString("input"), it.getString("expected"), NotebookRules.normalizeSubject(it.getString("input")))
+        }
+        val expected = courses.getJSONArray("sessionKeys").objects()
+        assertEquals(expected.size, sessions.size)
+        expected.zip(sessions).forEach { (e, s) ->
+            assertEquals(e.getString("id"), s.id)
+            assertEquals(e.getString("normalizedSubject"), NotebookRules.normalizeSubject(s.subject))
+            assertEquals(e.getInt("ordinal"), s.ordinal)
+            assertEquals(e.getString("sessionKey"), s.key)
+        }
+    }
+
+    private fun runScenario(scenario: JSONObject) {
+        val label = scenario.getString("id")
+        val today = LocalDate.parse(scenario.getString("today"))
+        val settings = settings(scenario.getJSONObject("settings"))
+        val raws = scenario.getJSONArray("sessions").objects()
+        val sessions = NotebookRules.withOrdinals(raws.map(::session))
+        val existing = scenario.getJSONArray("courses").objects().map(::course).toMutableList()
+        val imports = imports(scenario.getJSONObject("notebookImports"))
+        val expected = scenario.getJSONObject("expected")
+        val snapshot = NotebookSnapshot(today, today, sessions, emptyList(), 0, 0)
+        assertEquals(label, expected.getJSONArray("sessionKeys").let { a -> (0 until a.length()).map { a.getString(it) } }, sessions.map { it.key })
+
+        if (expected.has("backfillProposal")) {
+            val proposal = expected.getJSONObject("backfillProposal")
+            val backfill = NotebookCourses.backfill(snapshot, imports, subjects, today, existing)
+            assertEquals(label, proposal.getString("from"), backfill.from.toString())
+            assertEquals(label, proposal.getString("to"), backfill.to.toString())
+            assertEquals(label, proposal.getInt("count"), backfill.count)
+            assertEquals(label, proposal.getJSONArray("sessionKeys").let { a -> (0 until a.length()).map { a.getString(it) } }, backfill.sessionKeys)
+            assertEquals(label, proposal.str("message"), backfill.message)
+            assertEquals(label, proposal.getString("acceptSetsSince"), today.minusDays(NotebookCourses.BACKFILL_DAYS).toString())
+        }
+
+        val skipped = sessions.mapNotNull { s -> NotebookCourses.skipReason(s, settings, imports, subjects, today, existing)?.let { s.key to it } }
+        assertEquals(label, expected.getJSONArray("skipped").objects().map { it.getString("sessionKey") to it.getString("reason") }, skipped)
+        val eligible = NotebookCourses.eligible(snapshot, settings, imports, subjects, today, existing)
+        assertEquals(label, expected.getJSONArray("eligibleSessionKeys").let { a -> (0 until a.length()).map { a.getString(it) } }, eligible.map { it.key })
+
+        val createdExpected = expected.getJSONArray("createdCourses").objects()
+        assertEquals(label, createdExpected.size, eligible.size)
+        for ((session, e) in eligible.zip(createdExpected)) {
+            val raw = raws[sessions.indexOf(session)]
+            val pf = prefill(raw, session)
+            val subjectId = pf.subjectId!!
+            val number = CourseEditing.courseNumber(existing, subjectId, pf.chapter)
+            val id = "course-nb-${session.date}-${NotebookRules.normalizeSubject(session.subject).replace(' ', '-')}-${session.ordinal}"
+            val tag = "$label ${session.key}"
+            assertEquals(tag, e.getString("sessionKey"), session.key)
+            assertEquals(tag, e.getString("id"), id)
+            assertEquals(tag, e.getString("subjectId"), subjectId)
+            assertEquals(tag, e.getString("chapter"), pf.chapter)
+            assertEquals(tag, e.getInt("courseNumber"), number)
+            assertEquals(tag, e.getString("title"), pf.title)
+            assertEquals(tag, e.getString("date"), session.date.toString())
+            assertEquals(tag, e.getString("description"), pf.description)
+            assertEquals(tag, e.getString("titleSource"), pf.titleSource)
+            val source = CourseSource(NotebookCourses.SOURCE_KIND, session.key, session.subject, session.date.toString(), session.ordinal)
+            val src = e.getJSONObject("source")
+            assertEquals(tag, CourseSource(src.getString("kind"), src.getString("sessionKey"), src.getString("subjectLabel"), src.getString("date"), src.getInt("ordinal")), source)
+            documentsEqual(tag, e.getJSONArray("documents"), pf.documents)
+            existing += Course(id, subjectId, pf.chapter, number, pf.title, session.date.toString(), pf.description, today.toString(), source)
+            imports[session.key] = NotebookImport(NotebookImport.CREATED, id, "")
+        }
+
+        val after = expected.getJSONObject("notebookImportsAfter")
+        assertEquals(label, after.keys().asSequence().toSortedSet(), imports.keys.toSortedSet())
+        after.keys().forEach { key ->
+            assertEquals("$label $key", after.getJSONObject(key).getString("status"), imports.getValue(key).status)
+            assertEquals("$label $key", after.getJSONObject(key).str("courseId"), imports.getValue(key).courseId)
+        }
+        assertEquals(label, expected.str("toast"), NotebookCourses.toast(createdExpected.size))
+        val buttons = expected.getJSONObject("buttons")
+        assertEquals(label, buttons.keys().asSequence().toSet(), sessions.map { it.key }.toSet())
+        for (s in sessions) {
+            val state = NotebookCourses.importState(s, imports, existing)
+            assertEquals("$label ${s.key}", buttons.getString(s.key), if (state is NotebookCourses.ImportState.View) "viewCourse" else "createCourse")
+        }
+    }
+
+    @Test
     fun scenarios() {
         val scenarios = courses.getJSONArray("scenarios").objects()
-        for (scenario in scenarios) {
-            val label = scenario.getString("id")
-            val today = LocalDate.parse(scenario.getString("today"))
-            val settings = settings(scenario.getJSONObject("settings"))
-            val existing = scenario.getJSONArray("courses").objects().map(::course).toMutableList()
-            val importsRaw = scenario.getJSONObject("notebookImports")
-            val imports = importsRaw.keys().asSequence().associateWith { key ->
-                importsRaw.getJSONObject(key).let { NotebookImport(it.getString("status"), it.str("courseId"), it.optString("at")) }
-            }.toMutableMap()
-            val expected = scenario.getJSONObject("expected")
+        scenarios.forEach(::runScenario)
+        assertEquals(8, scenarios.size)
+    }
 
-            if (expected.has("backfillProposal")) {
-                val proposal = expected.getJSONObject("backfillProposal")
-                val backfill = NotebookCourses.backfill(NotebookSnapshot(today, today, sessions, emptyList(), 0, 0), imports, subjects, today)
-                assertEquals(label, proposal.getString("from"), backfill.from.toString())
-                assertEquals(label, proposal.getString("to"), backfill.to.toString())
-                assertEquals(label, proposal.getInt("count"), backfill.count)
-                assertEquals(label, proposal.getJSONArray("sessionKeys").let { a -> (0 until a.length()).map { a.getString(it) } }, backfill.sessionKeys)
-                assertEquals(label, proposal.str("message"), backfill.message)
-                assertEquals(label, proposal.getString("acceptSetsSince"), today.minusDays(NotebookCourses.BACKFILL_DAYS).toString())
-            }
-
-            val skipped = sessions.mapNotNull { s -> NotebookCourses.skipReason(s, settings, imports, subjects, today)?.let { s.id to it } }
-            assertEquals(label, expected.getJSONArray("skipped").objects().map { it.getString("sessionKey") to it.getString("reason") }, skipped)
-            val snapshot = NotebookSnapshot(today, today, sessions, emptyList(), 0, 0)
-            val eligible = NotebookCourses.eligible(snapshot, settings, imports, subjects, today)
-            assertEquals(label, expected.getJSONArray("eligibleSessionKeys").let { a -> (0 until a.length()).map { a.getString(it) } }, eligible.map { it.id })
-
-            val createdExpected = expected.getJSONArray("createdCourses").objects()
-            assertEquals(label, createdExpected.size, eligible.size)
-            for ((session, e) in eligible.zip(createdExpected)) {
-                val raw = rawSessions[sessions.indexOf(session)]
-                val pf = prefill(raw, session)
-                val subjectId = pf.subjectId!!
-                val number = CourseEditing.courseNumber(existing, subjectId, pf.chapter)
-                val id = "course-nb-${session.id}"
-                assertEquals(label, e.getString("subjectId"), subjectId)
-                assertEquals(label, e.getString("chapter"), pf.chapter)
-                assertEquals("$label ${session.id}", e.getInt("courseNumber"), number)
-                assertEquals(label, e.getString("title"), pf.title)
-                assertEquals(label, e.getString("date"), session.date.toString())
-                assertEquals(label, e.getString("description"), pf.description)
-                assertEquals(label, e.getString("titleSource"), pf.titleSource)
-                val source = e.getJSONObject("source")
-                assertEquals(label, source.getString("sessionKey"), session.id)
-                assertEquals(label, source.getString("subjectLabel"), session.subject)
-                documentsEqual("$label ${session.id}", e.getJSONArray("documents"), pf.documents)
-                existing += Course(id, subjectId, pf.chapter, number, pf.title, session.date.toString(), pf.description, today.toString())
-                imports[session.id] = NotebookImport(NotebookImport.CREATED, id, "")
-            }
-
-            val after = expected.getJSONObject("notebookImportsAfter")
-            assertEquals(label, after.keys().asSequence().toSortedSet(), imports.keys.toSortedSet())
-            after.keys().forEach { key ->
-                assertEquals("$label $key", after.getJSONObject(key).getString("status"), imports.getValue(key).status)
-                assertEquals("$label $key", after.getJSONObject(key).str("courseId"), imports.getValue(key).courseId)
-            }
-            assertEquals(label, expected.str("toast"), NotebookCourses.toast(createdExpected.size))
-            val buttons = expected.getJSONObject("buttons")
-            for (s in sessions) {
-                val state = NotebookCourses.importState(s.id, imports, existing)
-                assertEquals("$label ${s.id}", buttons.getString(s.id), if (state is NotebookCourses.ImportState.View) "viewCourse" else "createCourse")
-            }
+    @Test
+    fun migration() {
+        val migration = courses.getJSONObject("migration")
+        val input = migration.getJSONObject("input")
+        val document = AppDocument(courses = input.getJSONArray("courses").objects().map(::course), notebookImports = imports(input.getJSONObject("notebookImports")))
+        val migrated = DataMigrations.migrateNotebookKeys(document)
+        val expected = migration.getJSONObject("expected")
+        val expectedCourses = expected.getJSONArray("courses").objects()
+        assertEquals(expectedCourses.map { it.getString("id") }, migrated.courses.map { it.id })
+        expectedCourses.zip(migrated.courses).forEach { (e, c) -> assertEquals(c.id, course(e).source, c.source) }
+        val expectedImports = expected.getJSONObject("notebookImports")
+        // Clés triées (règle 39) ; l’ordre des clés JSON n’est pas conservé par org.json.
+        assertEquals(expectedImports.keys().asSequence().sorted().toList(), migrated.notebookImports.keys.toList())
+        expectedImports.keys().forEach { key ->
+            val e = expectedImports.getJSONObject(key)
+            assertEquals(key, NotebookImport(e.getString("status"), e.str("courseId"), e.optString("at")), migrated.notebookImports.getValue(key))
         }
-        assertEquals(5, scenarios.size)
+        // Idempotente.
+        assertTrue(migration.getBoolean("idempotent"))
+        assertEquals(migrated, DataMigrations.migrateNotebookKeys(migrated))
+        runScenario(migration.getJSONObject("afterMigration"))
     }
 
     // endregion
