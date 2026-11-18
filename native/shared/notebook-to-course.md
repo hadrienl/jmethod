@@ -90,3 +90,28 @@ Fiche du cours → section « Documents » (nom, type, taille) :
 `native/shared/documents/` : documents synthétiques (aucune donnée réelle) et `document-title-vectors.json` (fichier → type détecté, candidats, titre et chapitre attendus, texte de lecture attendu pour les formats ODF). `notebook-course-vectors.json` : séances synthétiques + réglages + `notebookImports` → cours attendus (éligibilité, dédoublonnage, `dismissed`, matière inconnue, dates futures, description).
 
 Les choix qui précisent cette spécification (règles 1 à 32 : détection du type, document principal, rejets, chapitres, vue Lecture, proposition des 14 jours…) sont dans `documents/README.md` et font foi au même titre. Les attendus sont calculés par l’implémentation de référence `documents/reference.py` (Python, bibliothèque standard).
+
+## 8. Réviser sans quitter Aujourd’hui
+
+Objectif : pendant qu’on enchaîne les révisions du soir, tout ce qui concerne le cours est à un geste, sans changer d’onglet ni chercher dans le cahier de textes.
+
+### 8.1 Fiche de séance (« Réviser »)
+Ouverte depuis une séance d’Aujourd’hui, une tuile du Planning ou la fiche d’un cours. Même contenu partout, dans une feuille avec sa propre navigation interne (les documents et le cahier s’ouvrent **dans** la feuille, le retour ramène à la fiche) :
+1. En-tête : matière, Jn, étape (Découvrir / S’entraîner / Se tester), titre du cours, chapitre · Cn, retard éventuel.
+2. **Le cours** : description (repliée au-delà de 6 lignes, « Afficher plus »), puis la liste des **documents** (icône du type, nom, titre lu) ; toucher un document l’ouvre dans la visionneuse de la §6, poussée dans la feuille. Le document principal (premier de la liste) porte l’action « Revoir le cours ».
+3. **Dans le cahier de textes** (si `source` existe et que la séance est dans la fenêtre lue) : contenus de la séance d’origine (titre, texte, liens dans le navigateur intégré, pièces jointes non importées téléchargeables) ; sinon une ligne « Séance du 18 novembre · Pronote » sans contenu.
+4. **Séances précédentes** (repliable, existant).
+5. Action principale en bas, toujours visible : **« Faire le point »** (autoévaluation existante, dans la même feuille).
+
+### 8.2 Enchaîner
+Après la validation d’une note depuis la fiche :
+- s’il reste des séances dues dans le programme du soir : la feuille affiche le résultat (message de l’algorithme) et un bouton principal **« Séance suivante · <matière> — <titre> »** qui remplace le contenu de la feuille par la fiche de la séance suivante (ordre du programme du soir d’Aujourd’hui), plus « Revenir à Aujourd’hui » ;
+- sinon : « Programme terminé » puis fermeture de la feuille et feu d’artifice (comportement existant).
+
+### 8.3 Aujourd’hui
+- Carte « Pour demain » : en plus de « Faire le point sur ce cours », un bouton secondaire **« Revoir le cours »** quand le cours a au moins un document (ouvre directement le document principal dans la feuille de la séance).
+- Chaque ligne de séance du programme : toucher la ligne ouvre la fiche §8.1 ; une petite icône indique la présence de documents.
+- Les créneaux de demain issus de Pronote : si un cours existe déjà pour cette matière et ce jour (séance du cahier importée), « Voir le cours » au lieu de « Ajouter ce cours ».
+
+### 8.4 Mes cours
+La fiche d’un cours donne le même accès aux documents et au contenu du cahier (§8.1, points 2 et 3) ; « Valider » ouvre la fiche de la prochaine séance due de ce cours.
