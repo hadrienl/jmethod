@@ -5,7 +5,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
-/** Dossier partagé avec iOS : script d’automatisation, vecteurs protocole et vecteurs métier. */
+/** Dossier partagé avec iOS : script d’automatisation de la page officielle. */
 val sharedDir: Directory = rootProject.layout.projectDirectory.dir("../../native/shared")
 
 /** Copie au build le seul script partagé utile à l’APK (aucune copie versionnée). */
@@ -45,10 +45,7 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    // Les tests JVM lisent directement les vecteurs partagés (protocol-vectors.json, domain/…).
-    sourceSets["test"].resources.srcDir(sharedDir)
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
-    testOptions { unitTests.isReturnDefaultValues = false }
 }
 
 androidComponents {
@@ -62,6 +59,8 @@ kotlin {
 }
 
 dependencies {
+    // Modèle, logique, protocole Pronote et écrans Compose communs avec l’app ordinateur.
+    implementation(project(":shared"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.activity.compose)
@@ -80,6 +79,4 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.zxing.core)
     debugImplementation(libs.compose.ui.tooling)
-    testImplementation(libs.junit)
-    testImplementation(libs.org.json)
 }
