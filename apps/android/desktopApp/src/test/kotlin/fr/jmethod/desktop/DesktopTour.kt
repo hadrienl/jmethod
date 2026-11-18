@@ -102,6 +102,11 @@ class DesktopTour {
                     shot(dir, "wide-1280-login")
                     onNodeWithText("Code ou adresse de l’établissement").performTextInput("demo")
                     onNodeWithText("Identifiant").performTextInput("demonstration")
+                    // Un mauvais mot de passe d’abord : refus de Pronote affiché sous le bouton.
+                    onNodeWithText("Mot de passe").performTextInput("mauvais-mot-de-passe")
+                    onNodeWithText("Mot de passe").performKeyInput { pressKey(Key.Enter) }
+                    waitUntil(timeoutMillis = 60_000) { onAllNodesWithText("Pronote a refusé", substring = true).fetchSemanticsNodes().isNotEmpty() }
+                    shot(dir, "wide-1280-login-rejected")
                     onNodeWithText("Mot de passe").performTextInput("pronotevs")
                     // Entrée envoie le formulaire.
                     onNodeWithText("Mot de passe").performKeyInput { pressKey(Key.Enter) }

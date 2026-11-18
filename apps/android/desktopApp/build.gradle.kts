@@ -12,8 +12,11 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
-/** Version de l’app ordinateur (MAJEUR.MINEUR.CORRECTIF, majeur ≥ 1 exigé par MSI et DMG). */
-val desktopVersion = "1.0.0"
+/**
+ * Version de l’app ordinateur (MAJEUR.MINEUR.CORRECTIF, majeur ≥ 1 exigé par MSI et DMG). La CI la
+ * tire de l’étiquette `desktop-vX.Y.Z` (`-Pjmethod.desktopVersion=X.Y.Z`).
+ */
+val desktopVersion: String = providers.gradleProperty("jmethod.desktopVersion").orElse("1.0.0").get()
 
 kotlin {
     compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
@@ -61,8 +64,9 @@ compose.desktop {
             description = "Révisions espacées à partir de Pronote"
             vendor = "J-Method"
             copyright = "J-Method"
-            // Modules du JDK embarqué : HTTPS (courbes elliptiques TLS), Swing/AWT, préférences, JNA.
-            modules("java.naming", "jdk.crypto.ec", "jdk.unsupported", "java.net.http")
+            // Modules du JDK embarqué en plus de ceux de Compose : suggestRuntimeModules (java.instrument,
+            // jdk.unsupported), HTTPS ECDHE (jdk.crypto.ec), lecteurs d’écran Windows (jdk.accessibility).
+            modules("java.instrument", "java.naming", "jdk.accessibility", "jdk.crypto.ec", "jdk.unsupported")
             windows {
                 menuGroup = "J-Method"
                 perUserInstall = true

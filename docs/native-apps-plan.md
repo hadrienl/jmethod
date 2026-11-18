@@ -24,6 +24,16 @@ Objectif : porter le POC web (`src/`, retiré du dépôt depuis, disponible au t
 | Secrets | Keychain `WhenUnlockedThisDeviceOnly` | Android Keystore |
 | Tests | XCTest / Swift Testing (vecteurs partagés) | JUnit JVM (vecteurs partagés) |
 
+## App ordinateur (Windows, macOS)
+
+Décision du 18 novembre 2026 : la même app que sur téléphone, en Kotlin, pour ordinateur. Pas de synchronisation pour l’instant : l’ordinateur garde ses propres données, comme chaque téléphone.
+
+- **Kotlin Multiplatform** dans `apps/android` : `shared` (modèle, logique, protocole Pronote, cahier de textes, documents, écrans Compose ; cibles Android et JVM), `app` (Android, fin), `desktopApp` (Compose Desktop). L’app Android garde son identifiant, son fichier de données et ses alias Keystore.
+- **Connexion directe** sur ordinateur (pas de WebView) : identifiant et mot de passe Pronote envoyés par le protocole natif à `<page>?login=true`, mêmes lectures et mêmes règles (lecture seule, erreur 25, expiration de session) ; double authentification non prise en charge (message clair).
+- **Secrets** : Trousseau macOS, DPAPI Windows. **Données** : dossier de l’app du système. **Actualisation** seulement pendant que l’app est ouverte.
+- **Fenêtre adaptative**, partagée avec Android (tablettes, pliables) : classes de largeur Material 3 (barre en bas, rail, deux volets), feuilles en panneau latéral ou en dialogue sur grande fenêtre.
+- **Distribution** : GitHub Actions (`.github/workflows/desktop.yml`) construit un MSI et un DMG non signés en artefacts, joints à une Release pour l’étiquette `desktop-vX.Y.Z`.
+
 ## Jalons
 
 1. **Socle, Pronote, Aujourd’hui.** Projets, modèle de données et persistance, données de démonstration au premier lancement, logique métier portée et vérifiée par les vecteurs, connexion Pronote (formulaire natif, reprise par jeton, synchronisation des 14 prochains jours vers les créneaux Pronote, choix de l’enfant), écran Aujourd’hui complet : séances à préparer ce soir groupées par matière et par étape, retards, progression, « Ta journée de cours de demain », validation d’une séance avec autoévaluation 0–100 et replanification adaptative, feu d’artifice quand tout est fait.
@@ -36,4 +46,4 @@ Chaque jalon se termine par : tests verts sur les deux plateformes, installation
 
 ## Organisation
 
-Deux experts (`jmethod-ios-swiftui-expert`, `jmethod-android-compose-expert`) travaillent en parallèle, chacun dans son dossier, pilotés par la session principale. Chacun compile et teste sa propre plateforme ; l’orchestrateur relit, installe sur les appareils et committe. Les changements de contrat partagé (`native/shared/`) passent par l’orchestrateur.
+Deux experts (`jmethod-ios-swiftui-expert`, `jmethod-android-compose-expert`, qui porte aussi l’app ordinateur) travaillent en parallèle, chacun dans son dossier, pilotés par la session principale. Chacun compile et teste sa propre plateforme ; l’orchestrateur relit, installe sur les appareils et committe. Les changements de contrat partagé (`native/shared/`) passent par l’orchestrateur.
