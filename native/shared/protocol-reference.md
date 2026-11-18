@@ -93,3 +93,12 @@ If the end date is absent, use `General.ListeHeuresFin.V`: calculate `endPlace =
 The native HTTPS allowlist is `FonctionParametres`, `Identification`, `Authentification`, `ParametresUtilisateur`, `PageInfosPerso`, `Navigation`, `PageEmploiDuTemps`. POST transport alone does not imply a school-data write. Official UI QR generation is the separately authorized connection step; it does not authorize arbitrary API writes. Reject unknown functions and school mutations such as `SaisieTAFFaitEleve`, `SaisieMessage`, security mutation `SecurisationCompteDoubleAuth`, and direct QR-generation API `JetonAppliMobile`.
 
 Milestone 5 adds `PageCahierDeTexte` as a READ call (tabs 88 and 89 only, `data` limited to `domaine`) and a same-host `GET /FichiersExternes/…` attachment download capped at 20 MB; see `notebook-reference.md`. Any `Saisie*` function, including `SaisieTAFFaitEleve` (mark homework done), stays refused.
+
+
+## Session expiry (observed 2026-11-18)
+
+A desktop-less mobile session opened by token login expires after inactivity. About two hours after the last call, `PageEmploiDuTemps` answered `{"Erreur":{"G":8}}` — a code absent from pronotepy's list (10, 22, 25). Do not rely on a closed list of “expired” codes:
+
+- Any `Erreur` on an established session, except 25 (too many attempts), means the session is lost: log in again by token once (fresh cookies, counters, key and IV), persist the rotated token, then replay the request once. A second failure is reported to the user.
+- Like pronotepy's session check, re-login by token before a request when the session has been idle for more than 10 minutes, instead of waiting for the error.
+- Error 25 stops every automatic attempt for at least one hour.
