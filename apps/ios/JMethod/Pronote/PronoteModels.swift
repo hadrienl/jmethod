@@ -54,8 +54,8 @@ struct PronoteFailure: Error, LocalizedError, Sendable, Equatable {
 
     static func invalid(_ code: String, _ message: String) -> Self { .init(code: code, message: message) }
 
-    /// Erreurs Pronote 10 (session expirée) et 22 (objet d'une session précédente) : une reconnexion par jeton suffit.
-    var isExpiredSession: Bool { code == "pronote-10" || code == "pronote-22" }
+    /// Session perdue (toute erreur Pronote sauf 25, HTTP non 2xx, réponse illisible) : une reconnexion par jeton suffit.
+    var isExpiredSession: Bool { PronoteSession.isSessionLost(self) }
     /// Erreur 25 : trop de tentatives, aucune nouvelle tentative automatique.
     var isTooManyAttempts: Bool { code == "pronote-25" }
 }

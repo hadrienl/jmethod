@@ -55,6 +55,8 @@ final class PronoteSession {
     }
 
     nonisolated static let foregroundSyncInterval: TimeInterval = 6 * 60 * 60
+    /// Session inactive depuis plus de 10 minutes : reconnexion par jeton avant toute lecture (comme pronotepy).
+    nonisolated static let idleReloginInterval: TimeInterval = 10 * 60
 
     private(set) var phase: Phase = .idle
     private(set) var access: Access
@@ -96,6 +98,11 @@ final class PronoteSession {
     #endif
     /// Une connexion par jeton est en vol (premier plan ou arrière-plan) : aucune autre n'est lancée en parallèle.
     @ObservationIgnored private var tokenLoginInFlight = false
+    /// Reconnexion par jeton en cours (session perdue ou inactive) : partagée par toutes les lectures concurrentes,
+    /// pour qu'un même jeton ne serve jamais à deux connexions.
+    @ObservationIgnored private var relogin: Task<any PronoteSessionClient, Error>?
+    /// Instant du dernier appel Pronote réussi sur la session établie (connexion comprise).
+    @ObservationIgnored private var lastPronoteSuccess: Date?
     /// Une seule reconnexion silencieuse par jeton refusé ; remis à zéro quand un nouveau jeton est obtenu.
     @ObservationIgnored private var silentAttemptUsed = false
     /// Identifiants à enregistrer après une connexion réussie (« Rester connecté »), puis effacés de la mémoire.
@@ -186,7 +193,7 @@ final class PronoteSession {
         // Aperçus Debug : aucune connexion automatique au retour au premier plan.
         if previewOnly { return }
         #endif
-        guard resumed, !isWorking, !tokenLoginInFlight, !webActive, !throttle.isBlocked(now: now) else { return }
+        guard resumed, !isWorking, !tokenLoginInFlight, relogin == nil, !webActive, !throttle.isBlocked(now: now) else { return }
         if vault.needsSilentRelogin && vault.autoReloginEnabled {
             handleRefusedToken()
         } else if access == .connected, Self.shouldSyncOnForeground(lastSync: app?.lastPronoteSync, now: now) {
@@ -271,7 +278,7 @@ final class PronoteSession {
     }
 
     func synchronize() {
-        guard !isWorking, !tokenLoginInFlight else { return }
+        guard !isWorking, !tokenLoginInFlight, relogin == nil else { return }
         if isBlocked { return showBlocked() }
         guard let client else {
             if hasSavedConnection { resumeSavedConnection() }
@@ -282,29 +289,88 @@ final class PronoteSession {
         task?.cancel()
         errorMessage = nil
         phase = .synchronizing
+        _ = client
         let child = selectedChildId
         let epoch = self.epoch
         task = Task { [weak self] in
             do {
-                let lessons: [PronoteLesson]
-                do {
-                    lessons = try await client.timetable(days: PronoteClient.maximumDays, childId: child, now: Date())
-                } catch let failure as PronoteFailure where failure.isExpiredSession {
-                    // Session expirée : une seule reconnexion par jeton, puis nouvelle lecture.
-                    guard let self, !self.isBlocked, let saved = try self.vault.loadCredentials() else { throw failure }
-                    let fresh = try self.makeClient(saved)
-                    _ = try await fresh.login(mode: .token, persist: self.tokenPersister(epoch: epoch))
-                    self.client = fresh
-                    lessons = try await fresh.timetable(days: PronoteClient.maximumDays, childId: child, now: Date())
-                }
+                guard let self else { return }
+                let lessons = try await self.withSession { try await $0.timetable(days: PronoteClient.maximumDays, childId: child, now: Date()) }
                 try Task.checkCancellation()
-                guard let self, self.generation == attempt else { return }
+                guard self.generation == attempt else { return }
                 self.finish(lessons: lessons, epoch: epoch)
             } catch {
                 guard let self, self.generation == attempt, !Task.isCancelled else { return }
                 self.connectionFailed(error, mode: .token)
             }
         }
+    }
+
+    // MARK: Session établie
+
+    /// Erreurs qui signifient que la session Pronote est perdue (`protocol-reference.md`, « Session expiry ») :
+    /// toute `Erreur` Pronote sauf 25, un statut HTTP non 2xx, une réponse non JSON, un échec de déchiffrement
+    /// ou de décompression. Pas de liste fermée de codes « expirés » (le code 8 est apparu après deux heures).
+    nonisolated static func isSessionLost(_ error: Error) -> Bool {
+        guard let failure = error as? PronoteFailure, failure.code != PronoteThrottle.blockedCode else { return false }
+        return failure.code.hasPrefix("pronote-") || failure.code.hasPrefix("http-") || ["json", "crypto", "compression"].contains(failure.code)
+    }
+
+    /// Lecture sur la session établie. Session inactive depuis plus de 10 minutes (ou absente) : reconnexion par jeton
+    /// avant l'appel. Session perdue pendant l'appel : une seule reconnexion par jeton, puis l'appel est rejoué une fois ;
+    /// un second échec remonte à l'utilisateur. Erreur 25 : blocage d'une heure, aucune reconnexion.
+    private func withSession<T: Sendable>(_ operation: (any PronoteSessionClient) async throws -> T) async throws -> T {
+        if isBlocked { throw PronoteFailure.invalid(PronoteThrottle.blockedCode, PronoteThrottle.blockedMessage) }
+        let epoch = self.epoch
+        var current: any PronoteSessionClient
+        var reconnected = false
+        if let client, let last = lastPronoteSuccess, now().timeIntervalSince(last) <= Self.idleReloginInterval, now() >= last {
+            current = client
+        } else {
+            current = try await reloginByToken(epoch: epoch)
+            reconnected = true
+        }
+        do {
+            let value = try await operation(current)
+            lastPronoteSuccess = now()
+            return value
+        } catch {
+            throttle.note(error, now: now())
+            guard !reconnected, Self.isSessionLost(error), !isBlocked, epoch == self.epoch else { throw error }
+            current = try await reloginByToken(epoch: epoch)
+            let value = try await operation(current)
+            lastPronoteSuccess = now()
+            return value
+        }
+    }
+
+    /// Reconnexion par jeton depuis un état propre : nouveau client (cookies, numéro d'ordre, clé et IV neufs),
+    /// dernier jeton du trousseau, jeton renouvelé enregistré dès sa réception (même si l'appelant est annulé).
+    /// Une reconnexion en cours est partagée.
+    private func reloginByToken(epoch: Int) async throws -> any PronoteSessionClient {
+        if let relogin { return try await relogin.value }
+        let task = Task { @MainActor [weak self] () throws -> any PronoteSessionClient in
+            guard let self else { throw CancellationError() }
+            if self.isBlocked { throw PronoteFailure.invalid(PronoteThrottle.blockedCode, PronoteThrottle.blockedMessage) }
+            guard let saved = try self.vault.loadCredentials() else {
+                throw PronoteFailure.invalid("login", "Ta session Pronote a expiré. Reconnecte-toi.")
+            }
+            let fresh = try self.makeClient(saved)
+            do {
+                _ = try await fresh.login(mode: .token, persist: self.tokenPersister(epoch: epoch))
+            } catch {
+                self.throttle.note(error, now: self.now())
+                throw error
+            }
+            guard epoch == self.epoch else { throw CancellationError() }
+            try? self.vault.saveCredentials(await fresh.credentialSnapshot())
+            self.client = fresh
+            self.lastPronoteSuccess = self.now()
+            return fresh
+        }
+        relogin = task
+        defer { relogin = nil }
+        return try await task.value
     }
 
     func selectChild(_ id: String) {
@@ -354,6 +420,7 @@ final class PronoteSession {
         notebookScope += 1
         await client?.invalidate()
         client = nil
+        lastPronoteSuccess = nil
         account = nil
         selectedChildId = nil
         hasSavedConnection = false
@@ -367,49 +434,33 @@ final class PronoteSession {
 
     // MARK: Cahier de textes
 
-    /// Lit le cahier de textes (28 jours) avec la connexion active ; une session expirée est reprise une fois par jeton.
+    /// Lit le cahier de textes (28 jours) sur la session établie (reconnexion par jeton si elle est perdue ou inactive).
     func readNotebook(now: Date = Date()) async throws -> NotebookRead {
-        guard let client else {
+        guard client != nil else {
             throw PronoteFailure.invalid("offline", "Pronote n’est pas connecté. Réessaie la connexion, puis rouvre le cahier de textes.")
         }
-        if isBlocked { throw PronoteFailure.invalid(PronoteThrottle.blockedCode, PronoteThrottle.blockedMessage) }
         let child = selectedChildId
         let today = SchoolDay.today(now: now)
-        do {
-            return try await client.notebook(today: today, childId: child)
-        } catch let failure as PronoteFailure where failure.isExpiredSession {
-            guard !tokenLoginInFlight, !isBlocked, let saved = try vault.loadCredentials() else { throw failure }
-            tokenLoginInFlight = true
-            defer { tokenLoginInFlight = false }
-            let fresh = try makeClient(saved)
-            do {
-                _ = try await fresh.login(mode: .token, persist: tokenPersister(epoch: epoch))
-            } catch {
-                throttle.note(error, now: self.now())
-                throw error
-            }
-            self.client = fresh
-            return try await fresh.notebook(today: today, childId: child)
-        } catch {
-            throttle.note(error, now: self.now())
-            throw error
-        }
+        return try await withSession { try await $0.notebook(today: today, childId: child) }
     }
 
-    /// Télécharge une pièce jointe dans le cache privé ; refusé si la session a changé depuis la lecture.
     /// Contrôlé juste avant le GET (client actif, aucune déconnexion), puis au retour : un résultat arrivé après une
     /// déconnexion est effacé et rien n'est ouvert.
     func downloadAttachment(_ attachment: NotebookAttachment, session: UUID, to destination: URL) async throws {
         let unavailable = PronoteFailure.invalid("download", NotebookRules.downloadUnavailable)
-        guard attachment.kind == .file, access == .connected || access == .offline, let client else { throw unavailable }
+        guard attachment.kind == .file, access == .connected || access == .offline, let original = client else { throw unavailable }
         let epoch = self.epoch
         do {
-            try await client.download(attachmentId: attachment.id, fileName: attachment.fileName, session: session, to: destination)
+            try await withSession { current in
+                // Après une reconnexion faite ici (session perdue ou inactive), la nouvelle session sert au téléchargement.
+                let stamp = current === original ? session : await current.currentSession()
+                try await current.download(attachmentId: attachment.id, fileName: attachment.fileName, session: stamp, to: destination)
+            }
         } catch {
             try? FileManager.default.removeItem(at: destination)
             throw error
         }
-        guard epoch == self.epoch, self.client === client else {
+        guard epoch == self.epoch else {
             try? FileManager.default.removeItem(at: destination)
             throw unavailable
         }
@@ -421,7 +472,7 @@ final class PronoteSession {
     /// jeton renouvelé enregistré immédiatement, synchronisation des 14 jours. Jeton refusé : rien d'autre n'est tenté,
     /// la reconnexion silencieuse est marquée pour le prochain premier plan.
     func backgroundRefresh(now: Date = Date()) async -> BackgroundResult {
-        guard !isWorking, !tokenLoginInFlight, !webActive else { return .busy }
+        guard !isWorking, !tokenLoginInFlight, relogin == nil, !webActive else { return .busy }
         guard !throttle.isBlocked(now: now) else { return .blocked }
         guard let saved = try? vault.loadCredentials() else { return .noConnection }
         await app?.ensureLoaded()
@@ -435,7 +486,8 @@ final class PronoteSession {
             guard epoch == self.epoch else { return .failed }
             try vault.saveCredentials(await client.credentialSnapshot())
             adopt(client: client, account: account)
-            let lessons = try await client.timetable(days: PronoteClient.maximumDays, childId: selectedChildId, now: now)
+            let child = selectedChildId
+            let lessons = try await withSession { try await $0.timetable(days: PronoteClient.maximumDays, childId: child, now: now) }
             guard epoch == self.epoch else { return .failed }
             app?.applyPronote(lessons: lessons, syncedAt: now, announce: false)
             silentAttemptUsed = false
@@ -584,7 +636,8 @@ final class PronoteSession {
                     await self.clearWebData()
                 }
                 self.phase = .synchronizing
-                let lessons = try await client.timetable(days: PronoteClient.maximumDays, childId: self.selectedChildId, now: Date())
+                let child = self.selectedChildId
+                let lessons = try await self.withSession { try await $0.timetable(days: PronoteClient.maximumDays, childId: child, now: Date()) }
                 guard epoch == self.epoch, self.generation == attempt else { return }
                 self.finish(lessons: lessons, epoch: epoch)
             } catch {
@@ -613,6 +666,7 @@ final class PronoteSession {
         silentRelogin = false
         self.client = client
         self.account = account
+        lastPronoteSuccess = now()
         notebookScope += 1
         if account.children.isEmpty {
             selectedChildId = nil

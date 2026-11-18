@@ -159,6 +159,7 @@ final class PronoteTests: XCTestCase {
     func testFailureClassification() {
         XCTAssertTrue(PronoteFailure.invalid("pronote-10", "").isExpiredSession)
         XCTAssertTrue(PronoteFailure.invalid("pronote-22", "").isExpiredSession)
+        XCTAssertTrue(PronoteFailure.invalid("pronote-8", "").isExpiredSession, "code 8 observé après deux heures d'inactivité")
         XCTAssertFalse(PronoteFailure.invalid("pronote-25", "").isExpiredSession)
         XCTAssertTrue(PronoteFailure.invalid("pronote-25", "").isTooManyAttempts)
     }

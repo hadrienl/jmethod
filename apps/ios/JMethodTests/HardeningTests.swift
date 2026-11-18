@@ -7,7 +7,18 @@ import XCTest
 /// Une étape peut être retenue jusqu'à ce que le test la libère ; la réponse respecte alors l'annulation de la
 /// tâche appelante, comme `URLSession`.
 actor ScriptedPronoteServer: PronoteTransport {
+    /// Réponse scriptée d'une fonction (consommée dans l'ordre, puis réponse normale).
+    enum Reply: Sendable {
+        case error(Int)
+        case notJSON
+        case status(Int)
+    }
+
     private var serverIV = ProtocolCrypto.zeroIV
+    /// Jeton attendu à la prochaine Authentification ; il tourne à chaque connexion réussie.
+    private var token = "old-token"
+    private var rotations = 0
+    private var script: [String: [Reply]] = [:]
     private(set) var functions: [String] = []
     private var held: String?
     private var heldArrived: CheckedContinuation<Void, Never>?
@@ -31,6 +42,12 @@ actor ScriptedPronoteServer: PronoteTransport {
         release = nil
     }
 
+    func enqueue(_ replies: [Reply], for function: String) {
+        script[function, default: []] += replies
+    }
+
+    func count(_ function: String) -> Int { functions.filter { $0 == function }.count }
+
     func request(url: URL, method: String, body: Data?, headers: [String: String]) async throws -> PronoteHTTPResponse {
         if method == "GET" {
             let html = "<html><body onload=\"Start({h:'424242',a:3,CoA:false,CrA:false,http:false})\"></body></html>"
@@ -40,6 +57,18 @@ actor ScriptedPronoteServer: PronoteTransport {
         let function = try XCTUnwrap(envelope["id"] as? String)
         functions.append(function)
         let payload = (envelope["dataSec"] as? [String: Any])?["data"] as? [String: Any] ?? [:]
+        if var queue = script[function], !queue.isEmpty {
+            let reply = queue.removeFirst()
+            script[function] = queue
+            switch reply {
+            case .error(let code):
+                return PronoteHTTPResponse(data: try JSONSerialization.data(withJSONObject: ["Erreur": ["G": code, "Titre": "Erreur"]]), status: 200)
+            case .notJSON:
+                return PronoteHTTPResponse(data: Data("<html>Session expirée</html>".utf8), status: 200)
+            case .status(let status):
+                return PronoteHTTPResponse(data: Data(), status: status)
+            }
+        }
         if function == held {
             arrived = true
             heldArrived?.resume()
@@ -57,15 +86,21 @@ actor ScriptedPronoteServer: PronoteTransport {
         case "Identification":
             data = ["alea": "", "challenge": "defi", "modeCompLog": 0, "modeCompMdp": 0]
         case "Authentification":
-            let key = ProtocolCodec.authenticationKey(username: "u", password: "old-token", alea: "", lowercaseUsername: false, lowercasePassword: false)
+            let key = ProtocolCodec.authenticationKey(username: "u", password: token, alea: "", lowercaseUsername: false, lowercasePassword: false)
+            rotations += 1
+            token = rotations == 1 ? "rotated-token" : "rotated-token-\(rotations)"
             var answer: [String: Any] = [
                 "cle": ProtocolCrypto.hex(try ProtocolCrypto.encrypt(Data("1,2,3".utf8), key: key, iv: serverIV)),
-                "jetonConnexionAppliMobile": "rotated-token",
+                "jetonConnexionAppliMobile": token,
             ]
             if doubleAuthentication { answer["actionsDoubleAuth"] = ["_T": 26, "V": "[3]"] }
             data = answer
         case "ParametresUtilisateur":
             data = ["ressource": ["N": "1", "L": "Élève test"], "listeOnglets": [["G": 16], ["G": 89]]]
+        case "PageEmploiDuTemps":
+            data = ["ListeCours": [] as [Any]]
+        case "PageCahierDeTexte":
+            data = ["ListeCahierDeTextes": ["_T": 24, "V": [] as [Any]]]
         default:
             data = [:]
         }
