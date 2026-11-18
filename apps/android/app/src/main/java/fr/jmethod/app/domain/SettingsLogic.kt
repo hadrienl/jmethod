@@ -9,6 +9,7 @@ import fr.jmethod.app.model.DEFAULT_INTERVALS
 import fr.jmethod.app.model.Revision
 import fr.jmethod.app.model.Subject
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -109,6 +110,8 @@ object ImportExport {
             val subjects: List<Subject>?,
             /** `null` : réglages conservés ; sinon stockés tels quels puis complétés par les valeurs par défaut. */
             val settings: AppSettings?,
+            /** Séances déjà importées (`notebook-to-course.md`) ; `null` : celles de l’appareil sont conservées. */
+            val notebookImports: Map<String, fr.jmethod.app.model.NotebookImport>? = null,
         ) : Result {
             /** État après import : les créneaux Pronote de l’appareil sont conservés. */
             fun applyTo(document: AppDocument): AppDocument = document.copy(
@@ -116,6 +119,7 @@ object ImportExport {
                 revisions = revisions,
                 subjects = subjects ?: document.subjects,
                 settings = settings ?: document.settings,
+                notebookImports = notebookImports ?: document.notebookImports,
                 initialized = true,
                 dataVersion = DataMigrations.CURRENT_VERSION,
             )
@@ -169,6 +173,17 @@ object ImportExport {
             else -> runCatching { AppDocumentCodec.json.decodeFromJsonElement(AppSettings.serializer(), settingsElement) }.getOrNull()
                 ?: return shapeError("les réglages sont illisibles")
         }
-        return Result.Accepted(courses, revisions, subjects, settings)
+        val importsElement = root["notebookImports"]
+        val imports = when (importsElement) {
+            null, JsonNull -> null
+            !is JsonObject -> return shapeError("les séances importées du cahier de textes sont illisibles")
+            else -> runCatching {
+                json.decodeFromJsonElement(
+                    kotlinx.serialization.builtins.MapSerializer(String.serializer(), fr.jmethod.app.model.NotebookImport.serializer()),
+                    importsElement,
+                )
+            }.getOrNull() ?: return shapeError("les séances importées du cahier de textes sont illisibles")
+        }
+        return Result.Accepted(courses, revisions, subjects, settings, imports)
     }
 }

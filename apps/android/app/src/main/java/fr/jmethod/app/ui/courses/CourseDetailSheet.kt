@@ -57,6 +57,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import fr.jmethod.app.domain.CourseDetailModel
+import androidx.compose.foundation.clickable
+import fr.jmethod.app.model.CourseDocument
 import fr.jmethod.app.ui.theme.JColors
 import fr.jmethod.app.ui.theme.JIcons
 import fr.jmethod.app.ui.theme.JShapes
@@ -78,6 +80,11 @@ fun CourseDetailSheet(
     onDelete: () -> Unit,
     /** `null` si la matière du cours a disparu. */
     onOpenNotebook: (() -> Unit)? = null,
+    /** Documents du cours et présence du fichier sur ce téléphone. */
+    documents: List<Pair<CourseDocument, Boolean>> = emptyList(),
+    onOpenDocument: (CourseDocument) -> Unit = {},
+    onShareDocument: (CourseDocument) -> Unit = {},
+    onRedownload: ((CourseDocument) -> Unit)? = null,
 ) {
     var confirmDelete by rememberSaveable(model.course.id) { mutableStateOf(false) }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = Color.White) {
@@ -120,6 +127,9 @@ fun CourseDetailSheet(
                     Spacer(Modifier.width(JSpacing.s))
                     Text("Voir le cahier de textes de ${model.subjectLabel}")
                 }
+            }
+            if (documents.isNotEmpty()) {
+                Documents(documents, onOpenDocument, onShareDocument, onRedownload)
             }
             Text(
                 "Calendrier personnalisé des J",
@@ -264,6 +274,49 @@ private fun TimelineRow(row: CourseDetailModel.Row, highlighted: Boolean, onVali
                 Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = JColors.Emerald700, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(JSpacing.xs))
                 Text(row.right, style = MaterialTheme.typography.labelMedium.tabular(), fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+private fun sizeLabel(bytes: Long): String = when {
+    bytes >= 1024 * 1024 -> String.format(java.util.Locale.FRENCH, "%.1f Mo", bytes / 1024.0 / 1024.0)
+    bytes >= 1024 -> "${bytes / 1024} Ko"
+    else -> "$bytes o"
+}
+
+private fun typeLabel(document: CourseDocument): String =
+    document.name.substringAfterLast('.', "").uppercase().ifEmpty { "Fichier" }
+
+/** Section « Documents » : ouverture dans l’app, « Ouvrir avec… », retéléchargement si absent. */
+@Composable
+private fun Documents(
+    documents: List<Pair<CourseDocument, Boolean>>,
+    onOpen: (CourseDocument) -> Unit,
+    onShare: (CourseDocument) -> Unit,
+    onRedownload: ((CourseDocument) -> Unit)?,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(JSpacing.s)) {
+        Text("Documents", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() })
+        documents.forEach { (document, present) ->
+            Row(
+                Modifier.fillMaxWidth().clip(JShapes.control).background(JColors.Slate50)
+                    .then(if (present) Modifier.clickable(onClickLabel = "Ouvrir dans l’app") { onOpen(document) } else Modifier)
+                    .padding(start = JSpacing.m, top = JSpacing.xs, bottom = JSpacing.xs),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f).semantics(mergeDescendants = true) {}) {
+                    Text(document.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        if (present) "${typeLabel(document)} · ${sizeLabel(document.size)}" else "${typeLabel(document)} · à retélécharger",
+                        style = MaterialTheme.typography.bodySmall, color = if (present) JColors.Slate600 else JColors.Amber900,
+                    )
+                }
+                if (present) {
+                    TextButton(onClick = { onShare(document) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Ouvrir avec…") }
+                } else if (onRedownload != null) {
+                    TextButton(onClick = { onRedownload(document) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Retélécharger") }
+                }
             }
         }
     }

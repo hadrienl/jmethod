@@ -115,6 +115,10 @@ import fr.jmethod.app.ui.pronote.OfflineBanner
 import fr.jmethod.app.ui.pronote.PronoteViewModel
 import fr.jmethod.app.ui.notebook.NotebookScreen
 import fr.jmethod.app.ui.notebook.NotebookViewModel
+import fr.jmethod.app.ui.notebook.NotebookEvent
+import fr.jmethod.app.ui.notebook.openFile
+import fr.jmethod.app.ui.documents.DocumentViewerScreen
+import fr.jmethod.app.ui.documents.openWith
 import fr.jmethod.app.ui.settings.SettingsEvent
 import fr.jmethod.app.ui.settings.SettingsScreen
 import fr.jmethod.app.ui.settings.SettingsViewModel
@@ -275,11 +279,11 @@ fun JMethodApp() {
     val todayViewModel: TodayViewModel = viewModel(factory = viewModelFactory { initializer { TodayViewModel(container.repository, container.clock) } })
     val pronoteViewModel: PronoteViewModel = viewModel(factory = viewModelFactory { initializer { PronoteViewModel(application, container) } })
     val planningViewModel: PlanningViewModel = viewModel(factory = viewModelFactory { initializer { PlanningViewModel(container.repository, container.clock) } })
-    val coursesViewModel: CoursesViewModel = viewModel(factory = viewModelFactory { initializer { CoursesViewModel(container.repository, container.clock) } })
+    val coursesViewModel: CoursesViewModel = viewModel(factory = viewModelFactory { initializer { CoursesViewModel(container.repository, container.clock, container.courseCreator, container.courseFiles) } })
     val statsViewModel: StatsViewModel = viewModel(factory = viewModelFactory { initializer { StatsViewModel(container.repository, container.clock) } })
     val settingsViewModel: SettingsViewModel = viewModel(factory = viewModelFactory { initializer { SettingsViewModel(container.repository, container.clock) } })
     val notebookViewModel: NotebookViewModel = viewModel(
-        factory = viewModelFactory { initializer { NotebookViewModel(pronoteViewModel.controller, container.repository, application.cacheDir) } },
+        factory = viewModelFactory { initializer { NotebookViewModel(pronoteViewModel.controller, container.repository, application.cacheDir, container.courseCreator, container.courseFiles, container.clock) } },
     )
 
     val today by todayViewModel.uiState.collectAsStateWithLifecycle()
@@ -291,6 +295,7 @@ fun JMethodApp() {
     val settings by settingsViewModel.uiState.collectAsStateWithLifecycle()
     val notebook by notebookViewModel.uiState.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableStateOf(Tab.TODAY) }
+    var viewing by remember { mutableStateOf<Pair<String, fr.jmethod.app.model.CourseDocument>?>(null) }
     val snackbar = remember { SnackbarHostState() }
     val celebration = remember { CelebrationState() }
 
@@ -309,6 +314,26 @@ fun JMethodApp() {
                 TodayEvent.Confetti -> celebration.confetti()
                 TodayEvent.Fireworks -> celebration.fireworks()
                 is TodayEvent.Toast -> toast(ToastVisuals(event.title, event.message, if (event.warning) ToastTone.WARNING else ToastTone.SUCCESS))
+            }
+        }
+    }
+    val appContext = LocalContext.current
+    LaunchedEffect(notebookViewModel) {
+        notebookViewModel.eventFlow.collect { event ->
+            when (event) {
+                is NotebookEvent.Open -> if (!openFile(appContext, event.file)) {
+                    snackbar.showSnackbar(ToastVisuals("Document", "Aucune app de ce téléphone ne sait ouvrir ce document.", ToastTone.WARNING))
+                }
+                is NotebookEvent.Message -> {
+                    snackbar.currentSnackbarData?.dismiss()
+                    snackbar.showSnackbar(ToastVisuals("Cahier de textes", event.text, ToastTone.INFO))
+                }
+                is NotebookEvent.CreateCourse -> coursesViewModel.openFromNotebook(event.draft)
+                is NotebookEvent.ViewCourse -> {
+                    notebookViewModel.close()
+                    tab = Tab.COURSES
+                    coursesViewModel.openDetail(event.courseId)
+                }
             }
         }
     }
@@ -393,6 +418,11 @@ fun JMethodApp() {
                                     current, padding, today, planning, courses, stats, settings, pronote, syncInfo,
                                     todayViewModel, planningViewModel, coursesViewModel, settingsViewModel, pronoteViewModel, notebookViewModel,
                                     onSelectTab = { tab = it },
+                                    courseFiles = container.courseFiles,
+                                    onViewDocument = { courseId, document ->
+                                        coursesViewModel.closeDetail()
+                                        viewing = courseId to document
+                                    },
                                 )
                             }
 
@@ -449,7 +479,19 @@ fun JMethodApp() {
             exit = slideOutHorizontally(motion(200)) { it / 5 } + fadeOut(motion(160)),
             modifier = Modifier.zIndex(1f),
         ) {
-            notebook?.let { NotebookScreen(it, notebookViewModel) }
+            notebook?.let { NotebookScreen(it, notebookViewModel, snackbar) }
+        }
+        // Document d’un cours : visionneuse dans l’app ; la fiche du cours se rouvre à la fermeture.
+        viewing?.let { (courseId, document) ->
+            val file = container.courseFiles.fileOf(document)
+            if (file != null && file.isFile) {
+                DocumentViewerScreen(document, file, onClose = {
+                    viewing = null
+                    coursesViewModel.openDetail(courseId)
+                }, modifier = Modifier.zIndex(1.5f))
+            } else {
+                viewing = null
+            }
         }
         CelebrationOverlay(celebration, Modifier.zIndex(3f))
     }
@@ -474,7 +516,10 @@ private fun TabContent(
     pronoteViewModel: PronoteViewModel,
     notebookViewModel: NotebookViewModel,
     onSelectTab: (Tab) -> Unit,
+    courseFiles: fr.jmethod.app.documents.CourseFiles,
+    onViewDocument: (courseId: String, document: fr.jmethod.app.model.CourseDocument) -> Unit,
 ) {
+    val context = LocalContext.current
     when (tab) {
         Tab.TODAY -> {
             if (today == null) {
@@ -534,11 +579,28 @@ private fun TabContent(
                                 notebookViewModel.open(subject.id)
                             }
                         },
+                        documents = courses.detailDocuments,
+                        onOpenDocument = { document -> onViewDocument(detail.course.id, document) },
+                        onShareDocument = { document -> courseFiles.fileOf(document)?.let { openWith(context, it, document.name) } },
+                        onRedownload = if (detail.course.source != null) {
+                            { document -> notebookViewModel.redownload(detail.course, document) }
+                        } else {
+                            null
+                        },
                     )
                 }
             }
         }
         Tab.STATS -> stats?.let { StatsScreen(it, padding) } ?: Loading()
-        Tab.SETTINGS -> settings?.let { SettingsScreen(it, settingsViewModel, pronoteViewModel, pronote, syncInfo, padding) } ?: Loading()
+        Tab.SETTINGS -> settings?.let {
+            val notebookState = notebookViewModel.uiState.collectAsStateWithLifecycle().value
+            SettingsScreen(
+                it, settingsViewModel, pronoteViewModel, pronote, syncInfo, padding,
+                autoCreate = notebookState?.autoCreate == true,
+                importOffer = notebookState?.state?.importOffer,
+                onAutoCreateChange = notebookViewModel::setAutoCreate,
+                onImportOffer = notebookViewModel::answerImportOffer,
+            )
+        } ?: Loading()
     }
 }

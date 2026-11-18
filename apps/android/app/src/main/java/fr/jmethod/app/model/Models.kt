@@ -42,7 +42,46 @@ data class Course(
     val date: String,
     val description: String? = null,
     val createdAt: String,
+    /** Séance du cahier de textes d’origine (`notebook-to-course.md`), absente pour un cours saisi. */
+    val source: CourseSource? = null,
+    /** Documents copiés dans le stockage privé ; l’export n’en contient que les métadonnées. */
+    val documents: List<CourseDocument>? = null,
 )
+
+@Serializable
+data class CourseSource(
+    /** `pronote-notebook`. */
+    val kind: String,
+    val sessionKey: String,
+    val subjectLabel: String,
+    /** YYYY-MM-DD, date de la séance. */
+    val date: String,
+)
+
+@Serializable
+data class CourseDocument(
+    val id: String,
+    val name: String,
+    val mime: String,
+    val size: Long,
+    /** Chemin relatif au stockage privé : `documents/<courseId>/<docId>.<ext>`. */
+    val file: String,
+    val extractedTitle: String? = null,
+)
+
+/** Séance déjà traitée : `created` (cours existant) ou `dismissed` (cours supprimé, jamais recréé automatiquement). */
+@Serializable
+data class NotebookImport(
+    val status: String,
+    val courseId: String? = null,
+    /** Horodatage ISO UTC. */
+    val at: String,
+) {
+    companion object {
+        const val CREATED = "created"
+        const val DISMISSED = "dismissed"
+    }
+}
 
 @Serializable
 data class Revision(
@@ -88,6 +127,10 @@ data class AppSettings(
     val soundEnabled: Boolean = true,
     val userName: String = "Élève",
     val userGrade: String = "3ème",
+    /** « Créer les cours automatiquement » ; `null` = désactivé (clé absente des sauvegardes web). */
+    val notebookAutoCreate: Boolean? = null,
+    /** YYYY-MM-DD : seules les séances à partir de cette date sont créées automatiquement. */
+    val notebookAutoCreateSince: String? = null,
 )
 
 /**
@@ -106,4 +149,6 @@ data class AppDocument(
     val initialized: Boolean = false,
     /** Version des données natives (migrations). Absente des documents antérieurs : 0. */
     val dataVersion: Int = 0,
+    /** Séances du cahier de textes déjà transformées en cours, par `sessionKey`. */
+    val notebookImports: Map<String, NotebookImport> = emptyMap(),
 )

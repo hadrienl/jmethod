@@ -20,6 +20,13 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import fr.jmethod.app.documents.CourseCreator
+import fr.jmethod.app.documents.CourseFiles
+import fr.jmethod.app.documents.NotebookCourseDraft
+import fr.jmethod.app.documents.PendingDocument
+import fr.jmethod.app.model.CourseDocument
 
 /**
  * Formulaire de création. Comme `AddCourseModal`, il garde son état d’une ouverture à l’autre :
@@ -36,6 +43,10 @@ data class CourseFormState(
     val description: String = "",
     /** Erreurs affichées après une tentative de création incomplète. */
     val showErrors: Boolean = false,
+    /** Séance du cahier de textes d’origine (création depuis le cahier) et documents joints proposés. */
+    val notebook: NotebookCourseDraft? = null,
+    val documents: List<PendingDocument> = emptyList(),
+    val notice: String? = null,
 )
 
 data class CoursesUiState(
@@ -46,6 +57,8 @@ data class CoursesUiState(
     val hasCourses: Boolean,
     val detail: CourseDetailModel?,
     val form: CourseFormState,
+    /** Documents du cours ouvert, avec la présence du fichier sur ce téléphone. */
+    val detailDocuments: List<Pair<CourseDocument, Boolean>>,
     /** Matière effective du formulaire. */
     val formSubjectId: String?,
     val formCourseNumber: Int,
@@ -61,6 +74,8 @@ sealed interface CoursesEvent {
 class CoursesViewModel(
     private val repository: AppRepository,
     private val clock: AppClock,
+    private val creator: CourseCreator,
+    private val files: CourseFiles,
 ) : ViewModel() {
     private val search = MutableStateFlow("")
     private val subjectFilter = MutableStateFlow<String?>(null)
@@ -77,7 +92,9 @@ class CoursesViewModel(
         form,
     ) { document, filters, formState ->
         val formSubject = formState.subjectId ?: document.subjects.firstOrNull()?.id ?: "maths"
+        val detailCourse = filters.detailId?.let { id -> document.courses.firstOrNull { it.id == id } }
         CoursesUiState(
+            detailDocuments = detailCourse?.documents.orEmpty().map { it to files.exists(it) },
             search = filters.search,
             subjectFilter = filters.subjectId,
             list = CoursesListModel.build(document.courses, document.revisions, document.subjects, filters.search, filters.subjectId),
@@ -107,7 +124,30 @@ class CoursesViewModel(
             title = prefill?.title.orEmpty(),
             description = "",
             showErrors = false,
+            notebook = null,
+            documents = emptyList(),
+            notice = null,
         )
+    }
+
+    /** Formulaire prérempli depuis une séance du cahier de textes (documents déjà téléchargés). */
+    fun openFromNotebook(draft: NotebookCourseDraft) = form.update { current ->
+        current.copy(
+            open = true,
+            subjectId = draft.subjectId ?: current.subjectId,
+            chapter = draft.chapter,
+            title = draft.title,
+            date = draft.date,
+            description = draft.description,
+            showErrors = false,
+            notebook = draft,
+            documents = draft.documents,
+            notice = draft.notice,
+        )
+    }
+
+    fun toggleDocument(index: Int) = form.update { current ->
+        current.copy(documents = current.documents.mapIndexed { i, doc -> if (i == index) doc.copy(selected = !doc.selected) else doc })
     }
 
     fun openCreateFrom(event: PronoteEvent) {
@@ -128,16 +168,11 @@ class CoursesViewModel(
             form.update { it.copy(showErrors = true) }
             return
         }
-        form.update { it.copy(open = false, showErrors = false) }
+        form.update { it.copy(open = false, showErrors = false, notebook = null, documents = emptyList(), notice = null) }
         viewModelScope.launch {
-            var created: CourseEditing.Created? = null
-            repository.update { document ->
-                val subjectId = current.subjectId ?: document.subjects.firstOrNull()?.id ?: "maths"
-                val input = CourseEditing.Form(subjectId, current.chapter, current.title, current.date, current.description)
-                val result = CourseEditing.create(document.courses, document.revisions, document.settings.intervals, input, clock.now(), AppClock.ZONE)
-                created = result
-                if (result == null) document else document.copy(courses = result.courses, revisions = result.revisions)
-            }
+            val subjectId = current.subjectId ?: repository.current().subjects.firstOrNull()?.id ?: "maths"
+            val input = CourseEditing.Form(subjectId, current.chapter, current.title, current.date, current.description)
+            val created = withContext(Dispatchers.IO) { creator.create(input, current.notebook?.source, current.documents) }
             created?.toast?.let { events.send(CoursesEvent.Toast(it.title, it.message, it.type == CourseEditing.ToastType.INFO)) }
         }
     }
@@ -146,12 +181,8 @@ class CoursesViewModel(
     fun delete(courseId: String) {
         detailCourseId.value = null
         viewModelScope.launch {
-            var deleted: CourseEditing.Deleted? = null
-            repository.update { document ->
-                val result = CourseEditing.delete(document.courses, document.revisions, courseId)
-                deleted = result
-                document.copy(courses = result.courses, revisions = result.revisions)
-            }
+            // Documents supprimés, séance marquée `dismissed` : jamais recréée automatiquement.
+            val deleted = withContext(Dispatchers.IO) { creator.delete(courseId) }
             deleted?.toast?.let { events.send(CoursesEvent.Toast(it.title, it.message, it.type == CourseEditing.ToastType.INFO)) }
         }
     }

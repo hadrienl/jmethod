@@ -39,6 +39,10 @@ class AppContainer(application: Application) {
     val sessionGuard = PronoteSessionGuard()
     val scheduler: BackgroundScheduler = WorkManagerScheduler(application)
 
+    /** Documents des cours (stockage privé non cache) et création commune formulaire / automatique. */
+    val courseFiles = fr.jmethod.app.documents.CourseFiles(application.filesDir)
+    val courseCreator = fr.jmethod.app.documents.CourseCreator(repository, clock, courseFiles)
+
     /** Erreur 25 et plafond des reconnexions silencieuses, communs au premier plan et à l’arrière-plan. */
     val throttle: PronoteThrottle = PrefsThrottle(application)
 
