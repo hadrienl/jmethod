@@ -5,7 +5,14 @@ Spécification commune iOS / Android. Le cahier de textes Pronote (voir `noteboo
 ## 1. Unité : une séance = un cours
 
 - Source : une `SessionEntry` (contenus de séance, réponse 89). Les devoirs (88) ne créent jamais de cours.
-- Clé de dédoublonnage : `sessionKey = "<SessionEntry.id>"` (déjà stable : `N`, sinon `cours:<lessonId>@<date>`).
+- Clé de dédoublonnage **stable entre sessions Pronote** (corrigé le 18/11/2026 : les `N` du cahier et `cours.V.N` changent à chaque session et ne doivent jamais servir de clé) :
+  `sessionKey = "pn1:" + date + "|" + matièreNormalisée + "|" + rang`
+  - `date` : `SessionEntry.date` au format `YYYY-MM-DD` ;
+  - `matièreNormalisée` : `SessionEntry.subject` en minuscules, accents retirés (NFD sans diacritiques), toute suite de caractères non alphanumériques remplacée par une espace, rognée ;
+  - `rang` : rang (à partir de 1) de la séance parmi celles du même instantané ayant la même `date` et la même `matièreNormalisée`, dans l’ordre de la réponse Pronote (ordre conservé par le tri stable du modèle).
+  - Le contenu (titres, textes) n’entre pas dans la clé : une séance modifiée par le professeur ne crée pas de doublon.
+- Ceinture et bretelles : une séance est aussi considérée comme déjà importée si un cours existe avec `source.kind == "pronote-notebook"`, la même `source.date`, la même matière normalisée (`source.subjectLabel`) et le même `source.ordinal`.
+- **Migration** (une fois, idempotente) des données créées avec l’ancienne clé : pour chaque cours ayant une `source`, recalculer sa clé à partir de `source.date`, `source.subjectLabel` et d’un rang = son ordre de création (`createdAt`) parmi les cours de même date et matière ; réécrire `notebookImports` avec la nouvelle clé (statut et `courseId` conservés) ; si deux cours obtiennent la même clé, la clé désigne le plus ancien et rien n’est supprimé ; supprimer les entrées dont la clé n’est pas au format `pn1:` et qui ne désignent aucun cours existant (anciens `dismissed`, impossibles à rattacher).
 - J0 du cours = date de la séance (`SessionEntry.date`). Les révisions initiales sont générées comme pour une création manuelle (`generateInitialRevisions`).
 - Matière : `matchSubject(SessionEntry.subject, subjects)`. Pas de correspondance → pas de création automatique ; la séance reste proposée avec le bouton (l’utilisateur choisit la matière dans le formulaire).
 
@@ -15,7 +22,7 @@ Champs facultatifs, ignorés par une ancienne sauvegarde web, conservés par l�
 
 ```jsonc
 // Course
-"source": { "kind": "pronote-notebook", "sessionKey": "…", "subjectLabel": "MATHEMATIQUES", "date": "2026-11-18" },
+"source": { "kind": "pronote-notebook", "sessionKey": "pn1:2026-11-18|mathematiques|1", "subjectLabel": "MATHEMATIQUES", "date": "2026-11-18", "ordinal": 1 },
 "documents": [
   { "id": "doc-<uuid>", "name": "Chapitre 3.pdf", "mime": "application/pdf", "size": 48213,
     "file": "documents/<courseId>/<docId>.pdf", "extractedTitle": "Les fonctions affines" }
