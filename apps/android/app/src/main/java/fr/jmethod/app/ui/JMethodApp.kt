@@ -1,12 +1,60 @@
 package fr.jmethod.app.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.NavigationRailItemDefaults
+import androidx.compose.material3.ScaffoldDefaults
+import androidx.compose.material3.SnackbarData
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.VerticalDivider
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.sp
+import fr.jmethod.app.domain.StatsModel
+import fr.jmethod.app.pronote.PronoteUiState
+import fr.jmethod.app.ui.components.LocalScreenGutter
+import fr.jmethod.app.ui.components.ReadingWidth
+import fr.jmethod.app.ui.components.motion
+import fr.jmethod.app.ui.courses.CoursesUiState
+import fr.jmethod.app.ui.planning.PlanningUiState
+import fr.jmethod.app.ui.pronote.PronoteSyncInfo
+import fr.jmethod.app.ui.settings.SettingsUiState
+import fr.jmethod.app.ui.theme.JIcons
+import fr.jmethod.app.ui.theme.JShapes
+import fr.jmethod.app.ui.theme.JSpacing
+import fr.jmethod.app.ui.today.TodayUiState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.layout.statusBars
 import androidx.activity.compose.BackHandler
-import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -80,13 +128,18 @@ import fr.jmethod.app.ui.today.TodayEvent
 import fr.jmethod.app.ui.today.TodayScreen
 import fr.jmethod.app.ui.today.TodayViewModel
 
-/** Onglets des jalons livrés (1 à 5). */
-/** Icône « progrès » : trois barres (pas d’icône de graphique dans le jeu d’icônes de base). */
-private val StatsIcon = androidx.compose.ui.graphics.vector.ImageVector.Builder("Stats", 24.dp, 24.dp, 24f, 24f)
-    .addPath(androidx.compose.ui.graphics.vector.addPathNodes("M4 13h4v7H4zM10 8h4v12h-4zM16 4h4v16h-4z"), fill = androidx.compose.ui.graphics.SolidColor(androidx.compose.ui.graphics.Color.Black))
-    .build()
-
 private enum class Tab { TODAY, PLANNING, COURSES, STATS, SETTINGS }
+
+/** Destinations de la navigation principale (barre en portrait, rail en paysage). */
+private data class Destination(val tab: Tab, val label: String, val icon: ImageVector, val spoken: String)
+
+private val Destinations = listOf(
+    Destination(Tab.TODAY, "Aujourd’hui", Icons.Filled.Home, "Aujourd’hui"),
+    Destination(Tab.PLANNING, "Planning", Icons.Filled.DateRange, "Planning"),
+    Destination(Tab.COURSES, "Cours", JIcons.Book, "Mes cours"),
+    Destination(Tab.STATS, "Progrès", JIcons.Stats, "Mes progrès"),
+    Destination(Tab.SETTINGS, "Réglages", Icons.Filled.Settings, "Réglages"),
+)
 
 private enum class ToastTone { SUCCESS, WARNING, INFO }
 
@@ -98,7 +151,121 @@ private class ToastVisuals(val title: String, override val message: String, val 
 
 @Composable
 private fun Loading() {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = JColors.Violet700) }
+}
+
+/** Libellé d’onglet sur une ligne : il rétrécit légèrement plutôt que de se couper avec un grand texte. */
+@Composable
+private fun NavLabel(text: String) {
+    // Libellés de même taille dans toute la barre : l’agrandissement système est plafonné à 110 %
+    // (comme les barres d’onglets iOS), puis le libellé ne rétrécit que s’il ne tient toujours pas.
+    val fontScale = LocalDensity.current.fontScale
+    val size = MaterialTheme.typography.labelMedium.fontSize * (minOf(fontScale, 1.1f) / fontScale)
+    Text(
+        text,
+        maxLines = 1,
+        softWrap = false,
+        autoSize = TextAutoSize.StepBased(minFontSize = 8.sp, maxFontSize = size, stepSize = 0.25.sp),
+    )
+}
+
+@Composable
+private fun NavIcon(destination: Destination, badge: Int) {
+    if (destination.tab == Tab.TODAY && badge > 0) {
+        BadgedBox(badge = {
+            Badge(containerColor = JColors.Violet700, contentColor = Color.White) { Text("$badge") }
+        }) { Icon(destination.icon, contentDescription = null) }
+    } else {
+        Icon(destination.icon, contentDescription = null)
+    }
+}
+
+private fun spokenLabel(destination: Destination, badge: Int): String =
+    if (destination.tab == Tab.TODAY && badge > 0) "Aujourd’hui, $badge séance${if (badge > 1) "s" else ""} à faire" else destination.spoken
+
+@Composable
+private fun AppNavigationBar(current: Tab, badge: Int, onSelect: (Tab) -> Unit) {
+    val colors = NavigationBarItemDefaults.colors(
+        selectedIconColor = JColors.Violet800,
+        selectedTextColor = JColors.Violet800,
+        indicatorColor = JColors.Violet100,
+        unselectedIconColor = JColors.Slate600,
+        unselectedTextColor = JColors.Slate600,
+    )
+    Column {
+        HorizontalDivider(color = JColors.Slate200)
+        NavigationBar(containerColor = Color.White, tonalElevation = 0.dp) {
+            Destinations.forEach { destination ->
+                NavigationBarItem(
+                    selected = current == destination.tab,
+                    onClick = { onSelect(destination.tab) },
+                    icon = { NavIcon(destination, badge) },
+                    label = { NavLabel(destination.label) },
+                    colors = colors,
+                    modifier = Modifier.semantics { contentDescription = spokenLabel(destination, badge) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AppNavigationRail(current: Tab, badge: Int, onSelect: (Tab) -> Unit) {
+    val colors = NavigationRailItemDefaults.colors(
+        selectedIconColor = JColors.Violet800,
+        selectedTextColor = JColors.Violet800,
+        indicatorColor = JColors.Violet100,
+        unselectedIconColor = JColors.Slate600,
+        unselectedTextColor = JColors.Slate600,
+    )
+    Row {
+        // Pas d’en-tête : les cinq destinations doivent tenir dans la hauteur d’un téléphone en paysage.
+        NavigationRail(containerColor = Color.White) {
+            Spacer(Modifier.weight(1f))
+            Destinations.forEach { destination ->
+                NavigationRailItem(
+                    selected = current == destination.tab,
+                    onClick = { onSelect(destination.tab) },
+                    icon = { NavIcon(destination, badge) },
+                    label = { NavLabel(destination.label) },
+                    colors = colors,
+                    modifier = Modifier.semantics { contentDescription = spokenLabel(destination, badge) },
+                )
+            }
+            Spacer(Modifier.weight(1f))
+        }
+        VerticalDivider(color = JColors.Slate200)
+    }
+}
+
+/** Snackbar sombre à marge et coins arrondis : titre coloré selon le ton, message, « Fermer ». */
+@Composable
+private fun ToastSnackbar(data: SnackbarData) {
+    val visuals = data.visuals as? ToastVisuals
+    Snackbar(
+        modifier = Modifier.padding(horizontal = JSpacing.m, vertical = JSpacing.s),
+        shape = JShapes.inner,
+        containerColor = JColors.Slate900,
+        contentColor = Color.White,
+        dismissAction = {
+            TextButton(onClick = { data.dismiss() }, colors = ButtonDefaults.textButtonColors(contentColor = JColors.Violet200)) { Text("Fermer") }
+        },
+    ) {
+        Column(Modifier.padding(vertical = JSpacing.xs)) {
+            if (visuals != null) {
+                Text(
+                    visuals.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = when (visuals.tone) {
+                        ToastTone.WARNING -> JColors.Amber300
+                        ToastTone.SUCCESS -> JColors.Lime200
+                        ToastTone.INFO -> JColors.Violet200
+                    },
+                )
+            }
+            Text(data.visuals.message, style = MaterialTheme.typography.bodyMedium)
+        }
+    }
 }
 
 @Composable
@@ -127,33 +294,35 @@ fun JMethodApp() {
     val snackbar = remember { SnackbarHostState() }
     val celebration = remember { CelebrationState() }
 
+    val haptics = LocalHapticFeedback.current
+
+    // Une seule bulle à la fois ; une validation réussie donne un léger retour haptique (réglage système respecté).
+    suspend fun toast(visuals: ToastVisuals) {
+        snackbar.currentSnackbarData?.dismiss()
+        if (visuals.tone == ToastTone.SUCCESS) haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+        snackbar.showSnackbar(visuals)
+    }
+
     LaunchedEffect(todayViewModel) {
         todayViewModel.eventFlow.collect { event ->
             when (event) {
                 TodayEvent.Confetti -> celebration.confetti()
                 TodayEvent.Fireworks -> celebration.fireworks()
-                is TodayEvent.Toast -> {
-                    snackbar.currentSnackbarData?.dismiss()
-                    snackbar.showSnackbar(ToastVisuals(event.title, event.message, if (event.warning) ToastTone.WARNING else ToastTone.SUCCESS))
-                }
+                is TodayEvent.Toast -> toast(ToastVisuals(event.title, event.message, if (event.warning) ToastTone.WARNING else ToastTone.SUCCESS))
             }
         }
     }
     LaunchedEffect(settingsViewModel) {
         settingsViewModel.eventFlow.collect { event ->
             if (event is SettingsEvent.Toast) {
-                snackbar.currentSnackbarData?.dismiss()
-                snackbar.showSnackbar(ToastVisuals(event.title, event.message, if (event.warning) ToastTone.WARNING else ToastTone.SUCCESS))
+                toast(ToastVisuals(event.title, event.message, if (event.warning) ToastTone.WARNING else ToastTone.SUCCESS))
             }
         }
     }
     LaunchedEffect(coursesViewModel) {
         coursesViewModel.eventFlow.collect { event ->
             when (event) {
-                is CoursesEvent.Toast -> {
-                    snackbar.currentSnackbarData?.dismiss()
-                    snackbar.showSnackbar(ToastVisuals(event.title, event.message, if (event.info) ToastTone.INFO else ToastTone.SUCCESS))
-                }
+                is CoursesEvent.Toast -> toast(ToastVisuals(event.title, event.message, if (event.info) ToastTone.INFO else ToastTone.SUCCESS))
             }
         }
     }
@@ -164,7 +333,7 @@ fun JMethodApp() {
     // Retour au premier plan : reconnexion ou synchronisation si la dernière date de plus de 6 h.
     LifecycleEventEffect(Lifecycle.Event.ON_START) { pronoteViewModel.controller.onForeground() }
 
-    Box(Modifier.fillMaxSize()) {
+    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         // La page officielle reste montée pendant toute la tentative (écran de connexion compris),
         // sous le contenu quand elle est masquée.
         if (pronote.browserStarted) {
@@ -173,223 +342,203 @@ fun JMethodApp() {
         when (pronote.access) {
             AccessPhase.CHECKING -> LoadingScreen(onSkip = pronoteViewModel.controller::skipResume)
             AccessPhase.SIGNED_OUT -> LoginScreen(pronoteViewModel, pronote)
-            AccessPhase.CONNECTED, AccessPhase.OFFLINE -> {
-                Scaffold(
-                    containerColor = MaterialTheme.colorScheme.background,
-                    topBar = {
-                        if (pronote.access == AccessPhase.OFFLINE || pronote.reconnecting) OfflineBanner(pronote, pronoteViewModel.controller::retry)
-                    },
-                    snackbarHost = {
-                        SnackbarHost(snackbar) { data ->
-                            val visuals = data.visuals as? ToastVisuals
-                            Snackbar(
-                                containerColor = androidx.compose.ui.graphics.Color.White,
-                                contentColor = JColors.Slate900,
-                                dismissAction = {
-                                    androidx.compose.material3.TextButton(onClick = { data.dismiss() }) { Text("Fermer") }
-                                },
-                            ) {
-                                Column {
-                                    if (visuals != null) {
-                                        Text(
-                                            visuals.title,
-                                            fontWeight = FontWeight.Bold,
-                                            color = when (visuals.tone) {
-                                                ToastTone.WARNING -> JColors.Amber900
-                                                ToastTone.SUCCESS -> JColors.Emerald800
-                                                ToastTone.INFO -> JColors.Violet800
-                                            },
+            AccessPhase.CONNECTED, AccessPhase.OFFLINE -> BoxWithConstraints(Modifier.fillMaxSize()) {
+                // Paysage ou grand écran : rail latéral et colonne de lecture centrée.
+                val rail = maxWidth >= 600.dp && maxWidth > maxHeight
+                val available = maxWidth - if (rail) 81.dp else 0.dp
+                val gutter = ((available - ReadingWidth) / 2).coerceAtLeast(0.dp)
+                val badge = today?.model?.badgeCount ?: 0
+                Row(Modifier.fillMaxSize()) {
+                    if (rail) AppNavigationRail(tab, badge) { tab = it }
+                    CompositionLocalProvider(LocalScreenGutter provides gutter) {
+                        Scaffold(
+                            modifier = Modifier.weight(1f),
+                            containerColor = MaterialTheme.colorScheme.background,
+                            contentWindowInsets = if (rail) {
+                                ScaffoldDefaults.contentWindowInsets.only(WindowInsetsSides.Vertical + WindowInsetsSides.End)
+                            } else {
+                                ScaffoldDefaults.contentWindowInsets
+                            },
+                            topBar = {
+                                if (pronote.access == AccessPhase.OFFLINE || pronote.reconnecting) OfflineBanner(pronote, pronoteViewModel.controller::retry)
+                            },
+                            snackbarHost = { SnackbarHost(snackbar) { data -> ToastSnackbar(data) } },
+                            bottomBar = { if (!rail) AppNavigationBar(tab, badge) { tab = it } },
+                            floatingActionButton = {
+                                AnimatedVisibility(
+                                    visible = tab == Tab.COURSES && courses?.hasCourses == true,
+                                    enter = fadeIn(motion()) + scaleIn(motion(), initialScale = 0.9f),
+                                    exit = fadeOut(motion(120)) + scaleOut(motion(120), targetScale = 0.9f),
+                                ) {
+                                    ExtendedFloatingActionButton(
+                                        onClick = { coursesViewModel.openCreate() },
+                                        icon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                                        text = { Text("Nouveau cours") },
+                                        shape = JShapes.inner,
+                                        containerColor = JColors.Violet700,
+                                        contentColor = Color.White,
+                                        // Le libellé animé du bouton étendu n’est pas exposé à TalkBack : nom explicite.
+                                        modifier = Modifier.semantics { contentDescription = "Nouveau cours" },
+                                    )
+                                }
+                            },
+                        ) { padding ->
+                            // Changement d’onglet : fondu court (coupé si les animations du système sont désactivées).
+                            AnimatedContent(
+                                targetState = tab,
+                                transitionSpec = { fadeIn(motion(200)) togetherWith fadeOut(motion(90)) },
+                                label = "onglet",
+                            ) { current ->
+                                TabContent(
+                                    current, padding, today, planning, courses, stats, settings, pronote, syncInfo,
+                                    todayViewModel, planningViewModel, coursesViewModel, settingsViewModel, pronoteViewModel, notebookViewModel,
+                                    onSelectTab = { tab = it },
+                                )
+                            }
+
+                            // Fond opaque de la barre d’état : le contenu qui défile ne transparaît pas sous l’heure.
+                            Box(
+                                Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars)
+                                    .background(MaterialTheme.colorScheme.background),
+                            )
+
+                            // Feuilles d’Aujourd’hui ouvertes depuis n’importe quel onglet (validation depuis la fiche d’un cours).
+                            today?.let { state ->
+                                val document = state.document
+                                state.scoringRevisionId?.let { id ->
+                                    val revision = document.revisions.firstOrNull { it.id == id }
+                                    val course = revision?.let { r -> document.courses.firstOrNull { it.id == r.courseId } }
+                                    if (revision != null && course != null) {
+                                        ScoreSheet(
+                                            revision, course, document.subjects.firstOrNull { it.id == course.subjectId }, document.settings,
+                                            onDismiss = todayViewModel::closeSheets,
+                                            onSubmit = { score -> todayViewModel.submitScore(revision.id, score, withConfetti = true) },
                                         )
                                     }
-                                    Text(data.visuals.message)
                                 }
-                            }
-                        }
-                    },
-                    bottomBar = {
-                        NavigationBar(containerColor = androidx.compose.ui.graphics.Color.White) {
-                            val badge = today?.model?.badgeCount ?: 0
-                            val colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = JColors.Violet800,
-                                selectedTextColor = JColors.Violet800,
-                                indicatorColor = JColors.Violet50,
-                                unselectedIconColor = JColors.Slate600,
-                                unselectedTextColor = JColors.Slate600,
-                            )
-                            NavigationBarItem(
-                                selected = tab == Tab.TODAY,
-                                onClick = { tab = Tab.TODAY },
-                                icon = {
-                                    BadgedBox(badge = {
-                                        if (badge > 0) {
-                                            Badge(containerColor = JColors.Violet200, contentColor = JColors.Violet900) { Text("$badge") }
-                                        }
-                                    }) { Icon(Icons.Filled.Home, contentDescription = null) }
-                                },
-                                label = { Text("Aujourd’hui") },
-                                colors = colors,
-                                modifier = Modifier.semantics {
-                                    contentDescription = if (badge > 0) "Aujourd’hui, $badge séance${if (badge > 1) "s" else ""} à faire" else "Aujourd’hui"
-                                },
-                            )
-                            NavigationBarItem(
-                                selected = tab == Tab.PLANNING,
-                                onClick = { tab = Tab.PLANNING },
-                                icon = { Icon(Icons.Filled.DateRange, contentDescription = null) },
-                                label = { Text("Planning") },
-                                colors = colors,
-                            )
-                            NavigationBarItem(
-                                selected = tab == Tab.COURSES,
-                                onClick = { tab = Tab.COURSES },
-                                icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) },
-                                label = { Text("Cours") },
-                                modifier = Modifier.semantics { contentDescription = "Mes cours" },
-                                colors = colors,
-                            )
-                            NavigationBarItem(
-                                selected = tab == Tab.STATS,
-                                onClick = { tab = Tab.STATS },
-                                icon = { Icon(StatsIcon, contentDescription = null) },
-                                label = { Text("Progrès") },
-                                colors = colors,
-                                modifier = Modifier.semantics { contentDescription = "Mes progrès" },
-                            )
-                            NavigationBarItem(
-                                selected = tab == Tab.SETTINGS,
-                                onClick = { tab = Tab.SETTINGS },
-                                icon = { Icon(Icons.Filled.Settings, contentDescription = null) },
-                                label = { Text("Réglages") },
-                                colors = colors,
-                            )
-                        }
-                    },
-                    floatingActionButton = {
-                        if (tab == Tab.COURSES && courses?.hasCourses == true) {
-                            ExtendedFloatingActionButton(
-                                onClick = { coursesViewModel.openCreate() },
-                                icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-                                text = { Text("Nouveau cours", fontWeight = FontWeight.Bold) },
-                                containerColor = JColors.Violet700,
-                                contentColor = androidx.compose.ui.graphics.Color.White,
-                            )
-                        }
-                    },
-                ) { padding ->
-                    when (tab) {
-                        Tab.TODAY -> {
-                            val state = today
-                            if (state == null) {
-                                Loading()
-                            } else {
-                                TodayScreen(
-                                    state, padding,
-                                    onScore = todayViewModel::openScore,
-                                    onDetail = todayViewModel::openDetail,
-                                    onAddCourse = coursesViewModel::openCreateFrom,
-                                )
-                            }
-                        }
-                        Tab.PLANNING -> {
-                            val state = planning
-                            if (state == null) {
-                                Loading()
-                            } else {
-                                PlanningScreen(
-                                    state, planningViewModel, padding,
-                                    onAddCourseFrom = coursesViewModel::openCreateFrom,
-                                    onCreateCourse = { coursesViewModel.openCreate() },
-                                )
-                                state.detail?.let { detail ->
-                                    RevisionDetailSheet(
-                                        detail,
-                                        onDismiss = planningViewModel::closeDetail,
-                                        onValidate = { score ->
-                                            planningViewModel.closeDetail()
-                                            todayViewModel.submitScore(detail.revision.id, score, withConfetti = false)
-                                        },
-                                    )
+                                state.detailRevisionId?.let { id ->
+                                    RevisionDetailModel.build(id, document.courses, document.revisions, document.subjects)?.let { detail ->
+                                        RevisionDetailSheet(
+                                            detail,
+                                            onDismiss = todayViewModel::closeSheets,
+                                            onValidate = { score -> todayViewModel.submitScore(detail.revision.id, score, withConfetti = false) },
+                                        )
+                                    }
                                 }
-                            }
-                        }
-                        Tab.COURSES -> {
-                            val state = courses
-                            if (state == null) {
-                                Loading()
-                            } else {
-                                CoursesScreen(
-                                    state, coursesViewModel, padding,
-                                    onShowPlanning = { tab = Tab.PLANNING },
-                                    onOpenNotebook = { notebookViewModel.open() },
-                                )
-                                state.detail?.let { detail ->
-                                    CourseDetailSheet(
-                                        detail,
-                                        onDismiss = coursesViewModel::closeDetail,
-                                        // Comme le web : la fiche se ferme et l’autoévaluation s’ouvre.
-                                        onValidate = { revisionId ->
-                                            coursesViewModel.closeDetail()
-                                            todayViewModel.openScore(revisionId)
-                                        },
-                                        onDelete = { coursesViewModel.delete(detail.course.id) },
-                                        onOpenNotebook = detail.subject?.let { subject ->
-                                            {
-                                                coursesViewModel.closeDetail()
-                                                notebookViewModel.open(subject.id)
-                                            }
-                                        },
-                                    )
-                                }
-                            }
-                        }
-                        Tab.STATS -> stats?.let { StatsScreen(it, padding) } ?: Loading()
-                        Tab.SETTINGS -> settings?.let { SettingsScreen(it, settingsViewModel, pronoteViewModel, pronote, syncInfo, padding) } ?: Loading()
-                    }
-
-                    // Fond de la barre d’état : le contenu qui défile ne passe plus sous l’heure (edge-to-edge).
-                    Box(
-                        Modifier.fillMaxWidth().windowInsetsTopHeight(androidx.compose.foundation.layout.WindowInsets.Companion.statusBars)
-                            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.96f)),
-                    )
-
-                    // Feuilles d’Aujourd’hui ouvertes depuis n’importe quel onglet (validation depuis la fiche d’un cours).
-                    today?.let { state ->
-                        val document = state.document
-                        state.scoringRevisionId?.let { id ->
-                            val revision = document.revisions.firstOrNull { it.id == id }
-                            val course = revision?.let { r -> document.courses.firstOrNull { it.id == r.courseId } }
-                            if (revision != null && course != null) {
-                                ScoreSheet(
-                                    revision, course, document.subjects.firstOrNull { it.id == course.subjectId }, document.settings,
-                                    onDismiss = todayViewModel::closeSheets,
-                                    onSubmit = { score -> todayViewModel.submitScore(revision.id, score, withConfetti = true) },
-                                )
-                            }
-                        }
-                        state.detailRevisionId?.let { id ->
-                            RevisionDetailModel.build(id, document.courses, document.revisions, document.subjects)?.let { detail ->
-                                RevisionDetailSheet(
-                                    detail,
-                                    onDismiss = todayViewModel::closeSheets,
-                                    onValidate = { score -> todayViewModel.submitScore(detail.revision.id, score, withConfetti = false) },
-                                )
                             }
                         }
                     }
                 }
             }
         }
-        // Création d’un cours : plein écran au-dessus de l’app, sous la page officielle Pronote.
-        val form = courses
         val signedIn = pronote.access != AccessPhase.SIGNED_OUT && pronote.access != AccessPhase.CHECKING
-        if (form != null && form.form.open && signedIn) {
-            CourseFormScreen(form, coursesViewModel, Modifier.zIndex(1f))
+        // Création d’un cours : plein écran au-dessus de l’app, sous la page officielle Pronote ; glisse depuis le bas.
+        val formOpen = courses?.form?.open == true && signedIn
+        AnimatedVisibility(
+            visible = formOpen,
+            enter = slideInVertically(motion(260)) { it / 6 } + fadeIn(motion(200)),
+            exit = slideOutVertically(motion(200)) { it / 6 } + fadeOut(motion(160)),
+            modifier = Modifier.zIndex(1f),
+        ) {
+            courses?.let { CourseFormScreen(it, coursesViewModel) }
         }
-        // Cahier de textes : plein écran, lecture seule.
-        val reader = notebook
-        if (reader != null && reader.state.open && signedIn && !(form?.form?.open ?: false)) {
-            NotebookScreen(reader, notebookViewModel, Modifier.zIndex(1f))
+        // Cahier de textes : plein écran, lecture seule ; glisse depuis la droite comme une page.
+        AnimatedVisibility(
+            visible = notebook?.state?.open == true && signedIn && !formOpen,
+            enter = slideInHorizontally(motion(260)) { it / 5 } + fadeIn(motion(200)),
+            exit = slideOutHorizontally(motion(200)) { it / 5 } + fadeOut(motion(160)),
+            modifier = Modifier.zIndex(1f),
+        ) {
+            notebook?.let { NotebookScreen(it, notebookViewModel) }
         }
         CelebrationOverlay(celebration, Modifier.zIndex(3f))
+    }
+}
+
+/** Contenu d’un onglet et ses feuilles propres (détail du Planning, fiche d’un cours). */
+@Composable
+private fun TabContent(
+    tab: Tab,
+    padding: PaddingValues,
+    today: TodayUiState?,
+    planning: PlanningUiState?,
+    courses: CoursesUiState?,
+    stats: StatsModel?,
+    settings: SettingsUiState?,
+    pronote: PronoteUiState,
+    syncInfo: PronoteSyncInfo?,
+    todayViewModel: TodayViewModel,
+    planningViewModel: PlanningViewModel,
+    coursesViewModel: CoursesViewModel,
+    settingsViewModel: SettingsViewModel,
+    pronoteViewModel: PronoteViewModel,
+    notebookViewModel: NotebookViewModel,
+    onSelectTab: (Tab) -> Unit,
+) {
+    when (tab) {
+        Tab.TODAY -> {
+            if (today == null) {
+                Loading()
+            } else {
+                TodayScreen(
+                    today, padding,
+                    onScore = todayViewModel::openScore,
+                    onDetail = todayViewModel::openDetail,
+                    onAddCourse = coursesViewModel::openCreateFrom,
+                )
+            }
+        }
+        Tab.PLANNING -> {
+            if (planning == null) {
+                Loading()
+            } else {
+                PlanningScreen(
+                    planning, planningViewModel, padding,
+                    onAddCourseFrom = coursesViewModel::openCreateFrom,
+                    onCreateCourse = { coursesViewModel.openCreate() },
+                )
+                planning.detail?.let { detail ->
+                    RevisionDetailSheet(
+                        detail,
+                        onDismiss = planningViewModel::closeDetail,
+                        onValidate = { score ->
+                            planningViewModel.closeDetail()
+                            todayViewModel.submitScore(detail.revision.id, score, withConfetti = false)
+                        },
+                    )
+                }
+            }
+        }
+        Tab.COURSES -> {
+            if (courses == null) {
+                Loading()
+            } else {
+                CoursesScreen(
+                    courses, coursesViewModel, padding,
+                    onShowPlanning = { onSelectTab(Tab.PLANNING) },
+                    onOpenNotebook = { notebookViewModel.open() },
+                )
+                courses.detail?.let { detail ->
+                    CourseDetailSheet(
+                        detail,
+                        onDismiss = coursesViewModel::closeDetail,
+                        // Comme le web : la fiche se ferme et l’autoévaluation s’ouvre.
+                        onValidate = { revisionId ->
+                            coursesViewModel.closeDetail()
+                            todayViewModel.openScore(revisionId)
+                        },
+                        onDelete = { coursesViewModel.delete(detail.course.id) },
+                        onOpenNotebook = detail.subject?.let { subject ->
+                            {
+                                coursesViewModel.closeDetail()
+                                notebookViewModel.open(subject.id)
+                            }
+                        },
+                    )
+                }
+            }
+        }
+        Tab.STATS -> stats?.let { StatsScreen(it, padding) } ?: Loading()
+        Tab.SETTINGS -> settings?.let { SettingsScreen(it, settingsViewModel, pronoteViewModel, pronote, syncInfo, padding) } ?: Loading()
     }
 }

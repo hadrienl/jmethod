@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -75,9 +76,19 @@ import fr.jmethod.app.domain.sentenceCase
 import fr.jmethod.app.model.Phase
 import fr.jmethod.app.model.PronoteEvent
 import fr.jmethod.app.ui.theme.JColors
-import fr.jmethod.app.ui.today.SurfaceCard
-import fr.jmethod.app.ui.today.screenPadding
-import fr.jmethod.app.ui.today.subjectColor
+import fr.jmethod.app.ui.theme.JIcons
+import fr.jmethod.app.ui.theme.JShapes
+import fr.jmethod.app.ui.theme.JSpacing
+import fr.jmethod.app.ui.theme.tabular
+import fr.jmethod.app.ui.components.Pill
+import fr.jmethod.app.ui.components.ScreenHeader
+import fr.jmethod.app.ui.components.SubjectDot
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.ui.text.style.TextDecoration
+import fr.jmethod.app.ui.components.SurfaceCard
+import fr.jmethod.app.ui.components.screenPadding
+import fr.jmethod.app.ui.components.subjectColor
 import java.time.LocalDate
 
 @Composable
@@ -94,34 +105,26 @@ fun PlanningScreen(
     val wide = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= 600
     LazyColumn(
         contentPadding = screenPadding(contentPadding, 24.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(JSpacing.m),
     ) {
         if (wide) {
             // Paysage ou grand écran : en-tête compact sur deux lignes, qui défile avec le contenu.
             item(key = "header") {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(JSpacing.m)) {
                     Text("Planning", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold, modifier = Modifier.semantics { heading() })
                     ModeSelector(mode, viewModel::setMode, Modifier.weight(1f))
                     TodayButton(viewModel)
                 }
             }
             item(key = "navigation") {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(JSpacing.m)) {
                     PeriodNavigation(state.model.period, viewModel, Modifier.weight(1f))
                     Filters(state, viewModel, Modifier.weight(1f))
                 }
             }
         } else {
             item(key = "header") {
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Planning", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold,
-                            modifier = Modifier.weight(1f).semantics { heading() })
-                        TodayButton(viewModel)
-                    }
-                    Spacer(Modifier.height(4.dp))
-                    Text("Les matières, les étapes et les séances à revoir.", style = MaterialTheme.typography.bodyMedium, color = JColors.Slate600)
-                }
+                ScreenHeader("Planning", "Les matières, les étapes et les séances à revoir.") { TodayButton(viewModel) }
             }
             item(key = "mode") { ModeSelector(mode, viewModel::setMode) }
             item(key = "navigation") { PeriodNavigation(state.model.period, viewModel) }
@@ -151,11 +154,14 @@ fun PlanningScreen(
 private fun TodayButton(viewModel: PlanningViewModel) {
     OutlinedButton(
         onClick = viewModel::goToToday,
+        shape = JShapes.control,
+        border = BorderStroke(1.dp, JColors.Slate200),
+        colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White),
         modifier = Modifier.heightIn(min = 48.dp),
-        contentPadding = PaddingValues(horizontal = 14.dp),
+        contentPadding = PaddingValues(horizontal = JSpacing.m),
     ) {
         Icon(Icons.Filled.DateRange, contentDescription = null, modifier = Modifier.size(18.dp), tint = JColors.Violet800)
-        Spacer(Modifier.width(6.dp))
+        Spacer(Modifier.width(JSpacing.s))
         Text("Aujourd’hui", color = JColors.Violet800, fontWeight = FontWeight.SemiBold)
     }
 }
@@ -205,7 +211,7 @@ private fun PeriodNavigation(period: String, viewModel: PlanningViewModel, modif
 @Composable
 private fun Filters(state: PlanningUiState, viewModel: PlanningViewModel, modifier: Modifier = Modifier) {
     val selection = state.selection
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically, modifier = modifier.fillMaxWidth()) {
+    Row(horizontalArrangement = Arrangement.spacedBy(JSpacing.s), verticalAlignment = Alignment.CenterVertically, modifier = modifier.fillMaxWidth()) {
         val subject = state.subjects.firstOrNull { it.id == selection.subjectId }
         DropdownFilter(
             label = subject?.name ?: "Matière",
@@ -247,7 +253,7 @@ private fun <T> DropdownFilter(
             selected = active,
             onClick = { expanded = true },
             label = { Text(label, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) },
-            leadingIcon = dotColor?.let { color -> { Box(Modifier.size(10.dp).clip(CircleShape).background(subjectColor(color))) } },
+            leadingIcon = dotColor?.let { color -> { SubjectDot(color) } },
             trailingIcon = { Icon(Icons.Filled.ArrowDropDown, contentDescription = null) },
             colors = FilterChipDefaults.filterChipColors(
                 containerColor = Color.White,
@@ -263,7 +269,7 @@ private fun <T> DropdownFilter(
             options.forEach { (value, text) ->
                 DropdownMenuItem(
                     text = { Text(text) },
-                    leadingIcon = optionColor(value)?.let { color -> { Box(Modifier.size(10.dp).clip(CircleShape).background(subjectColor(color))) } },
+                    leadingIcon = optionColor(value)?.let { color -> { SubjectDot(color) } },
                     onClick = {
                         expanded = false
                         onSelect(value)
@@ -277,16 +283,24 @@ private fun <T> DropdownFilter(
 @Composable
 private fun NoCourseCard(onCreateCourse: () -> Unit) {
     SurfaceCard {
-        Column(Modifier.padding(20.dp)) {
-            Text("Aucun cours pour l’instant", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(6.dp))
-            Text(
-                "Tes séances de révision apparaîtront ici. Ajoute un cours depuis un créneau de ton emploi du temps, ou crée-le directement.",
-                style = MaterialTheme.typography.bodyMedium, color = JColors.Slate600,
-            )
-            Spacer(Modifier.height(12.dp))
-            Button(onClick = onCreateCourse, shape = RoundedCornerShape(12.dp), modifier = Modifier.heightIn(min = 48.dp)) {
-                Text("Créer un cours", fontWeight = FontWeight.SemiBold)
+        Row(Modifier.padding(JSpacing.l), verticalAlignment = Alignment.Top) {
+            Box(Modifier.size(40.dp).clip(JShapes.control).background(JColors.Violet50), contentAlignment = Alignment.Center) {
+                Icon(JIcons.School, contentDescription = null, tint = JColors.Violet700, modifier = Modifier.size(22.dp))
+            }
+            Spacer(Modifier.width(JSpacing.m))
+            Column(Modifier.weight(1f)) {
+                Text("Aucun cours pour l’instant", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(JSpacing.xs))
+                Text(
+                    "Tes séances de révision apparaîtront ici. Ajoute un cours depuis un créneau de ton emploi du temps, ou crée-le directement.",
+                    style = MaterialTheme.typography.bodyMedium, color = JColors.Slate600,
+                )
+                Spacer(Modifier.height(JSpacing.m))
+                Button(onClick = onCreateCourse, shape = JShapes.control, modifier = Modifier.heightIn(min = 48.dp)) {
+                    Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(JSpacing.s))
+                    Text("Créer un cours", fontWeight = FontWeight.SemiBold)
+                }
             }
         }
     }
@@ -298,13 +312,13 @@ private val WEEKDAY_INITIALS = listOf("L" to "lundi", "M" to "mardi", "M" to "me
 @Composable
 private fun MonthGrid(days: List<PlanningModel.Day>, today: LocalDate, onOpenDay: (String) -> Unit) {
     SurfaceCard {
-        Column(Modifier.padding(8.dp)) {
+        Column(Modifier.padding(JSpacing.s)) {
             Row(Modifier.fillMaxWidth().clearAndSetSemantics {}) {
                 WEEKDAY_INITIALS.forEach { (initial, _) ->
                     Text(initial, style = MaterialTheme.typography.labelMedium, color = JColors.Slate500, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
                 }
             }
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(JSpacing.xs))
             days.chunked(7).forEach { week ->
                 Row(Modifier.fillMaxWidth()) {
                     week.forEach { day -> MonthCell(day, LocalDate.parse(day.date) == today, onOpenDay, Modifier.weight(1f)) }
@@ -329,9 +343,9 @@ private fun MonthCell(day: PlanningModel.Day, isToday: Boolean, onOpenDay: (Stri
     }
     Column(
         modifier
-            .heightIn(min = 52.dp)
+            .heightIn(min = 56.dp)
             .padding(2.dp)
-            .clip(RoundedCornerShape(10.dp))
+            .clip(JShapes.control)
             .background(if (isToday) JColors.Violet100 else Color.Transparent)
             .clickable(onClickLabel = "Voir ce jour") { onOpenDay(day.date) }
             .clearAndSetSemantics {
@@ -343,7 +357,7 @@ private fun MonthCell(day: PlanningModel.Day, isToday: Boolean, onOpenDay: (Stri
     ) {
         Text(
             "${date.dayOfMonth}",
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodyMedium.tabular(),
             fontWeight = if (isToday) FontWeight.ExtraBold else FontWeight.Medium,
             color = when {
                 isToday -> JColors.Violet900
@@ -375,19 +389,18 @@ private fun DaySection(
     onOpen: (String) -> Unit,
     onAddCourseFrom: (PronoteEvent) -> Unit,
 ) {
-    val shape = RoundedCornerShape(20.dp)
+    val shape = JShapes.card
     Column(
         Modifier.fillMaxWidth().clip(shape)
             .background(Color.White)
             .border(if (day.isToday) 2.dp else 1.dp, if (day.isToday) JColors.Violet700 else JColors.Slate200, shape)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(JSpacing.l),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.semantics(mergeDescendants = true) { heading() }) {
             val heading = if (mode == PlanningMode.MONTH) FrenchDates.weekdayDayMonthShort(LocalDate.parse(day.date)) else day.heading
             Text(
                 heading.sentenceCase(),
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
                 color = if (day.outsideMonth == true) JColors.Slate600 else JColors.Slate900,
                 modifier = Modifier.weight(1f),
             )
@@ -395,16 +408,16 @@ private fun DaySection(
                 fontWeight = if (day.isToday) FontWeight.SemiBold else FontWeight.Normal)
         }
         if (day.events.isNotEmpty()) {
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(JSpacing.s))
             Timetable(day, expandedByDefault = mode == PlanningMode.DAY, onAddCourseFrom)
         }
         if (day.tiles.isNotEmpty()) {
-            Spacer(Modifier.height(8.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Spacer(Modifier.height(JSpacing.s))
+            Column(verticalArrangement = Arrangement.spacedBy(JSpacing.s)) {
                 day.tiles.forEach { tile -> Tile(tile, onOpen) }
             }
         } else if (day.empty != null) {
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(JSpacing.xs))
             Text(day.empty, style = MaterialTheme.typography.bodyMedium, color = JColors.Slate500)
         }
     }
@@ -413,37 +426,57 @@ private fun DaySection(
 @Composable
 private fun Timetable(day: PlanningModel.Day, expandedByDefault: Boolean, onAddCourseFrom: (PronoteEvent) -> Unit) {
     var open by rememberSaveable(day.date) { mutableStateOf(expandedByDefault) }
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(JColors.Slate50)) {
+    Column(Modifier.fillMaxWidth().clip(JShapes.control).background(JColors.Slate50)) {
         Row(
             Modifier.fillMaxWidth().heightIn(min = 48.dp)
                 .clickable(role = Role.Button) { open = !open }
                 .semantics { stateDescription = if (open) "Ouvert" else "Fermé" }
-                .padding(horizontal = 12.dp),
+                .padding(horizontal = JSpacing.m),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(day.timetableSummary.orEmpty(), style = MaterialTheme.typography.bodyMedium, color = JColors.Slate700, modifier = Modifier.weight(1f))
             Icon(if (open) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown, contentDescription = null, tint = JColors.Slate600)
         }
         if (open) {
-            Column(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 4.dp)) {
+            Column(Modifier.padding(start = JSpacing.m, end = JSpacing.xs, bottom = JSpacing.xs)) {
                 day.events.forEach { line ->
+                    val cancelled = line.event.isCancelled
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.heightIn(min = 48.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f).semantics(mergeDescendants = true) {}) {
-                            Box(Modifier.size(8.dp).clip(CircleShape).background(line.subjectColor?.let(::subjectColor) ?: JColors.Slate300))
-                            Spacer(Modifier.width(8.dp))
+                        // Heure en colonne fixe, puis la matière : les noms longs passent à la ligne sans décaler l’heure.
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f).padding(vertical = JSpacing.xs).clearAndSetSemantics { contentDescription = line.label },
+                        ) {
                             Text(
-                                line.label,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = if (line.event.isCancelled) JColors.Slate500 else JColors.Slate900,
+                                line.event.startTime,
+                                style = MaterialTheme.typography.labelLarge.tabular(),
+                                color = if (cancelled) JColors.Slate500 else JColors.Slate700,
+                                softWrap = false,
+                                modifier = Modifier.widthIn(min = 48.dp).padding(end = JSpacing.xs),
                             )
+                            SubjectDot(line.subjectColor, 8.dp)
+                            Spacer(Modifier.width(JSpacing.s))
+                            Text(
+                                line.event.subjectName,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = if (cancelled) JColors.Slate500 else JColors.Slate900,
+                                textDecoration = if (cancelled) TextDecoration.LineThrough else null,
+                                modifier = Modifier.weight(1f, fill = false),
+                            )
+                            if (cancelled) {
+                                Spacer(Modifier.width(JSpacing.s))
+                                Pill("Annulé", JColors.Rose50, JColors.Rose800)
+                            }
                         }
                         if (line.canAddCourse) {
                             TextButton(
                                 onClick = { onAddCourseFrom(line.event) },
+                                shape = JShapes.control,
+                                contentPadding = PaddingValues(horizontal = JSpacing.m),
                                 modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "Ajouter ce cours : ${line.event.subjectName}, ${line.event.startTime}" },
                             ) {
                                 Icon(Icons.Filled.Add, contentDescription = null, tint = JColors.Violet800, modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.width(4.dp))
+                                Spacer(Modifier.width(JSpacing.xs))
                                 Text("Ajouter", color = JColors.Violet800, fontWeight = FontWeight.Bold)
                             }
                         }
@@ -456,7 +489,7 @@ private fun Timetable(day: PlanningModel.Day, expandedByDefault: Boolean, onAddC
 
 @Composable
 private fun Tile(tile: PlanningModel.Tile, onOpen: (String) -> Unit) {
-    val shape = RoundedCornerShape(14.dp)
+    val shape = JShapes.inner
     val color = subjectColor(tile.subject.color)
     Row(
         Modifier.fillMaxWidth().clip(shape)
@@ -470,29 +503,21 @@ private fun Tile(tile: PlanningModel.Tile, onOpen: (String) -> Unit) {
             .height(IntrinsicSize.Min)
             .heightIn(min = 48.dp),
     ) {
-        Box(Modifier.width(5.dp).fillMaxHeight().background(color))
-        Column(Modifier.weight(1f).padding(horizontal = 12.dp, vertical = 10.dp)) {
+        Box(Modifier.width(JSpacing.xs).fillMaxHeight().background(color))
+        Column(Modifier.weight(1f).padding(horizontal = JSpacing.m, vertical = JSpacing.m)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(10.dp).clip(CircleShape).background(color))
-                Spacer(Modifier.width(8.dp))
                 Text(tile.subjectName, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                Text(
-                    tile.stepLabel,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
-                    modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(JColors.Slate100).padding(horizontal = 8.dp, vertical = 2.dp),
-                )
+                Pill(tile.stepLabel, JColors.Slate100, JColors.Slate700)
             }
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(JSpacing.xs))
             Text(tile.phaseLine, style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
             Text(tile.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
             Text(tile.chapter, style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(JSpacing.s))
             if (tile.done) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = JColors.Emerald800, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
+                    Spacer(Modifier.width(JSpacing.xs))
                     Text(tile.footer, style = MaterialTheme.typography.bodySmall, color = JColors.Emerald800, fontWeight = FontWeight.SemiBold)
                 }
             } else {

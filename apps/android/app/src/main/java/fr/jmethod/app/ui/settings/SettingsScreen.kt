@@ -81,7 +81,19 @@ import fr.jmethod.app.ui.pronote.PronoteAccountSection
 import fr.jmethod.app.ui.pronote.PronoteSyncInfo
 import fr.jmethod.app.ui.pronote.PronoteViewModel
 import fr.jmethod.app.ui.theme.JColors
-import fr.jmethod.app.ui.today.subjectColor
+import fr.jmethod.app.ui.theme.JShapes
+import fr.jmethod.app.ui.theme.JSpacing
+import fr.jmethod.app.ui.theme.tabular
+import fr.jmethod.app.ui.components.BrandMark
+import fr.jmethod.app.ui.components.LocalScreenGutter
+import fr.jmethod.app.ui.components.Pill
+import fr.jmethod.app.ui.components.ScreenHeader
+import fr.jmethod.app.ui.components.SectionTitle
+import fr.jmethod.app.ui.components.SurfaceCard
+import fr.jmethod.app.ui.components.screenPadding
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import fr.jmethod.app.ui.components.subjectColor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -92,18 +104,11 @@ private const val MAX_IMPORT_BYTES = 20 * 1024 * 1024
 
 @Composable
 private fun Section(title: String, subtitle: String? = null, content: @Composable () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        border = BorderStroke(1.dp, JColors.Slate200),
-    ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Column {
-                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() })
-                if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
-            }
-            content()
+    // Même structure pour toutes les sections (Compte Pronote compris) : titre et explication au-dessus, réglages dans la carte.
+    Column(verticalArrangement = Arrangement.spacedBy(JSpacing.m)) {
+        SectionTitle(title, Modifier.padding(top = JSpacing.s), supporting = subtitle)
+        SurfaceCard {
+            Column(Modifier.padding(JSpacing.l), verticalArrangement = Arrangement.spacedBy(JSpacing.m)) { content() }
         }
     }
 }
@@ -157,19 +162,15 @@ fun SettingsScreen(
         viewModel.exportFlow.collect { event -> exporter.launch(event.fileName) }
     }
 
-    val direction = LocalLayoutDirection.current
     val draft = ui.draft
+    val gutter = LocalScreenGutter.current
     Box(Modifier.fillMaxSize()) {
         Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(
-                start = contentPadding.calculateStartPadding(direction) + 16.dp,
-                end = contentPadding.calculateEndPadding(direction) + 16.dp,
-                top = contentPadding.calculateTopPadding() + 16.dp,
-                bottom = contentPadding.calculateBottomPadding() + if (draft.dirty) 120.dp else 24.dp,
-            ),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                .padding(screenPadding(contentPadding, if (draft.dirty) 120.dp else JSpacing.xl)),
+            verticalArrangement = Arrangement.spacedBy(JSpacing.l),
         ) {
-            Text("Réglages", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, modifier = Modifier.semantics { heading() })
+            ScreenHeader("Réglages")
             PronoteAccountSection(pronoteViewModel, pronote, syncInfo)
             Algorithm(draft, viewModel)
             Intervals(draft, viewModel)
@@ -178,17 +179,23 @@ fun SettingsScreen(
             About()
         }
         if (draft.dirty) {
+            val direction = LocalLayoutDirection.current
             Surface(
                 color = Color.White,
                 shadowElevation = 8.dp,
-                shape = RoundedCornerShape(16.dp),
+                shape = JShapes.inner,
+                border = BorderStroke(1.dp, JColors.Slate200),
                 modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-                    .padding(start = 12.dp, end = 12.dp, bottom = contentPadding.calculateBottomPadding() + 12.dp),
+                    .padding(
+                        start = contentPadding.calculateStartPadding(direction) + JSpacing.m + gutter,
+                        end = contentPadding.calculateEndPadding(direction) + JSpacing.m + gutter,
+                        bottom = contentPadding.calculateBottomPadding() + JSpacing.m,
+                    ),
             ) {
-                Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.padding(start = JSpacing.l, end = JSpacing.s, top = JSpacing.s, bottom = JSpacing.s), verticalAlignment = Alignment.CenterVertically) {
                     Text("Modifications non enregistrées", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     TextButton(onClick = viewModel::discard, modifier = Modifier.heightIn(min = 48.dp)) { Text("Annuler") }
-                    Button(onClick = viewModel::save, shape = RoundedCornerShape(12.dp), modifier = Modifier.heightIn(min = 48.dp)) { Text("Enregistrer") }
+                    Button(onClick = viewModel::save, shape = JShapes.control, modifier = Modifier.heightIn(min = 48.dp)) { Text("Enregistrer") }
                 }
             }
         }
@@ -228,21 +235,24 @@ fun SettingsScreen(
 @Composable
 private fun Algorithm(draft: SettingsDraft, viewModel: SettingsViewModel) {
     Section("Algorithme adaptatif", "Point pivot à 50 : règle l’espacement des séances et le seuil de rattrapage.") {
-        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(JColors.Slate50).padding(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "Sensibilité de l’espacement : ${SettingsLogic.jsNumber(draft.sensitivity)}",
-                    style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f),
-                )
-                Text(SettingsLogic.sensitivityLabel(draft.sensitivity), style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace, color = JColors.Slate600)
-            }
+        Column(Modifier.fillMaxWidth().clip(JShapes.control).background(JColors.Slate50).padding(JSpacing.m)) {
+            // Titre puis pastille : rien ne se chevauche avec un grand texte.
+            Text(
+                "Sensibilité de l’espacement : ${SettingsLogic.jsNumber(draft.sensitivity)}",
+                style = MaterialTheme.typography.titleSmall,
+            )
+            Spacer(Modifier.height(JSpacing.xs))
+            Pill(SettingsLogic.sensitivityLabel(draft.sensitivity), JColors.Violet100, JColors.Violet800)
             val steps = ((SettingsLogic.SENSITIVITY_MAX - SettingsLogic.SENSITIVITY_MIN) / SettingsLogic.SENSITIVITY_STEP).roundToInt() - 1
             Slider(
                 value = draft.sensitivity.toFloat(),
                 onValueChange = { viewModel.setSensitivity(it.toDouble()) },
                 valueRange = SettingsLogic.SENSITIVITY_MIN.toFloat()..SettingsLogic.SENSITIVITY_MAX.toFloat(),
                 steps = steps,
-                colors = SliderDefaults.colors(thumbColor = JColors.Violet700, activeTrackColor = JColors.Violet700, inactiveTrackColor = JColors.Violet100),
+                colors = SliderDefaults.colors(
+                    thumbColor = JColors.Violet700, activeTrackColor = JColors.Violet700, inactiveTrackColor = JColors.Violet100,
+                    activeTickColor = Color.Transparent, inactiveTickColor = Color.Transparent,
+                ),
                 modifier = Modifier.semantics {
                     contentDescription = "Sensibilité de l’espacement"
                     stateDescription = "${SettingsLogic.jsNumber(draft.sensitivity).replace('.', ',')}, ${SettingsLogic.sensitivityLabel(draft.sensitivity)}"
@@ -254,14 +264,17 @@ private fun Algorithm(draft: SettingsDraft, viewModel: SettingsViewModel) {
                 Text("Agressif ±80%", style = MaterialTheme.typography.labelSmall, color = JColors.Slate600)
             }
         }
-        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(JColors.Slate50).padding(12.dp)) {
-            Text(SettingsLogic.thresholdLabel(draft.emergencyThreshold), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+        Column(Modifier.fillMaxWidth().clip(JShapes.control).background(JColors.Slate50).padding(JSpacing.m)) {
+            Text(SettingsLogic.thresholdLabel(draft.emergencyThreshold), style = MaterialTheme.typography.titleSmall)
             Slider(
                 value = draft.emergencyThreshold.toFloat(),
                 onValueChange = { viewModel.setThreshold((it / SettingsLogic.THRESHOLD_STEP).roundToInt() * SettingsLogic.THRESHOLD_STEP) },
                 valueRange = SettingsLogic.THRESHOLD_MIN.toFloat()..SettingsLogic.THRESHOLD_MAX.toFloat(),
                 steps = (SettingsLogic.THRESHOLD_MAX - SettingsLogic.THRESHOLD_MIN) / SettingsLogic.THRESHOLD_STEP - 1,
-                colors = SliderDefaults.colors(thumbColor = JColors.Rose700, activeTrackColor = JColors.Rose700, inactiveTrackColor = JColors.Rose50),
+                colors = SliderDefaults.colors(
+                    thumbColor = JColors.Rose700, activeTrackColor = JColors.Rose700, inactiveTrackColor = JColors.Rose50,
+                    activeTickColor = Color.Transparent, inactiveTickColor = Color.Transparent,
+                ),
                 modifier = Modifier.semantics {
                     contentDescription = "Seuil de rattrapage"
                     stateDescription = "moins de ${draft.emergencyThreshold} sur 100"
@@ -280,17 +293,17 @@ private fun Algorithm(draft: SettingsDraft, viewModel: SettingsViewModel) {
 private fun Intervals(draft: SettingsDraft, viewModel: SettingsViewModel) {
     val focus = LocalFocusManager.current
     Section("Intervalles des J", "Paliers de révision appliqués à chaque nouveau cours. Les cours existants gardent leur calendrier.") {
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(JSpacing.s), verticalArrangement = Arrangement.spacedBy(JSpacing.s)) {
             draft.intervals.forEach { value ->
                 Row(
-                    Modifier.clip(RoundedCornerShape(12.dp)).background(JColors.Slate50).border(1.dp, JColors.Slate200, RoundedCornerShape(12.dp))
-                        .padding(start = 12.dp, end = if (SettingsLogic.removeButtonShown(value)) 0.dp else 12.dp),
+                    Modifier.heightIn(min = 48.dp).clip(JShapes.control).background(JColors.Violet50).border(1.dp, JColors.Violet200, JShapes.control)
+                        .padding(start = JSpacing.m, end = if (SettingsLogic.removeButtonShown(value)) 0.dp else JSpacing.m),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("J$value", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 12.dp))
+                    Text("J$value", style = MaterialTheme.typography.titleSmall.tabular(), color = JColors.Violet900)
                     if (SettingsLogic.removeButtonShown(value)) {
                         IconButton(onClick = { viewModel.removeInterval(value) }, enabled = draft.intervals.size > 2, modifier = Modifier.size(48.dp)) {
-                            Icon(Icons.Filled.Close, contentDescription = "Retirer le palier J$value", modifier = Modifier.size(18.dp))
+                            Icon(Icons.Filled.Close, contentDescription = "Retirer le palier J$value", modifier = Modifier.size(18.dp), tint = JColors.Violet800)
                         }
                     }
                 }
@@ -299,7 +312,7 @@ private fun Intervals(draft: SettingsDraft, viewModel: SettingsViewModel) {
         if (draft.intervals.size <= 2) {
             Text("Il faut garder au moins deux paliers.", style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(verticalAlignment = Alignment.Bottom) {
             OutlinedTextField(
                 value = draft.newInterval,
                 onValueChange = viewModel::setNewInterval,
@@ -310,8 +323,12 @@ private fun Intervals(draft: SettingsDraft, viewModel: SettingsViewModel) {
                 keyboardActions = KeyboardActions(onDone = { viewModel.addInterval(); focus.clearFocus() }),
                 modifier = Modifier.weight(1f),
             )
-            Spacer(Modifier.width(8.dp))
-            OutlinedButton(onClick = viewModel::addInterval, modifier = Modifier.heightIn(min = 48.dp)) { Text("Ajouter") }
+            Spacer(Modifier.width(JSpacing.s))
+            OutlinedButton(onClick = viewModel::addInterval, shape = JShapes.control, modifier = Modifier.height(56.dp)) {
+                Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(JSpacing.s))
+                Text("Ajouter")
+            }
         }
         TextButton(onClick = viewModel::resetIntervals, modifier = Modifier.heightIn(min = 48.dp)) { Text("Rétablir les valeurs initiales") }
     }
@@ -323,16 +340,18 @@ private fun Colors(subjects: List<Subject>, onPick: (String) -> Unit) {
         if (subjects.isEmpty()) Text("Aucune matière.", style = MaterialTheme.typography.bodyMedium, color = JColors.Slate600)
         subjects.forEach { subject ->
             Row(
-                Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(12.dp))
+                Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(JShapes.control)
                     .clickable(onClickLabel = "Changer la couleur", role = Role.Button) { onPick(subject.id) }
-                    .padding(horizontal = 4.dp, vertical = 6.dp)
+                    .padding(horizontal = JSpacing.xs, vertical = JSpacing.xs)
                     .semantics(mergeDescendants = true) {},
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Box(Modifier.size(28.dp).clip(RoundedCornerShape(8.dp)).background(subjectColor(subject.color)))
-                Spacer(Modifier.width(12.dp))
-                Text(subject.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                Text(subject.color.uppercase(), style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace, color = JColors.Slate600)
+                Box(Modifier.size(32.dp).clip(JShapes.badge).background(subjectColor(subject.color)))
+                Spacer(Modifier.width(JSpacing.m))
+                Text(subject.name, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                Text(subject.color.uppercase(), style = MaterialTheme.typography.bodySmall.tabular(), color = JColors.Slate500)
+                Spacer(Modifier.width(JSpacing.xs))
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = JColors.Slate400)
             }
         }
     }
@@ -350,8 +369,8 @@ private fun ColorDialog(subject: Subject, onDismiss: () -> Unit, onPick: (String
         onDismissRequest = onDismiss,
         title = { Text("Couleur : ${subject.name}") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(JSpacing.m)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(JSpacing.xs), verticalArrangement = Arrangement.spacedBy(JSpacing.xs)) {
                     PALETTE.forEach { color ->
                         val selected = color.equals(hex, ignoreCase = true)
                         Box(
@@ -385,11 +404,11 @@ private fun Backup(ui: SettingsUiState, onExport: () -> Unit, onImport: () -> Un
         "Sauvegarde et export",
         "Tes données sont enregistrées uniquement sur ce téléphone. Exporte une copie pour les garder ou les ouvrir dans J-Method sur le web.",
     ) {
-        Text("${ui.courseCount} cours et ${ui.revisionCount} séances enregistrés.", style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
-        Button(onClick = onExport, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+        Text("${ui.courseCount} cours et ${ui.revisionCount} séances enregistrés.", style = MaterialTheme.typography.bodyMedium, color = JColors.Slate700)
+        Button(onClick = onExport, shape = JShapes.control, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
             Text("Exporter mes données (JSON)")
         }
-        OutlinedButton(onClick = onImport, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+        OutlinedButton(onClick = onImport, shape = JShapes.control, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
             Text("Restaurer une sauvegarde")
         }
         Text(
@@ -404,7 +423,14 @@ private fun About() {
     val context = LocalContext.current
     val version = runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "—"
     Section("À propos") {
-        Text("J-Method, version $version", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            BrandMark(48.dp)
+            Spacer(Modifier.width(JSpacing.m))
+            Column {
+                Text("J-Method", style = MaterialTheme.typography.titleMedium)
+                Text("Version $version", style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
+            }
+        }
         Text(
             "J-Method lit Pronote en lecture seule : emploi du temps et cahier de textes. Rien n’est jamais modifié ni envoyé dans Pronote.",
             style = MaterialTheme.typography.bodyMedium, color = JColors.Slate700,

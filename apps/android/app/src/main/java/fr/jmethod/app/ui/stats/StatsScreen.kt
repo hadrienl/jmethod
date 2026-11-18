@@ -42,9 +42,19 @@ import fr.jmethod.app.data.AppRepository
 import fr.jmethod.app.data.todayTicks
 import fr.jmethod.app.domain.StatsModel
 import fr.jmethod.app.ui.theme.JColors
-import fr.jmethod.app.ui.today.SurfaceCard
-import fr.jmethod.app.ui.today.screenPadding
-import fr.jmethod.app.ui.today.subjectColor
+import fr.jmethod.app.ui.theme.JIcons
+import fr.jmethod.app.ui.theme.JShapes
+import fr.jmethod.app.ui.theme.JSpacing
+import fr.jmethod.app.ui.theme.tabular
+import fr.jmethod.app.ui.components.EmptyState
+import fr.jmethod.app.ui.components.ScreenHeader
+import fr.jmethod.app.ui.components.SectionTitle
+import fr.jmethod.app.ui.components.SubjectDot
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import fr.jmethod.app.ui.components.SurfaceCard
+import fr.jmethod.app.ui.components.screenPadding
+import fr.jmethod.app.ui.components.subjectColor
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -61,57 +71,54 @@ class StatsViewModel(repository: AppRepository, clock: AppClock) : ViewModel() {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun StatsScreen(model: StatsModel, contentPadding: PaddingValues) {
-    LazyColumn(contentPadding = screenPadding(contentPadding), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    LazyColumn(contentPadding = screenPadding(contentPadding), verticalArrangement = Arrangement.spacedBy(JSpacing.l)) {
         item(key = "header") {
-            Column {
-                Text("Mes progrès", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, modifier = Modifier.semantics { heading() })
-                Spacer(Modifier.height(4.dp))
-                Text("Ta régularité, tes scores et ce qui reste à consolider.", style = MaterialTheme.typography.bodyMedium, color = JColors.Slate600)
-            }
+            ScreenHeader("Mes progrès", "Ta régularité, tes scores et ce qui reste à consolider.")
         }
         item(key = "metrics") {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            // Deux rangées de deux indicateurs de même hauteur, même avec un grand texte.
+            Column(verticalArrangement = Arrangement.spacedBy(JSpacing.m)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(JSpacing.m), modifier = Modifier.height(IntrinsicSize.Min)) {
                     Metric("Taux de réalisation", "${model.completionRate} %", model.completionLine, JColors.Slate900, Modifier.weight(1f))
                     Metric(
                         "Score moyen",
                         if (model.overallAvgScore == null) "—" else "${model.overallAvgScore}/100",
                         model.balanceLabel,
-                        JColors.Sky700,
+                        JColors.Slate900,
                         Modifier.weight(1f),
                         spoken = if (model.overallAvgScore == null) "Score moyen : pas encore de note" else null,
                     )
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(JSpacing.m), modifier = Modifier.height(IntrinsicSize.Min)) {
                     Metric(
-                        "Régularité", model.streakLabel, model.streakLine, JColors.Orange800, Modifier.weight(1f),
+                        "Régularité", model.streakLabel, model.streakLine, JColors.Slate900, Modifier.weight(1f),
                         spoken = "Régularité : ${model.streakDays} ${if (model.streakDays > 1) "jours consécutifs" else "jour"}",
                     )
-                    Metric("Cours suivis", "${model.coursesCount}", model.subjectsLine, JColors.Indigo700, Modifier.weight(1f))
+                    Metric("Cours suivis", "${model.coursesCount}", model.subjectsLine, JColors.Slate900, Modifier.weight(1f))
                 }
             }
         }
         if (model.weakSubjects.isNotEmpty()) {
             item(key = "weak") {
                 Column(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(JColors.Amber50)
-                        .border(1.dp, JColors.Amber700.copy(alpha = 0.3f), RoundedCornerShape(16.dp)).padding(16.dp),
+                    Modifier.fillMaxWidth().clip(JShapes.inner).background(JColors.Amber50)
+                        .border(1.dp, JColors.Amber700.copy(alpha = 0.3f), JShapes.inner).padding(JSpacing.l),
                 ) {
                     Text("Matières à retravailler", fontWeight = FontWeight.Bold, color = JColors.Amber900, modifier = Modifier.semantics { heading() })
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(JSpacing.xs))
                     Text(
                         "Leur score moyen est sous l’équilibre (50/100). Les prochaines séances de ces matières sont déjà rapprochées pour t’aider.",
                         style = MaterialTheme.typography.bodySmall, color = JColors.Amber900,
                     )
-                    Spacer(Modifier.height(8.dp))
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Spacer(Modifier.height(JSpacing.m))
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(JSpacing.s), verticalArrangement = Arrangement.spacedBy(JSpacing.s)) {
                         model.weakSubjects.forEach { row ->
                             Text(
                                 "${row.subject.name} (${row.avgScore}/100)",
                                 style = MaterialTheme.typography.labelLarge,
                                 fontWeight = FontWeight.Bold,
                                 color = JColors.Amber900,
-                                modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(Color.White).padding(horizontal = 10.dp, vertical = 6.dp),
+                                modifier = Modifier.clip(JShapes.badge).background(Color.White).padding(horizontal = JSpacing.m, vertical = JSpacing.s),
                             )
                         }
                     }
@@ -119,15 +126,12 @@ fun StatsScreen(model: StatsModel, contentPadding: PaddingValues) {
             }
         }
         item(key = "subjects-title") {
-            Text("Par matière", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, modifier = Modifier.semantics { heading() })
+            SectionTitle("Par matière", Modifier.padding(top = JSpacing.s))
         }
         if (model.subjects.isEmpty()) {
             item(key = "empty") {
                 SurfaceCard {
-                    Text(
-                        "Tes progrès par matière apparaîtront ici dès que tu auras ajouté un cours.",
-                        style = MaterialTheme.typography.bodyMedium, color = JColors.Slate600, modifier = Modifier.padding(20.dp),
-                    )
+                    EmptyState(JIcons.Stats, "Pas encore de progrès à afficher", "Tes progrès par matière apparaîtront ici dès que tu auras ajouté un cours.")
                 }
             }
         }
@@ -138,13 +142,13 @@ fun StatsScreen(model: StatsModel, contentPadding: PaddingValues) {
 @Composable
 private fun Metric(title: String, value: String, line: String, color: Color, modifier: Modifier, spoken: String? = null) {
     Column(
-        modifier.clip(RoundedCornerShape(16.dp)).background(Color.White).border(1.dp, JColors.Slate200, RoundedCornerShape(16.dp)).padding(14.dp)
+        modifier.fillMaxHeight().clip(JShapes.inner).background(Color.White).border(1.dp, JColors.Slate200, JShapes.inner).padding(JSpacing.l)
             .semantics(mergeDescendants = true) { if (spoken != null) contentDescription = "$spoken. $line" },
     ) {
-        Text(title.uppercase(java.util.Locale.FRENCH), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = JColors.Slate600)
-        Spacer(Modifier.height(6.dp))
-        Text(value, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace, color = color)
-        Spacer(Modifier.height(2.dp))
+        Text(title, style = MaterialTheme.typography.labelMedium, color = JColors.Slate600)
+        Spacer(Modifier.height(JSpacing.s))
+        Text(value, style = MaterialTheme.typography.headlineMedium.tabular(), fontWeight = FontWeight.ExtraBold, color = color)
+        Spacer(Modifier.height(JSpacing.xs))
         Text(line, style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
     }
 }
@@ -157,14 +161,14 @@ private fun SubjectBar(row: StatsModel.SubjectRow) {
         row.avgScore?.let { append(", moyenne $it sur 100") }
     }
     SurfaceCard {
-        Column(Modifier.padding(16.dp).clearAndSetSemantics { contentDescription = spoken }) {
+        Column(Modifier.padding(JSpacing.l).clearAndSetSemantics { contentDescription = spoken }) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(12.dp).clip(CircleShape).background(color))
-                Spacer(Modifier.width(8.dp))
-                Text(row.subject.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                Text("${row.rate} %", style = MaterialTheme.typography.labelLarge, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = JColors.Sky700)
+                SubjectDot(row.subject.color, 12.dp)
+                Spacer(Modifier.width(JSpacing.m))
+                Text(row.subject.name, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                Text("${row.rate} %", style = MaterialTheme.typography.titleSmall.tabular(), color = JColors.Violet800)
             }
-            Spacer(Modifier.height(2.dp))
+            Spacer(Modifier.height(JSpacing.xs))
             Row {
                 Text(row.line, style = MaterialTheme.typography.bodySmall, color = JColors.Slate600, modifier = Modifier.weight(1f))
                 if (row.avgScore != null) {
@@ -176,7 +180,7 @@ private fun SubjectBar(row: StatsModel.SubjectRow) {
                     )
                 }
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(JSpacing.m))
             LinearProgressIndicator(
                 progress = { row.rate / 100f },
                 color = color,

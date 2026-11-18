@@ -67,7 +67,15 @@ import fr.jmethod.app.domain.CourseEditing
 import fr.jmethod.app.domain.FrenchDates
 import fr.jmethod.app.domain.sentenceCase
 import fr.jmethod.app.ui.theme.JColors
-import fr.jmethod.app.ui.today.subjectColor
+import fr.jmethod.app.ui.theme.JShapes
+import fr.jmethod.app.ui.theme.JSpacing
+import fr.jmethod.app.ui.theme.tabular
+import fr.jmethod.app.ui.components.fullScreenGutter
+import fr.jmethod.app.ui.components.SubjectDot
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.widthIn
+import fr.jmethod.app.ui.components.subjectColor
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
@@ -100,8 +108,8 @@ fun CourseFormScreen(state: CoursesUiState, viewModel: CoursesViewModel, modifie
         Column(
             Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).imePadding()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp),
+                .padding(horizontal = JSpacing.l + fullScreenGutter(), vertical = JSpacing.l),
+            verticalArrangement = Arrangement.spacedBy(JSpacing.xl),
         ) {
             val count = state.intervalCount
             Text(
@@ -111,13 +119,13 @@ fun CourseFormScreen(state: CoursesUiState, viewModel: CoursesViewModel, modifie
 
             Column {
                 SectionLabel("Matière")
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(JSpacing.s), verticalArrangement = Arrangement.spacedBy(0.dp)) {
                     state.subjects.forEach { subject ->
                         FilterChip(
                             selected = subject.id == state.formSubjectId,
                             onClick = { viewModel.setFormSubject(subject.id) },
                             label = { Text(subject.name) },
-                            leadingIcon = { Box(Modifier.size(10.dp).clip(CircleShape).background(subjectColor(subject.color))) },
+                            leadingIcon = { SubjectDot(subject.color) },
                             colors = FilterChipDefaults.filterChipColors(
                                 containerColor = Color.White,
                                 selectedContainerColor = JColors.Violet100,
@@ -147,28 +155,25 @@ fun CourseFormScreen(state: CoursesUiState, viewModel: CoursesViewModel, modifie
                         colors = fieldColors,
                         modifier = Modifier.weight(1f),
                     )
-                    Spacer(Modifier.width(12.dp))
+                    Spacer(Modifier.width(JSpacing.m))
+                    // Numéro attribué : même hauteur que le champ (56 dp), aligné sur son cadre.
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(top = 8.dp).semantics(mergeDescendants = true) {
-                            contentDescription = "Numéro attribué automatiquement : C${state.formCourseNumber}"
-                        },
+                        verticalArrangement = Arrangement.Center,
+                        modifier = Modifier.padding(top = JSpacing.s).height(56.dp).widthIn(min = 72.dp).clip(JShapes.control).background(JColors.Violet50)
+                            .padding(horizontal = JSpacing.m)
+                            .semantics(mergeDescendants = true) {
+                                contentDescription = "Numéro attribué automatiquement : C${state.formCourseNumber}"
+                            },
                     ) {
-                        Text(
-                            "C${state.formCourseNumber}",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Bold,
-                            color = JColors.Sky700,
-                            modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(Color.White).padding(horizontal = 14.dp, vertical = 10.dp),
-                        )
-                        Text("Numéro auto", style = MaterialTheme.typography.labelSmall, color = JColors.Slate600)
+                        Text("C${state.formCourseNumber}", style = MaterialTheme.typography.titleMedium.tabular(), color = JColors.Violet800)
+                        Text("auto", style = MaterialTheme.typography.labelSmall, color = JColors.Violet800)
                     }
                 }
                 if (state.formSuggestions.isNotEmpty()) {
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(JSpacing.s))
                     Text("Chapitres existants :", style = MaterialTheme.typography.labelMedium, color = JColors.Slate600)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(JSpacing.s)) {
                         state.formSuggestions.forEach { chapter ->
                             AssistChip(
                                 onClick = { viewModel.setChapter(chapter) },
@@ -201,16 +206,18 @@ fun CourseFormScreen(state: CoursesUiState, viewModel: CoursesViewModel, modifie
                 SectionLabel("Date du cours (J0)")
                 TextButton(
                     onClick = { pickingDate = true },
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(RoundedCornerShape(12.dp)).background(Color.White)
+                    shape = JShapes.control,
+                    contentPadding = PaddingValues(horizontal = JSpacing.l),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(JShapes.control).background(Color.White)
+                        .border(1.dp, JColors.Slate300, JShapes.control)
                         .semantics { contentDescription = "Date du cours : $dateLabel. Modifier" },
                 ) {
                     Icon(Icons.Filled.DateRange, contentDescription = null, tint = JColors.Violet700)
-                    Spacer(Modifier.width(12.dp))
+                    Spacer(Modifier.width(JSpacing.m))
                     Text(dateLabel, color = JColors.Slate900, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
                     Text("Modifier", color = JColors.Violet800, fontWeight = FontWeight.SemiBold)
                 }
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(JSpacing.xs))
                 Text(
                     "La première révision (Découvrir, J0) est programmée ce jour-là.",
                     style = MaterialTheme.typography.bodySmall, color = JColors.Slate600,
@@ -231,10 +238,10 @@ fun CourseFormScreen(state: CoursesUiState, viewModel: CoursesViewModel, modifie
 
             Row(horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 TextButton(onClick = viewModel::closeCreate, modifier = Modifier.heightIn(min = 48.dp)) { Text("Annuler") }
-                Spacer(Modifier.width(12.dp))
-                Button(onClick = viewModel::submitCreate, shape = RoundedCornerShape(12.dp), modifier = Modifier.heightIn(min = 48.dp)) {
+                Spacer(Modifier.width(JSpacing.m))
+                Button(onClick = viewModel::submitCreate, shape = JShapes.control, modifier = Modifier.heightIn(min = 48.dp)) {
                     Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(JSpacing.s))
                     Text(CourseEditing.submitLabel(state.formCourseNumber), fontWeight = FontWeight.SemiBold)
                 }
             }
@@ -268,6 +275,6 @@ private fun SectionLabel(text: String) {
         style = MaterialTheme.typography.labelLarge,
         fontWeight = FontWeight.SemiBold,
         color = JColors.Slate700,
-        modifier = Modifier.padding(bottom = 8.dp).semantics { heading() },
+        modifier = Modifier.padding(bottom = JSpacing.s).semantics { heading() },
     )
 }

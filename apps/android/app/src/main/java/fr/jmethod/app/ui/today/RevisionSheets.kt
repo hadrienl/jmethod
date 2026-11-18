@@ -69,7 +69,22 @@ import fr.jmethod.app.model.SCORE_PRESETS
 import fr.jmethod.app.model.SCORE_STEP
 import fr.jmethod.app.model.Subject
 import fr.jmethod.app.model.info
+import fr.jmethod.app.ui.components.phaseColors
+import fr.jmethod.app.ui.components.subjectColor
 import fr.jmethod.app.ui.theme.JColors
+import fr.jmethod.app.ui.theme.JShapes
+import fr.jmethod.app.ui.theme.JSpacing
+import fr.jmethod.app.ui.theme.tabular
+import fr.jmethod.app.ui.components.Pill
+import fr.jmethod.app.ui.components.SubjectDot
+import fr.jmethod.app.model.Phase
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -96,7 +111,10 @@ private fun ScoreSlider(score: Int, onChange: (Int) -> Unit, description: String
         onValueChange = { onChange(((it / SCORE_STEP).roundToInt() * SCORE_STEP).coerceIn(SCORE_MIN, SCORE_MAX)) },
         valueRange = SCORE_MIN.toFloat()..SCORE_MAX.toFloat(),
         steps = (SCORE_MAX - SCORE_MIN) / SCORE_STEP - 1,
-        colors = SliderDefaults.colors(thumbColor = JColors.Violet700, activeTrackColor = JColors.Violet700, inactiveTrackColor = JColors.Violet100),
+        colors = SliderDefaults.colors(
+            thumbColor = JColors.Violet700, activeTrackColor = JColors.Violet700, inactiveTrackColor = JColors.Violet100,
+            activeTickColor = Color.Transparent, inactiveTickColor = Color.Transparent,
+        ),
         modifier = Modifier.fillMaxWidth().semantics {
             contentDescription = description
             stateDescription = "$score sur 100"
@@ -105,22 +123,23 @@ private fun ScoreSlider(score: Int, onChange: (Int) -> Unit, description: String
 }
 
 @Composable
-private fun SheetHeader(subject: Subject?, badge: String?, title: String, chapter: String, closeLabel: String, onClose: () -> Unit) {
+private fun SheetHeader(subject: Subject?, phase: Phase?, badge: String?, title: String, chapter: String, closeLabel: String, onClose: () -> Unit) {
     Row(verticalAlignment = Alignment.Top) {
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(10.dp).clip(CircleShape).background(subjectColor(subject?.color ?: "#64748B")))
-                Spacer(Modifier.width(8.dp))
-                Text(subject?.name ?: "Matière", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                SubjectDot(subject?.color)
+                Spacer(Modifier.width(JSpacing.s))
+                Text(subject?.name ?: "Matière", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = JColors.Slate700)
             }
-            if (badge != null) {
-                Spacer(Modifier.height(8.dp))
-                Text(badge, style = MaterialTheme.typography.labelMedium, color = JColors.Slate700)
-            }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(JSpacing.s))
             Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, modifier = Modifier.semantics { heading() })
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(JSpacing.xs))
             Text("Chapitre : $chapter", style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
+            if (badge != null && phase != null) {
+                Spacer(Modifier.height(JSpacing.s))
+                val (background, foreground) = phaseColors(phase)
+                Pill(badge, background, foreground)
+            }
         }
         IconButton(onClick = onClose, modifier = Modifier.size(48.dp)) {
             Icon(Icons.Filled.Close, contentDescription = closeLabel)
@@ -129,7 +148,7 @@ private fun SheetHeader(subject: Subject?, badge: String?, title: String, chapte
 }
 
 /** Autoévaluation rapide (« Faire le point »), port de `ScoreModal`. */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun ScoreSheet(
     revision: Revision,
@@ -143,48 +162,61 @@ fun ScoreSheet(
     val preview = ScorePreview.of(score, settings.sensitivity, settings.emergencyThreshold)
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = Color.White) {
         Column(
-            Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp).navigationBarsPadding(),
+            Modifier.verticalScroll(rememberScrollState()).padding(horizontal = JSpacing.xl).padding(bottom = JSpacing.xl).navigationBarsPadding(),
         ) {
             SheetHeader(
-                subject, "${revision.phase.info.label} · ${revision.stepLabel}", "C${course.courseNumber} : ${course.title}",
+                subject, revision.phase, "${revision.phase.info.label} · ${revision.stepLabel}", "C${course.courseNumber} · ${course.title}",
                 course.chapter, "Fermer l’autoévaluation", onDismiss,
             )
-            Spacer(Modifier.height(20.dp))
-            Text("De quoi te souviens-tu sans regarder ton cours ?", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+            Spacer(Modifier.height(JSpacing.xl))
+            Text("De quoi te souviens-tu sans regarder ton cours ?", style = MaterialTheme.typography.titleMedium)
             Text("Avec 50/100 on garde ton rythme actuel.", style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
             Spacer(Modifier.height(16.dp))
             Column(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(JColors.Slate50)
-                    .border(1.dp, JColors.Slate200, RoundedCornerShape(12.dp)).padding(16.dp),
+                Modifier.fillMaxWidth().clip(JShapes.inner).background(JColors.Slate50)
+                    .border(1.dp, JColors.Slate200, JShapes.inner).padding(JSpacing.l),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Row(verticalAlignment = Alignment.Bottom) {
-                    Text("$score", style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace, color = bandColor(preview.scoreBand))
+                    Text("$score", style = MaterialTheme.typography.displayMedium.tabular(), fontWeight = FontWeight.Black, color = bandColor(preview.scoreBand))
                     Text(" / 100", style = MaterialTheme.typography.titleMedium, color = JColors.Slate500, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
                 }
                 ScoreSlider(score, { score = it }, "Ton niveau de mémorisation sur 100")
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                // Cinq repères sur une ligne ; avec un grand texte, trois puis deux pour ne jamais couper un mot.
+                val perRow = if (LocalDensity.current.fontScale > 1.15f) 3 else SCORE_PRESETS.size
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(JSpacing.xs),
+                    verticalArrangement = Arrangement.spacedBy(JSpacing.xs),
+                    maxItemsInEachRow = perRow,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
                     SCORE_PRESETS.forEach { preset ->
                         val selected = score == preset.value
                         Column(
-                            Modifier.weight(1f).heightIn(min = 48.dp).clip(RoundedCornerShape(8.dp))
+                            Modifier.weight(1f).heightIn(min = 56.dp).clip(JShapes.badge)
                                 .background(if (selected) JColors.Violet100 else Color.White)
-                                .border(1.dp, if (selected) JColors.Violet700 else JColors.Slate200, RoundedCornerShape(8.dp))
+                                .border(if (selected) 2.dp else 1.dp, if (selected) JColors.Violet700 else JColors.Slate200, JShapes.badge)
                                 .clickable(role = Role.RadioButton) { score = preset.value }
                                 .semantics { this.selected = selected }
-                                .padding(vertical = 6.dp),
+                                .padding(horizontal = JSpacing.xs, vertical = JSpacing.s),
                             horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
                         ) {
-                            Text(preset.label, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge)
-                            Text(preset.sub, style = MaterialTheme.typography.labelSmall, color = JColors.Slate600, textAlign = TextAlign.Center)
+                            Text(preset.label, style = MaterialTheme.typography.labelLarge.tabular(), fontWeight = FontWeight.Bold,
+                                color = if (selected) JColors.Violet900 else JColors.Slate900)
+                            Text(
+                                preset.sub, style = MaterialTheme.typography.labelSmall, color = if (selected) JColors.Violet800 else JColors.Slate600,
+                                textAlign = TextAlign.Center, maxLines = 1, softWrap = false,
+                                autoSize = TextAutoSize.StepBased(minFontSize = 8.sp, maxFontSize = MaterialTheme.typography.labelSmall.fontSize, stepSize = 0.5.sp),
+                            )
                         }
                     }
                 }
             }
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(JSpacing.l))
             val (background, foreground) = toneColors(preview.tone)
             Column(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(background).padding(14.dp)
+                Modifier.fillMaxWidth().clip(JShapes.inner).background(background).padding(JSpacing.l)
                     .semantics(mergeDescendants = true) {},
             ) {
                 Text(preview.title.uppercase(Locale.FRENCH), color = foreground, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold,
@@ -192,13 +224,13 @@ fun ScoreSheet(
                 Spacer(Modifier.height(4.dp))
                 Text(preview.description, color = foreground, style = MaterialTheme.typography.bodySmall)
             }
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(JSpacing.xl))
             Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text("Annuler") }
-                Spacer(Modifier.width(12.dp))
+                Spacer(Modifier.width(JSpacing.m))
                 Button(
                     onClick = { onSubmit(score) },
-                    shape = RoundedCornerShape(12.dp),
+                    shape = JShapes.control,
                     modifier = Modifier.heightIn(min = 48.dp),
                 ) {
                     Icon(Icons.Filled.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -228,39 +260,36 @@ fun RevisionDetailSheet(
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = Color.White) {
         Column(
-            Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp).navigationBarsPadding(),
+            Modifier.verticalScroll(rememberScrollState()).padding(horizontal = JSpacing.xl).padding(bottom = JSpacing.xl).navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            SheetHeader(model.subject, null, model.title, model.course.chapter, "Fermer le détail de la séance", onDismiss)
+            SheetHeader(model.subject, null, null, model.title, model.course.chapter, "Fermer le détail de la séance", onDismiss)
             val (phaseBackground, phaseForeground) = phaseColors(revision.phase)
             Column(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(JColors.Slate50)
-                    .border(1.dp, JColors.Slate200, RoundedCornerShape(16.dp)).padding(16.dp)
+                Modifier.fillMaxWidth().clip(JShapes.inner).background(JColors.Slate50)
+                    .border(1.dp, JColors.Slate200, JShapes.inner).padding(JSpacing.l)
                     .semantics(mergeDescendants = true) {},
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(model.stepLabel, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
-                    Spacer(Modifier.width(12.dp))
-                    Text(
-                        model.phaseLabel, color = phaseForeground, fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(phaseBackground).padding(horizontal = 10.dp, vertical = 4.dp),
-                    )
+                    Text(model.stepLabel, style = MaterialTheme.typography.titleLarge.tabular(), fontWeight = FontWeight.ExtraBold)
+                    Spacer(Modifier.width(JSpacing.m))
+                    Pill(model.phaseLabel, phaseBackground, phaseForeground)
                 }
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(JSpacing.xs))
                 Text(model.plannedLine, style = MaterialTheme.typography.bodyMedium, color = JColors.Slate600)
             }
             model.description?.let { description ->
                 Column {
                     Text("À revoir", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() })
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(JSpacing.xs))
                     Text(description, style = MaterialTheme.typography.bodyMedium, color = JColors.Slate700)
                 }
             }
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).border(1.dp, JColors.Slate200, RoundedCornerShape(16.dp))) {
+            Column(Modifier.fillMaxWidth().clip(JShapes.inner).border(1.dp, JColors.Slate200, JShapes.inner)) {
                 Row(
                     Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(role = Role.Button) { historyOpen = !historyOpen }
                         .semantics { stateDescription = if (historyOpen) "Ouvert" else "Fermé" }
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                        .padding(horizontal = JSpacing.l, vertical = JSpacing.m),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(model.historyTitle, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
@@ -285,7 +314,7 @@ fun RevisionDetailSheet(
             }
             if (model.completedLine != null) {
                 Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(JColors.Emerald50).padding(16.dp),
+                    Modifier.fillMaxWidth().clip(JShapes.inner).background(JColors.Emerald50).padding(JSpacing.l),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = JColors.Emerald800)
@@ -293,25 +322,25 @@ fun RevisionDetailSheet(
                     Text(model.completedLine, color = JColors.Emerald950)
                 }
             } else {
-                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(JColors.Slate50).padding(16.dp)) {
+                Column(Modifier.fillMaxWidth().clip(JShapes.inner).background(JColors.Slate50).padding(JSpacing.l)) {
                     Text("Ta mémorisation : $score/100", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                     ScoreSlider(score, { score = it; confirming = false }, "Ta mémorisation")
                     Text("50 conserve le rythme prévu. Ta note ajuste les prochaines révisions.", style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
                 }
                 if (confirming) {
                     Column(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(JColors.Violet50)
-                            .border(1.dp, JColors.Violet200, RoundedCornerShape(16.dp)).padding(16.dp),
+                        Modifier.fillMaxWidth().clip(JShapes.inner).background(JColors.Violet50)
+                            .border(1.dp, JColors.Violet200, JShapes.inner).padding(JSpacing.l),
                     ) {
                         Text("Terminer cette séance avec $score/100 ?", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall, modifier = Modifier.semantics { heading() })
-                        Spacer(Modifier.height(6.dp))
+                        Spacer(Modifier.height(JSpacing.xs))
                         Text("Elle sera enregistrée comme faite aujourd’hui et les prochaines dates seront ajustées.", style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
                         Spacer(Modifier.height(12.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Button(onClick = { onValidate(score) }, shape = RoundedCornerShape(12.dp), modifier = Modifier.heightIn(min = 48.dp)) {
+                            Button(onClick = { onValidate(score) }, shape = JShapes.control, modifier = Modifier.heightIn(min = 48.dp)) {
                                 Text("Confirmer la validation")
                             }
-                            OutlinedButton(onClick = { confirming = false }, shape = RoundedCornerShape(12.dp), modifier = Modifier.heightIn(min = 48.dp)) {
+                            OutlinedButton(onClick = { confirming = false }, shape = JShapes.control, modifier = Modifier.heightIn(min = 48.dp)) {
                                 Text("Revenir")
                             }
                         }
@@ -319,7 +348,7 @@ fun RevisionDetailSheet(
                 } else {
                     Button(
                         onClick = { confirming = true },
-                        shape = RoundedCornerShape(12.dp),
+                        shape = JShapes.control,
                         colors = ButtonDefaults.buttonColors(),
                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                     ) {

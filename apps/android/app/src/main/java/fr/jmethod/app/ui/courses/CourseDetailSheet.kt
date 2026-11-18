@@ -58,8 +58,15 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import fr.jmethod.app.domain.CourseDetailModel
 import fr.jmethod.app.ui.theme.JColors
-import fr.jmethod.app.ui.today.phaseColors
-import fr.jmethod.app.ui.today.subjectColor
+import fr.jmethod.app.ui.theme.JIcons
+import fr.jmethod.app.ui.theme.JShapes
+import fr.jmethod.app.ui.theme.JSpacing
+import fr.jmethod.app.ui.theme.tabular
+import fr.jmethod.app.ui.components.SubjectDot
+import fr.jmethod.app.ui.components.Pill
+import androidx.compose.ui.text.style.TextAlign
+import fr.jmethod.app.ui.components.phaseColors
+import fr.jmethod.app.ui.components.subjectColor
 
 /** Fiche d’un cours (`CourseDetailModal`) : historique des J, validation, suppression confirmée. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -75,52 +82,54 @@ fun CourseDetailSheet(
     var confirmDelete by rememberSaveable(model.course.id) { mutableStateOf(false) }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = Color.White) {
         Column(
-            Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp).navigationBarsPadding(),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            Modifier.verticalScroll(rememberScrollState()).padding(horizontal = JSpacing.xl).padding(bottom = JSpacing.xl).navigationBarsPadding(),
+            verticalArrangement = Arrangement.spacedBy(JSpacing.l),
         ) {
             Header(model, onDismiss)
             model.notes?.let { notes ->
                 Column(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(JColors.Slate50)
-                        .border(1.dp, JColors.Slate200, RoundedCornerShape(12.dp)).padding(12.dp),
+                    Modifier.fillMaxWidth().clip(JShapes.inner).background(JColors.Slate50)
+                        .border(1.dp, JColors.Slate200, JShapes.inner).padding(JSpacing.l),
                 ) {
                     Text("Notes de cours", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = JColors.Slate600)
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(JSpacing.xs))
                     Text(notes, style = MaterialTheme.typography.bodyMedium, color = JColors.Slate700)
                 }
             }
             Column(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(JColors.Slate50)
-                    .border(1.dp, JColors.Slate200, RoundedCornerShape(12.dp)).padding(16.dp)
+                Modifier.fillMaxWidth().clip(JShapes.inner).background(JColors.Slate50)
+                    .border(1.dp, JColors.Slate200, JShapes.inner).padding(JSpacing.l)
                     .semantics(mergeDescendants = true) {},
             ) {
-                Text("Cycle des révisions", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-                Text(model.progressLine, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = JColors.Sky700)
-                Spacer(Modifier.height(8.dp))
+                Text("Cycle des révisions", style = MaterialTheme.typography.labelLarge, color = JColors.Slate600)
+                Text(model.progressLine, style = MaterialTheme.typography.titleMedium.tabular(), color = JColors.Violet800)
+                Spacer(Modifier.height(JSpacing.s))
                 LinearProgressIndicator(
                     progress = { model.progressPercent / 100f },
                     color = JColors.Violet700,
-                    trackColor = JColors.Slate200,
+                    trackColor = JColors.Violet100,
                     strokeCap = StrokeCap.Round,
                     gapSize = 0.dp,
                     drawStopIndicator = {},
-                    modifier = Modifier.fillMaxWidth().height(10.dp),
+                    modifier = Modifier.fillMaxWidth().height(8.dp),
                 )
             }
             if (onOpenNotebook != null) {
-                OutlinedButton(onClick = onOpenNotebook, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                OutlinedButton(onClick = onOpenNotebook, shape = JShapes.control, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                    Icon(JIcons.Notebook, contentDescription = null, modifier = Modifier.size(18.dp), tint = JColors.Violet700)
+                    Spacer(Modifier.width(JSpacing.s))
                     Text("Voir le cahier de textes de ${model.subjectLabel}")
                 }
             }
             Text(
                 "Calendrier personnalisé des J",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = JColors.Slate700,
+                style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.semantics { heading() },
             )
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                model.timeline.forEach { row -> TimelineRow(row, onValidate) }
+            // Une seule action mise en avant : la prochaine séance à valider ; les suivantes restent discrètes.
+            val nextToValidate = model.timeline.indexOfFirst { it.canValidate }
+            Column(verticalArrangement = Arrangement.spacedBy(JSpacing.s)) {
+                model.timeline.forEachIndexed { index, row -> TimelineRow(row, highlighted = index == nextToValidate, onValidate) }
             }
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 TextButton(
@@ -129,11 +138,11 @@ fun CourseDetailSheet(
                     modifier = Modifier.heightIn(min = 48.dp),
                 ) {
                     Icon(Icons.Filled.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
+                    Spacer(Modifier.width(JSpacing.s))
                     Text("Supprimer ce cours")
                 }
                 Spacer(Modifier.weight(1f))
-                OutlinedButton(onClick = onDismiss, shape = RoundedCornerShape(12.dp), modifier = Modifier.heightIn(min = 48.dp)) { Text("Fermer") }
+                OutlinedButton(onClick = onDismiss, shape = JShapes.control, modifier = Modifier.heightIn(min = 48.dp)) { Text("Fermer") }
             }
         }
     }
@@ -165,24 +174,23 @@ private fun Header(model: CourseDetailModel, onDismiss: () -> Unit) {
     Row(verticalAlignment = Alignment.Top) {
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(10.dp).clip(CircleShape).background(subjectColor(model.subject?.color ?: "#64748B")))
-                Spacer(Modifier.width(8.dp))
-                Text(model.subjectLabel, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                SubjectDot(model.subject?.color)
+                Spacer(Modifier.width(JSpacing.s))
+                Text(model.subjectLabel, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = JColors.Slate700)
             }
-            Spacer(Modifier.height(4.dp))
-            Text(model.chapterLine, style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(JSpacing.s))
             Text(
                 buildAnnotatedString {
-                    withStyle(SpanStyle(color = JColors.Sky700, fontFamily = FontFamily.Monospace)) { append("C${model.course.courseNumber}") }
-                    append(" ")
+                    withStyle(SpanStyle(color = JColors.Violet700, fontFeatureSettings = "tnum")) { append("C${model.course.courseNumber}") }
+                    append(" · ")
                     append(model.course.title)
                 },
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.ExtraBold,
                 modifier = Modifier.semantics { heading() },
             )
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(JSpacing.xs))
+            Text(model.chapterLine, style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
             Text(model.courseDateLine, style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
             Text(model.createdLine, style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
             model.averageLine?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = JColors.Slate900, fontWeight = FontWeight.SemiBold) }
@@ -194,8 +202,8 @@ private fun Header(model: CourseDetailModel, onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun TimelineRow(row: CourseDetailModel.Row, onValidate: (String) -> Unit) {
-    val shape = RoundedCornerShape(12.dp)
+private fun TimelineRow(row: CourseDetailModel.Row, highlighted: Boolean, onValidate: (String) -> Unit) {
+    val shape = JShapes.control
     val (background, border) = when (row.state) {
         CourseDetailModel.State.COMPLETED -> JColors.Slate50 to JColors.Slate200
         CourseDetailModel.State.OVERDUE -> JColors.Rose50 to JColors.Rose700.copy(alpha = 0.3f)
@@ -203,32 +211,27 @@ private fun TimelineRow(row: CourseDetailModel.Row, onValidate: (String) -> Unit
     }
     val (phaseBackground, phaseForeground) = phaseColors(row.phase)
     Row(
-        Modifier.fillMaxWidth().clip(shape).background(background).border(1.dp, border, shape).padding(horizontal = 12.dp, vertical = 8.dp),
+        Modifier.fillMaxWidth().clip(shape).background(background).border(1.dp, border, shape).padding(start = JSpacing.m, end = JSpacing.s, top = JSpacing.s, bottom = JSpacing.s),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(Modifier.weight(1f).semantics(mergeDescendants = true) {}, verticalAlignment = Alignment.CenterVertically) {
             Text(
                 row.stepLabel.substringBefore(" "),
-                style = MaterialTheme.typography.labelMedium,
-                fontFamily = FontFamily.Monospace,
+                style = MaterialTheme.typography.labelLarge.tabular(),
                 fontWeight = FontWeight.Bold,
                 color = phaseForeground,
-                modifier = Modifier.widthIn(min = 44.dp).clip(RoundedCornerShape(8.dp)).background(phaseBackground)
-                    .padding(horizontal = 6.dp, vertical = 4.dp)
+                textAlign = TextAlign.Center,
+                modifier = Modifier.widthIn(min = 44.dp).clip(JShapes.badge).background(phaseBackground)
+                    .padding(horizontal = JSpacing.s, vertical = JSpacing.xs)
                     .semantics { contentDescription = row.stepLabel },
             )
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(JSpacing.m))
             Column {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(row.phaseLabel, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
                     if (row.emergencyBadge) {
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            "Rattrapage",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = JColors.Rose700,
-                            modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(JColors.Rose50).padding(horizontal = 6.dp, vertical = 1.dp),
-                        )
+                        Spacer(Modifier.width(JSpacing.s))
+                        Pill("Rattrapage", JColors.Rose50, JColors.Rose700)
                     }
                 }
                 Text(row.plannedLine, style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
@@ -236,24 +239,31 @@ private fun TimelineRow(row: CourseDetailModel.Row, onValidate: (String) -> Unit
             }
         }
         Spacer(Modifier.width(8.dp))
-        if (row.canValidate) {
+        if (row.canValidate && highlighted) {
             Button(
                 onClick = { onValidate(row.revisionId) },
-                shape = RoundedCornerShape(10.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = JColors.Violet50, contentColor = JColors.Violet800),
-                contentPadding = PaddingValues(horizontal = 14.dp),
+                shape = JShapes.control,
+                colors = ButtonDefaults.buttonColors(containerColor = JColors.Violet700, contentColor = Color.White),
+                contentPadding = PaddingValues(horizontal = JSpacing.l),
+                modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "Valider ${row.stepLabel}" },
+            ) { Text(row.right, fontWeight = FontWeight.SemiBold) }
+        } else if (row.canValidate) {
+            TextButton(
+                onClick = { onValidate(row.revisionId) },
+                shape = JShapes.control,
+                colors = ButtonDefaults.textButtonColors(contentColor = JColors.Violet800),
                 modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "Valider ${row.stepLabel}" },
             ) { Text(row.right, fontWeight = FontWeight.SemiBold) }
         } else {
             Row(
-                Modifier.clip(RoundedCornerShape(8.dp)).background(Color.White).border(1.dp, JColors.Slate300, RoundedCornerShape(8.dp))
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                Modifier.clip(JShapes.badge).background(Color.White).border(1.dp, JColors.Slate200, JShapes.badge)
+                    .padding(horizontal = JSpacing.s, vertical = JSpacing.xs)
                     .semantics(mergeDescendants = true) { contentDescription = "Faite, ${row.right}" },
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = JColors.Emerald700, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(4.dp))
-                Text(row.right, style = MaterialTheme.typography.labelMedium, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.width(JSpacing.xs))
+                Text(row.right, style = MaterialTheme.typography.labelMedium.tabular(), fontWeight = FontWeight.Bold)
             }
         }
     }

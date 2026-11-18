@@ -71,6 +71,12 @@ import fr.jmethod.app.pronote.NotebookContent
 import fr.jmethod.app.pronote.NotebookLink
 import fr.jmethod.app.pronote.SessionEntry
 import fr.jmethod.app.ui.theme.JColors
+import fr.jmethod.app.ui.theme.JIcons
+import fr.jmethod.app.ui.theme.JShapes
+import fr.jmethod.app.ui.theme.JSpacing
+import fr.jmethod.app.ui.components.EmptyState
+import fr.jmethod.app.ui.components.fullScreenGutter
+import androidx.compose.foundation.layout.offset
 import java.io.File
 import java.time.LocalDate
 import java.util.Locale
@@ -152,8 +158,8 @@ fun NotebookScreen(ui: NotebookUiState, viewModel: NotebookViewModel, modifier: 
         else sessions.sumOf { s -> s.contents.sumOf { it.attachments.size } } + homework.sumOf { it.attachments.size }
         LazyColumn(
             Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(horizontal = JSpacing.l + fullScreenGutter(), vertical = JSpacing.l),
+            verticalArrangement = Arrangement.spacedBy(JSpacing.m),
         ) {
             item(key = "intro") {
                 Text(
@@ -175,20 +181,20 @@ fun NotebookScreen(ui: NotebookUiState, viewModel: NotebookViewModel, modifier: 
             if (state.error != null) {
                 item(key = "error") {
                     Column(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(JColors.Rose50).padding(16.dp)
+                        Modifier.fillMaxWidth().clip(JShapes.inner).background(JColors.Rose50).padding(JSpacing.l)
                             .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
                     ) {
                         Text(state.error, color = JColors.Rose800, style = MaterialTheme.typography.bodyMedium)
-                        Spacer(Modifier.height(8.dp))
-                        OutlinedButton(onClick = viewModel::refresh, modifier = Modifier.heightIn(min = 48.dp)) { Text("Réessayer") }
+                        Spacer(Modifier.height(JSpacing.s))
+                        OutlinedButton(onClick = viewModel::refresh, shape = JShapes.control, modifier = Modifier.heightIn(min = 48.dp)) { Text("Réessayer") }
                     }
                 }
             }
             if (state.loading) {
                 item(key = "loading") {
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite }) {
-                        CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 3.dp)
-                        Spacer(Modifier.width(12.dp))
+                        CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 3.dp, color = JColors.Violet700, trackColor = JColors.Violet100)
+                        Spacer(Modifier.width(JSpacing.m))
                         Text("Lecture du cahier de textes…", style = MaterialTheme.typography.bodyMedium)
                     }
                 }
@@ -196,22 +202,22 @@ fun NotebookScreen(ui: NotebookUiState, viewModel: NotebookViewModel, modifier: 
             if (snapshot != null) {
                 item(key = "summary") {
                     Column(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color.White)
-                            .border(1.dp, JColors.Slate200, RoundedCornerShape(12.dp)).padding(16.dp)
+                        Modifier.fillMaxWidth().clip(JShapes.inner).background(JColors.Violet50)
+                            .border(1.dp, JColors.Violet200, JShapes.inner).padding(JSpacing.l)
                             .semantics(mergeDescendants = true) {},
                     ) {
                         Text(
                             "${sessions.size} ${if (sessions.size > 1) "séances publiées" else "séance publiée"} · " +
                                 "${homework.size} ${if (homework.size > 1) "devoirs" else "devoir"} · " +
                                 "$attachmentCount ${if (attachmentCount > 1) "pièces jointes et liens" else "pièce jointe ou lien"}",
-                            fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium,
+                            style = MaterialTheme.typography.titleSmall, color = JColors.Violet900,
                         )
                         Text(
                             "Du ${FrenchDates.numeric(snapshot.from)} au ${FrenchDates.numeric(snapshot.to)}",
                             style = MaterialTheme.typography.bodySmall, color = JColors.Slate600,
                         )
                         if (snapshot.skippedEntries > 0) {
-                            Spacer(Modifier.height(4.dp))
+                            Spacer(Modifier.height(JSpacing.xs))
                             Text(
                                 "${snapshot.skippedEntries} ${if (snapshot.skippedEntries > 1) "entrées sans date exploitable n’ont pas été affichées" else "entrée sans date exploitable n’a pas été affichée"}.",
                                 style = MaterialTheme.typography.bodySmall, color = JColors.Amber900,
@@ -244,15 +250,15 @@ fun NotebookScreen(ui: NotebookUiState, viewModel: NotebookViewModel, modifier: 
 
 @Composable
 private fun Empty(text: String) {
-    Text(text, style = MaterialTheme.typography.bodyMedium, color = JColors.Slate600, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(24.dp))
+    EmptyState(JIcons.Notebook, "Rien de publié", text)
 }
 
 @Composable
 private fun Card(content: @Composable () -> Unit) {
     Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color.White)
-            .border(1.dp, JColors.Slate200, RoundedCornerShape(16.dp)).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        Modifier.fillMaxWidth().clip(JShapes.card).background(Color.White)
+            .border(1.dp, JColors.Slate200, JShapes.card).padding(JSpacing.l),
+        verticalArrangement = Arrangement.spacedBy(JSpacing.s),
     ) { content() }
 }
 
@@ -269,9 +275,9 @@ private fun SessionCard(session: SessionEntry, downloading: String?, onDownload:
 
 @Composable
 private fun ContentBlock(content: NotebookContent, downloading: String?, onDownload: (NotebookAttachment) -> Unit, onLink: (String) -> Unit) {
-    Column(Modifier.padding(top = 4.dp)) {
+    Column(Modifier.padding(top = JSpacing.xs), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         if (content.category.isNotEmpty()) Text(content.category, style = MaterialTheme.typography.labelMedium, color = JColors.Violet800)
-        Text(content.title.ifEmpty { "Séance publiée sans titre" }, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+        Text(content.title.ifEmpty { "Séance publiée sans titre" }, style = MaterialTheme.typography.titleMedium)
         if (content.description.isNotEmpty()) {
             Text(content.description, style = MaterialTheme.typography.bodyMedium, color = JColors.Slate700)
         }
@@ -290,7 +296,7 @@ private fun HomeworkCard(item: HomeworkItem, downloading: String?, onDownload: (
         Text(item.description.ifEmpty { "Travail à faire" }, style = MaterialTheme.typography.bodyMedium, color = JColors.Slate700)
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.semantics(mergeDescendants = true) {}) {
             if (item.done) Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = JColors.Emerald700, modifier = Modifier.size(16.dp))
-            if (item.done) Spacer(Modifier.width(4.dp))
+            if (item.done) Spacer(Modifier.width(JSpacing.xs))
             Text(
                 "Statut Pronote : ${if (item.done) "fait" else "à faire"}",
                 style = MaterialTheme.typography.bodySmall, color = if (item.done) JColors.Emerald800 else JColors.Slate600,
@@ -312,10 +318,13 @@ private fun Links(links: List<NotebookLink>, onLink: (String) -> Unit) {
 private fun LinkButton(label: String, onClick: () -> Unit) {
     androidx.compose.material3.TextButton(
         onClick = onClick,
-        contentPadding = PaddingValues(horizontal = 0.dp),
-        modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "Ouvrir le lien dans le navigateur : $label" },
+        shape = JShapes.control,
+        contentPadding = PaddingValues(horizontal = JSpacing.s),
+        modifier = Modifier.offset(x = (-8).dp).heightIn(min = 48.dp).semantics { contentDescription = "Ouvrir le lien dans le navigateur : $label" },
     ) {
-        Text("Lien : $label", color = JColors.Violet800, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+        Icon(JIcons.Link, contentDescription = null, tint = JColors.Violet700, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(JSpacing.s))
+        Text(label, color = JColors.Violet800, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
     }
 }
 
@@ -327,15 +336,18 @@ private fun Attachments(items: List<NotebookAttachment>, downloading: String?, o
             NotebookAttachment.Kind.FILE -> Button(
                 onClick = { onDownload(attachment) },
                 enabled = downloading == null,
-                shape = RoundedCornerShape(12.dp),
+                shape = JShapes.control,
                 colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = JColors.Violet50, contentColor = JColors.Violet800),
+                contentPadding = PaddingValues(horizontal = JSpacing.m, vertical = JSpacing.s),
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).semantics { contentDescription = "Ouvrir la pièce jointe : ${attachment.name}" },
             ) {
                 if (downloading == attachment.id) {
                     CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = JColors.Violet800)
-                    Spacer(Modifier.width(8.dp))
+                } else {
+                    Icon(JIcons.Attachment, contentDescription = null, modifier = Modifier.size(18.dp))
                 }
-                Text(attachment.name, modifier = Modifier.weight(1f), maxLines = 2)
+                Spacer(Modifier.width(JSpacing.s))
+                Text(attachment.name, modifier = Modifier.weight(1f), maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
             }
         }
     }

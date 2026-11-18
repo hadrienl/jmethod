@@ -1,9 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!--
+      Thème clair uniquement, même quand le téléphone est en mode sombre (voir JMethodTheme) :
+      le mode sombre forcé des surcouches constructeur est refusé pour garder les contrastes prévus.
+    -->
     <style name="Theme.JMethod" parent="android:style/Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@color/background</item>
         <item name="android:colorAccent">@color/violet</item>
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:forceDarkAllowed" tools:targetApi="29">false</item>
+    </style>
+
+    <!-- Écran de démarrage (API SplashScreen) : fond clair, monogramme sur pastille violette. -->
+    <style name="Theme.JMethod.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash</item>
+        <item name="postSplashScreenTheme">@style/Theme.JMethod</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="27">true</item>
+        <item name="android:forceDarkAllowed" tools:targetApi="29">false</item>
     </style>
 </resources>

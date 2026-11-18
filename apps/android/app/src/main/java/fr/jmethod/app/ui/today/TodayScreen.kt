@@ -62,43 +62,23 @@ import fr.jmethod.app.domain.TodayModel
 import fr.jmethod.app.model.PHASE_CONFIG
 import fr.jmethod.app.model.Phase
 import fr.jmethod.app.model.PronoteEvent
+import fr.jmethod.app.ui.components.SurfaceCard
+import fr.jmethod.app.ui.components.phaseColors
+import fr.jmethod.app.ui.components.screenPadding
+import fr.jmethod.app.ui.components.subjectColor
 import fr.jmethod.app.ui.theme.JColors
+import fr.jmethod.app.ui.theme.JShapes
+import fr.jmethod.app.ui.theme.JSpacing
+import fr.jmethod.app.ui.theme.tabular
+import fr.jmethod.app.ui.components.SubjectDot
+import fr.jmethod.app.ui.components.EmptyState
+import fr.jmethod.app.ui.components.Pill
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.text.style.TextDecoration
 import java.util.Locale
 
-private val CardShape = RoundedCornerShape(24.dp)
-
-/** Couleurs des étapes dans Aujourd’hui (classes `bg-*-50 text-*-800` du web). */
-internal fun phaseColors(phase: Phase): Pair<Color, Color> = when (phase) {
-    Phase.ENCODAGE -> JColors.Blue50 to JColors.Blue800
-    Phase.CONSOLIDATION -> JColors.Orange50 to JColors.Orange800
-    Phase.RECUPERATION -> JColors.Emerald50 to JColors.Emerald800
-}
-
-internal fun subjectColor(hex: String): Color = runCatching {
-    Color(android.graphics.Color.parseColor(hex))
-}.getOrDefault(JColors.Slate500)
-
-/** Marges d’un écran à onglet : 16 dp plus les encarts du Scaffold, y compris latéraux en paysage. */
-@Composable
-internal fun screenPadding(contentPadding: PaddingValues, bottomExtra: androidx.compose.ui.unit.Dp = 24.dp): PaddingValues {
-    val direction = androidx.compose.ui.platform.LocalLayoutDirection.current
-    return PaddingValues(
-        start = contentPadding.calculateStartPadding(direction) + 16.dp,
-        end = contentPadding.calculateEndPadding(direction) + 16.dp,
-        top = contentPadding.calculateTopPadding() + 16.dp,
-        bottom = contentPadding.calculateBottomPadding() + bottomExtra,
-    )
-}
-
-@Composable
-internal fun SurfaceCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = CardShape,
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        border = BorderStroke(1.dp, JColors.Slate200),
-    ) { content() }
-}
+private val CardShape = JShapes.card
 
 @Composable
 fun TodayScreen(
@@ -111,7 +91,7 @@ fun TodayScreen(
     val model = state.model
     LazyColumn(
         contentPadding = screenPadding(contentPadding, 24.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
+        verticalArrangement = Arrangement.spacedBy(JSpacing.l),
     ) {
         if (model.allDoneBanner) item(key = "done") { AllDoneBanner() }
         item(key = "header") { Header(model) }
@@ -126,12 +106,12 @@ fun TodayScreen(
                     model.overdueBanner,
                     color = JColors.Amber900,
                     style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(JColors.Amber50).padding(16.dp),
+                    modifier = Modifier.fillMaxWidth().clip(JShapes.inner).background(JColors.Amber50).padding(JSpacing.l),
                 )
             }
         }
         if (model.emptyProgramme) {
-            item(key = "empty") { EmptyProgramme() }
+            item(key = "empty") { EmptyProgramme(hasCourses) }
         } else {
             items(model.groups, key = { "group-" + it.subject.id }) { group -> SubjectGroup(group, onScore, onDetail) }
         }
@@ -153,11 +133,11 @@ fun TodayScreen(
 @Composable
 private fun AllDoneBanner() {
     Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(JColors.Emerald50)
-            .border(1.dp, JColors.Emerald200, RoundedCornerShape(16.dp)).padding(20.dp)
+        Modifier.fillMaxWidth().clip(JShapes.inner).background(JColors.Emerald50)
+            .border(1.dp, JColors.Emerald200, JShapes.inner).padding(JSpacing.l)
             .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
     ) {
-        Text("Toutes tes révisions sont terminées !", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, color = JColors.Emerald950)
+        Text("Toutes tes révisions sont terminées !", style = MaterialTheme.typography.titleMedium, color = JColors.Emerald950)
         Spacer(Modifier.height(8.dp))
         Text("Tes révisions pour demain sont prêtes. Bonne soirée !", style = MaterialTheme.typography.bodyMedium, color = JColors.Emerald950)
     }
@@ -196,14 +176,14 @@ private fun Hero(model: TodayModel, hasCourses: Boolean, onScore: (String) -> Un
         Modifier.fillMaxWidth().clip(CardShape).background(JColors.Violet700).padding(24.dp),
     ) {
         Row(
-            Modifier.clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.15f)).padding(horizontal = 12.dp, vertical = 8.dp),
+            Modifier.clip(JShapes.pill).background(Color.White.copy(alpha = 0.15f)).padding(horizontal = JSpacing.m, vertical = JSpacing.s),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(Icons.Filled.Star, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(8.dp))
             Text("POUR DEMAIN", color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
         }
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(JSpacing.l))
         Text(
             if (hasCourses) hero.title else "Rien à préparer ce soir.",
             color = Color.White,
@@ -233,11 +213,12 @@ private fun Hero(model: TodayModel, hasCourses: Boolean, onScore: (String) -> Un
         }
         val revision = hero.revision
         if (revision != null) {
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(JSpacing.l))
             Button(
                 onClick = { onScore(revision.id) },
                 colors = ButtonDefaults.buttonColors(containerColor = JColors.Lime200, contentColor = JColors.Violet950),
-                shape = RoundedCornerShape(12.dp),
+                shape = JShapes.control,
+                contentPadding = PaddingValues(horizontal = JSpacing.l, vertical = JSpacing.m),
                 modifier = Modifier.heightIn(min = 48.dp),
             ) {
                 Text("Faire le point sur ce cours", fontWeight = FontWeight.Bold)
@@ -251,16 +232,16 @@ private fun Hero(model: TodayModel, hasCourses: Boolean, onScore: (String) -> Un
 @Composable
 private fun Progress(model: TodayModel) {
     SurfaceCard {
-        Column(Modifier.padding(20.dp)) {
-            Text("Tes petits progrès", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() })
+        Column(Modifier.padding(JSpacing.l)) {
+            Text("Tes petits progrès", style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
             Spacer(Modifier.height(16.dp))
             Row(
                 verticalAlignment = Alignment.Bottom,
                 modifier = Modifier.semantics(mergeDescendants = true) {},
             ) {
-                Text("${model.completed.size}", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.ExtraBold)
+                Text("${model.completed.size}", style = MaterialTheme.typography.displaySmall.tabular(), fontWeight = FontWeight.ExtraBold)
                 Spacer(Modifier.width(8.dp))
-                Text(model.progressSuffix, style = MaterialTheme.typography.bodyLarge, color = JColors.Slate600, modifier = Modifier.padding(bottom = 6.dp))
+                Text(model.progressSuffix, style = MaterialTheme.typography.bodyLarge, color = JColors.Slate600, modifier = Modifier.padding(bottom = JSpacing.s))
             }
             Spacer(Modifier.height(16.dp))
             LinearProgressIndicator(
@@ -288,7 +269,7 @@ private fun PhaseLegend() {
             val (background, foreground) = phaseColors(phase)
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.semantics(mergeDescendants = true) {}) {
                 Box(
-                    Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(background).clearAndSetSemantics {},
+                    Modifier.size(40.dp).clip(JShapes.control).background(background).clearAndSetSemantics {},
                     contentAlignment = Alignment.Center,
                 ) { Text(info.symbol, color = foreground, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge) }
                 Spacer(Modifier.width(12.dp))
@@ -304,22 +285,25 @@ private fun PhaseLegend() {
 @Composable
 private fun ProgrammeHeader(model: TodayModel) {
     Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.semantics(mergeDescendants = true) { heading() }) {
-        Text("Dans ton programme", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
+        Text("Dans ton programme", style = MaterialTheme.typography.titleLarge)
         Spacer(Modifier.width(8.dp))
         Text(model.dueLabel, style = MaterialTheme.typography.bodyMedium, color = JColors.Slate500, modifier = Modifier.padding(bottom = 2.dp))
     }
 }
 
 @Composable
-private fun EmptyProgramme() {
+private fun EmptyProgramme(hasCourses: Boolean) {
     SurfaceCard {
-        Column(Modifier.fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = JColors.Emerald700, modifier = Modifier.size(32.dp))
-            Spacer(Modifier.height(12.dp))
-            Text("Tout est à jour", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(8.dp))
-            Text("Tu peux ajouter un cours depuis ton emploi du temps ci-dessous.", style = MaterialTheme.typography.bodyMedium, color = JColors.Slate600, textAlign = TextAlign.Center)
-        }
+        EmptyState(
+            icon = Icons.Filled.CheckCircle,
+            tint = JColors.Emerald700,
+            title = if (hasCourses) "Tout est à jour" else "Ton programme est vide",
+            message = if (hasCourses) {
+                "Aucune séance à faire pour l’instant. Tu peux ajouter un cours depuis ton emploi du temps ci-dessous."
+            } else {
+                "Ajoute un cours depuis ton emploi du temps ci-dessous : ses séances apparaîtront ici."
+            },
+        )
     }
 }
 
@@ -329,13 +313,13 @@ private fun SubjectGroup(group: TodayModel.Group, onScore: (String) -> Unit, onD
     SurfaceCard {
         Column {
             Row(
-                Modifier.fillMaxWidth().padding(20.dp).semantics(mergeDescendants = true) { heading() },
+                Modifier.fillMaxWidth().padding(JSpacing.l).semantics(mergeDescendants = true) { heading() },
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Box(Modifier.size(12.dp).clip(CircleShape).background(color))
-                Spacer(Modifier.width(12.dp))
+                SubjectDot(group.subject.color, 12.dp)
+                Spacer(Modifier.width(JSpacing.m))
                 Column(Modifier.weight(1f)) {
-                    Text(group.subject.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(group.subject.name, style = MaterialTheme.typography.titleMedium)
                     Text(group.countLabel, style = MaterialTheme.typography.bodySmall, color = JColors.Slate500)
                 }
             }
@@ -351,16 +335,10 @@ private fun SubjectGroup(group: TodayModel.Group, onScore: (String) -> Unit, onD
 private fun RevisionRow(row: TodayModel.Row, onScore: (String) -> Unit, onDetail: (String) -> Unit) {
     val (background, foreground) = phaseColors(row.phase)
     Column(
-        Modifier.fillMaxWidth().background(if (row.done) JColors.Slate50 else Color.White).padding(horizontal = 20.dp, vertical = 16.dp),
+        Modifier.fillMaxWidth().background(if (row.done) JColors.Slate50 else Color.White).padding(horizontal = JSpacing.l, vertical = JSpacing.l),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                row.badge,
-                color = foreground,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(background).padding(horizontal = 10.dp, vertical = 4.dp),
-            )
+            Pill(row.badge, background, foreground)
             Spacer(Modifier.weight(1f))
             if (row.doneLabel != null) {
                 Icon(Icons.Filled.Check, contentDescription = null, tint = JColors.Emerald800, modifier = Modifier.size(16.dp))
@@ -370,7 +348,7 @@ private fun RevisionRow(row: TodayModel.Row, onScore: (String) -> Unit, onDetail
         }
         Spacer(Modifier.height(8.dp))
         Column(
-            Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(8.dp))
+            Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(JShapes.badge)
                 .clickable(onClickLabel = "Voir le détail de la séance", role = Role.Button) { onDetail(row.revision.id) }
                 .padding(vertical = 4.dp),
         ) {
@@ -382,8 +360,8 @@ private fun RevisionRow(row: TodayModel.Row, onScore: (String) -> Unit, onDetail
             Button(
                 onClick = { onScore(row.revision.id) },
                 colors = ButtonDefaults.buttonColors(containerColor = JColors.Violet50, contentColor = JColors.Violet800),
-                shape = RoundedCornerShape(12.dp),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                shape = JShapes.control,
+                contentPadding = PaddingValues(horizontal = JSpacing.l, vertical = JSpacing.m),
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).semantics {
                     contentDescription = "Faire le point : ${row.title}"
                 },
@@ -398,59 +376,77 @@ private fun RevisionRow(row: TodayModel.Row, onScore: (String) -> Unit, onDetail
 @Composable
 private fun TomorrowClasses(model: TodayModel, onAddCourse: (String) -> Unit) {
     SurfaceCard {
-        Column(Modifier.padding(20.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.semantics(mergeDescendants = true) {}) {
-                Icon(Icons.Filled.DateRange, contentDescription = null, tint = JColors.Violet700)
-                Spacer(Modifier.width(12.dp))
+        Column(Modifier.padding(vertical = JSpacing.l)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(horizontal = JSpacing.l).semantics(mergeDescendants = true) {},
+            ) {
+                Box(Modifier.size(40.dp).clip(JShapes.control).background(JColors.Violet50), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Filled.DateRange, contentDescription = null, tint = JColors.Violet700, modifier = Modifier.size(22.dp))
+                }
+                Spacer(Modifier.width(JSpacing.m))
                 Column {
-                    Text("Ta journée de cours de demain", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold, modifier = Modifier.semantics { heading() })
+                    Text("Ta journée de cours de demain", style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
                     Text("${model.tomorrowDate} · Depuis Pronote", style = MaterialTheme.typography.bodyMedium, color = JColors.Slate600)
                 }
             }
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(JSpacing.s))
             if (model.tomorrowEvents.isEmpty()) {
-                Text("Aucun cours importé pour demain.", style = MaterialTheme.typography.bodyMedium, color = JColors.Slate600)
+                Text(
+                    "Aucun cours importé pour demain.",
+                    style = MaterialTheme.typography.bodyMedium, color = JColors.Slate600,
+                    modifier = Modifier.padding(horizontal = JSpacing.l, vertical = JSpacing.s),
+                )
             } else {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    model.tomorrowEvents.forEach { event -> TomorrowEventCard(event, onAddCourse) }
+                model.tomorrowEvents.forEachIndexed { index, event ->
+                    if (index > 0) HorizontalDivider(color = JColors.Slate100, modifier = Modifier.padding(start = 76.dp))
+                    TomorrowEventRow(event, onAddCourse)
                 }
             }
         }
     }
 }
 
+/** Un créneau de demain : heures en colonne, matière, professeur et salle ; « Ajouter ce cours » si possible. */
 @Composable
-private fun TomorrowEventCard(event: TodayModel.TomorrowEvent, onAddCourse: (String) -> Unit) {
-    val shape = RoundedCornerShape(12.dp)
-    Column(
-        Modifier.fillMaxWidth().clip(shape)
-            .background(if (event.cancelled) JColors.Slate50 else Color.White)
-            .border(1.dp, if (event.cancelled) JColors.Slate300 else JColors.Slate200, shape)
-            .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = if (event.canAddCourse) 4.dp else 16.dp),
-    ) {
-        Row(Modifier.semantics(mergeDescendants = true) {}) {
-            Text(
-                event.timeRange.removeSuffix(" – "),
-                style = MaterialTheme.typography.bodySmall,
-                color = JColors.Slate600,
-                modifier = Modifier.weight(1f),
-            )
-            if (event.trailing != null) {
+private fun TomorrowEventRow(event: TodayModel.TomorrowEvent, onAddCourse: (String) -> Unit) {
+    val start = event.timeRange.substringBefore(" – ")
+    val end = event.timeRange.substringAfter(" – ", "")
+    val muted = event.cancelled
+    Row(Modifier.fillMaxWidth().padding(start = JSpacing.l, end = JSpacing.s, top = JSpacing.m, bottom = if (event.canAddCourse) 0.dp else JSpacing.m)) {
+        Column(Modifier.widthIn(min = 48.dp).clearAndSetSemantics {}) {
+            Text(start, style = MaterialTheme.typography.labelLarge.tabular(), color = if (muted) JColors.Slate500 else JColors.Slate900, softWrap = false)
+            if (end.isNotEmpty()) Text(end, style = MaterialTheme.typography.labelMedium.tabular(), color = JColors.Slate500, softWrap = false)
+        }
+        Spacer(Modifier.width(JSpacing.m))
+        Column(Modifier.weight(1f)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(end = JSpacing.s).semantics(mergeDescendants = true) {
+                    contentDescription = listOfNotNull(event.timeRange.removeSuffix(" – "), event.subjectName, event.teacher, event.trailing).joinToString(", ")
+                },
+            ) {
                 Text(
-                    event.trailing,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (event.cancelled) JColors.Rose800 else JColors.Slate600,
-                    fontWeight = if (event.cancelled) FontWeight.SemiBold else FontWeight.Normal,
+                    event.subjectName,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = if (muted) JColors.Slate500 else JColors.Slate900,
+                    textDecoration = if (muted) TextDecoration.LineThrough else null,
+                    modifier = Modifier.weight(1f),
                 )
+                if (event.trailing != null) {
+                    Spacer(Modifier.width(JSpacing.s))
+                    if (muted) {
+                        Pill(event.trailing, JColors.Rose50, JColors.Rose800)
+                    } else {
+                        Text(event.trailing, style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
+                    }
+                }
             }
+            if (event.teacher != null) {
+                Text(event.teacher, style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
+            }
+            if (event.canAddCourse) AddCourseButton(event.subjectName) { onAddCourse(event.id) }
         }
-        Spacer(Modifier.height(8.dp))
-        Text(event.subjectName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-        if (event.teacher != null) {
-            Spacer(Modifier.height(4.dp))
-            Text(event.teacher, style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
-        }
-        if (event.canAddCourse) AddCourseButton(event.subjectName) { onAddCourse(event.id) }
     }
 }
 
@@ -459,12 +455,12 @@ private fun TomorrowEventCard(event: TodayModel.TomorrowEvent, onAddCourse: (Str
 internal fun AddCourseButton(subjectName: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     androidx.compose.material3.TextButton(
         onClick = onClick,
-        contentPadding = PaddingValues(horizontal = 0.dp, vertical = 8.dp),
-        modifier = modifier.fillMaxWidth().heightIn(min = 48.dp).semantics { contentDescription = "Ajouter ce cours : $subjectName" },
+        shape = JShapes.control,
+        contentPadding = PaddingValues(horizontal = JSpacing.s, vertical = JSpacing.s),
+        modifier = modifier.offset(x = (-8).dp).heightIn(min = 48.dp).semantics { contentDescription = "Ajouter ce cours : $subjectName" },
     ) {
         Icon(Icons.Filled.Add, contentDescription = null, tint = JColors.Violet800, modifier = Modifier.size(18.dp))
-        Spacer(Modifier.width(8.dp))
-        Text("Ajouter ce cours", color = JColors.Violet800, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = JColors.Violet800, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(JSpacing.s))
+        Text("Ajouter ce cours", color = JColors.Violet800, fontWeight = FontWeight.Bold)
     }
 }

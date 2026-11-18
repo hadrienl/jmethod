@@ -59,9 +59,18 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import fr.jmethod.app.domain.CoursesListModel
 import fr.jmethod.app.ui.theme.JColors
-import fr.jmethod.app.ui.today.SurfaceCard
-import fr.jmethod.app.ui.today.screenPadding
-import fr.jmethod.app.ui.today.subjectColor
+import fr.jmethod.app.ui.theme.JIcons
+import fr.jmethod.app.ui.theme.JShapes
+import fr.jmethod.app.ui.theme.JSpacing
+import fr.jmethod.app.ui.theme.tabular
+import fr.jmethod.app.ui.components.EmptyState
+import fr.jmethod.app.ui.components.Pill
+import fr.jmethod.app.ui.components.ScreenHeader
+import fr.jmethod.app.ui.components.SubjectDot
+import androidx.compose.material.icons.filled.Add
+import fr.jmethod.app.ui.components.SurfaceCard
+import fr.jmethod.app.ui.components.screenPadding
+import fr.jmethod.app.ui.components.subjectColor
 
 @Composable
 fun CoursesScreen(
@@ -73,17 +82,10 @@ fun CoursesScreen(
 ) {
     LazyColumn(
         contentPadding = screenPadding(contentPadding, 96.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(JSpacing.l),
     ) {
         item(key = "header") {
-            Column {
-                Text(state.list.header, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, modifier = Modifier.semantics { heading() })
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    "Tous tes cours classés par matière et par chapitre, avec le suivi de leurs révisions.",
-                    style = MaterialTheme.typography.bodyMedium, color = JColors.Slate600,
-                )
-            }
+            ScreenHeader(state.list.header, "Tous tes cours classés par matière et par chapitre, avec le suivi de leurs révisions.")
         }
         item(key = "notebook") { NotebookEntry(onOpenNotebook) }
         if (!state.hasCourses) {
@@ -95,13 +97,7 @@ fun CoursesScreen(
         if (state.list.empty) {
             item(key = "empty") {
                 SurfaceCard {
-                    Column(Modifier.fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.AutoMirrored.Filled.List, contentDescription = null, tint = JColors.Slate500, modifier = Modifier.size(40.dp))
-                        Spacer(Modifier.height(8.dp))
-                        Text("Aucun cours trouvé", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.height(4.dp))
-                        Text("Essaie de modifier ta recherche ou tes filtres.", style = MaterialTheme.typography.bodyMedium, color = JColors.Slate600, textAlign = TextAlign.Center)
-                    }
+                    EmptyState(Icons.Filled.Search, "Aucun cours trouvé", "Essaie de modifier ta recherche ou tes filtres.")
                 }
             }
         }
@@ -112,16 +108,20 @@ fun CoursesScreen(
 /** Entrée du cahier de textes Pronote (lecture seule). */
 @Composable
 private fun NotebookEntry(onOpen: () -> Unit) {
-    val shape = RoundedCornerShape(16.dp)
+    val shape = JShapes.inner
     Row(
         Modifier.fillMaxWidth().clip(shape).background(JColors.Violet50).border(1.dp, JColors.Violet200, shape)
             .clickable(role = Role.Button, onClickLabel = "Ouvrir le cahier de textes") { onOpen() }
             .semantics(mergeDescendants = true) {}
-            .padding(16.dp),
+            .padding(JSpacing.l),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        Box(Modifier.size(40.dp).clip(JShapes.control).background(Color.White), contentAlignment = Alignment.Center) {
+            Icon(JIcons.Notebook, contentDescription = null, tint = JColors.Violet700, modifier = Modifier.size(22.dp))
+        }
+        Spacer(Modifier.width(JSpacing.m))
         Column(Modifier.weight(1f)) {
-            Text("Cahier de textes", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = JColors.Violet900)
+            Text("Cahier de textes", style = MaterialTheme.typography.titleMedium, color = JColors.Violet900)
             Text(
                 "Contenus de séance, devoirs et pièces jointes publiés dans Pronote.",
                 style = MaterialTheme.typography.bodySmall, color = JColors.Slate700,
@@ -134,24 +134,18 @@ private fun NotebookEntry(onOpen: () -> Unit) {
 @Composable
 private fun FirstCourse(onCreate: () -> Unit, onShowPlanning: () -> Unit) {
     SurfaceCard {
-        Column(Modifier.fillMaxWidth().padding(24.dp)) {
-            Text("Aucun cours pour l’instant", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "Crée ton premier cours : ses révisions seront planifiées automatiquement, de Découvrir à Se tester.",
-                style = MaterialTheme.typography.bodyMedium, color = JColors.Slate700,
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
+        EmptyState(
+            icon = JIcons.School,
+            title = "Aucun cours pour l’instant",
+            message = "Crée ton premier cours : ses révisions seront planifiées automatiquement, de Découvrir à Se tester. " +
                 "Tu peux aussi l’ajouter depuis ton emploi du temps, avec « Ajouter ce cours » dans Aujourd’hui ou dans le Planning.",
-                style = MaterialTheme.typography.bodyMedium, color = JColors.Slate600,
-            )
-            Spacer(Modifier.height(16.dp))
-            Button(onClick = onCreate, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+        ) {
+            Button(onClick = onCreate, shape = JShapes.control, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(JSpacing.s))
                 Text("Créer mon premier cours", fontWeight = FontWeight.Bold)
             }
-            Spacer(Modifier.height(8.dp))
-            OutlinedButton(onClick = onShowPlanning, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+            OutlinedButton(onClick = onShowPlanning, shape = JShapes.control, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                 Text("Voir le Planning")
             }
         }
@@ -174,8 +168,11 @@ private fun SearchField(value: String, onChange: (String) -> Unit) {
         },
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
         keyboardActions = KeyboardActions(onSearch = { focus.clearFocus() }),
-        shape = RoundedCornerShape(12.dp),
-        colors = OutlinedTextFieldDefaults.colors(unfocusedContainerColor = Color.White, focusedContainerColor = Color.White),
+        shape = JShapes.control,
+        colors = OutlinedTextFieldDefaults.colors(
+            unfocusedContainerColor = Color.White, focusedContainerColor = Color.White,
+            unfocusedBorderColor = JColors.Slate200,
+        ),
         modifier = Modifier.fillMaxWidth(),
     )
 }
@@ -187,7 +184,7 @@ private fun SubjectChips(state: CoursesUiState, onSelect: (String?) -> Unit) {
         selectedContainerColor = JColors.Violet100,
         selectedLabelColor = JColors.Violet900,
     )
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.semantics { contentDescription = "Filtrer par matière" }) {
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(JSpacing.s), modifier = Modifier.semantics { contentDescription = "Filtrer par matière" }) {
         item(key = "all") {
             FilterChip(
                 selected = state.subjectFilter == null,
@@ -201,7 +198,7 @@ private fun SubjectChips(state: CoursesUiState, onSelect: (String?) -> Unit) {
                 selected = state.subjectFilter == subject.id,
                 onClick = { onSelect(subject.id) },
                 label = { Text(subject.name) },
-                leadingIcon = { Box(Modifier.size(10.dp).clip(CircleShape).background(subjectColor(subject.color))) },
+                leadingIcon = { SubjectDot(subject.color) },
                 colors = colors,
             )
         }
@@ -211,16 +208,16 @@ private fun SubjectChips(state: CoursesUiState, onSelect: (String?) -> Unit) {
 @Composable
 private fun SubjectGroup(group: CoursesListModel.SubjectGroup, onOpen: (String) -> Unit) {
     SurfaceCard {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(JSpacing.l)) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.semantics(mergeDescendants = true) { heading() }) {
-                Box(Modifier.size(14.dp).clip(CircleShape).background(subjectColor(group.subject.color)))
-                Spacer(Modifier.width(10.dp))
-                Text(group.subject.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f, fill = false))
-                Spacer(Modifier.width(8.dp))
+                SubjectDot(group.subject.color, 12.dp)
+                Spacer(Modifier.width(JSpacing.m))
+                Text(group.subject.name, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f, fill = false))
+                Spacer(Modifier.width(JSpacing.s))
                 Text(group.countLabel, style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
             }
             group.chapters.forEach { chapter ->
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(JSpacing.l))
                 Text(
                     "Chapitre : ${chapter.chapter}",
                     style = MaterialTheme.typography.labelLarge,
@@ -229,7 +226,7 @@ private fun SubjectGroup(group: CoursesListModel.SubjectGroup, onOpen: (String) 
                     modifier = Modifier.semantics { heading() },
                 )
                 chapter.courses.forEach { card ->
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(JSpacing.s))
                     CourseCard(card, onOpen)
                 }
             }
@@ -239,40 +236,31 @@ private fun SubjectGroup(group: CoursesListModel.SubjectGroup, onOpen: (String) 
 
 @Composable
 private fun CourseCard(card: CoursesListModel.Card, onOpen: (String) -> Unit) {
-    val shape = RoundedCornerShape(14.dp)
+    val shape = JShapes.inner
     Column(
         Modifier.fillMaxWidth().clip(shape).background(JColors.Slate50).border(1.dp, JColors.Slate200, shape)
             .clickable(role = Role.Button, onClickLabel = "Ouvrir la fiche du cours") { onOpen(card.course.id) }
             .semantics(mergeDescendants = true) {}
-            .padding(14.dp),
+            .padding(JSpacing.l),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                card.badge,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.labelLarge,
-                color = JColors.Sky700,
-                modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(JColors.Sky50).padding(horizontal = 8.dp, vertical = 2.dp),
-            )
+            Pill(card.badge, JColors.Violet100, JColors.Violet800)
             Spacer(Modifier.weight(1f))
             if (card.lastScoreLine != null) {
-                Icon(Icons.Filled.Star, contentDescription = null, tint = JColors.Amber700, modifier = Modifier.size(14.dp))
-                Spacer(Modifier.width(4.dp))
-                Text(card.lastScoreLine, style = MaterialTheme.typography.labelMedium, color = JColors.Emerald800, fontWeight = FontWeight.Bold)
+                Icon(Icons.Filled.Star, contentDescription = null, tint = JColors.Amber700, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(JSpacing.xs))
+                Text(card.lastScoreLine, style = MaterialTheme.typography.labelMedium.tabular(), color = JColors.Emerald800, fontWeight = FontWeight.Bold)
             }
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(JSpacing.s))
         Text(card.course.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
         Text(card.dateLine, style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
-        Spacer(Modifier.height(8.dp))
-        HorizontalDivider(color = JColors.Slate200)
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(JSpacing.m))
         Row {
             Text("Progression", style = MaterialTheme.typography.bodySmall, color = JColors.Slate600, modifier = Modifier.weight(1f))
-            Text(card.counter, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+            Text(card.counter, style = MaterialTheme.typography.bodySmall.tabular(), fontWeight = FontWeight.Bold)
         }
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(JSpacing.s))
         LinearProgressIndicator(
             progress = { card.progress / 100f },
             color = JColors.Violet700,
@@ -283,10 +271,10 @@ private fun CourseCard(card: CoursesListModel.Card, onOpen: (String) -> Unit) {
             modifier = Modifier.fillMaxWidth().height(6.dp).semantics { contentDescription = "Progression : ${card.progress} %" },
         )
         if (card.next != null) {
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(JSpacing.s))
             Row {
                 Text(card.next.label, style = MaterialTheme.typography.bodySmall, color = JColors.Slate700, modifier = Modifier.weight(1f))
-                Text(card.next.date, style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
+                Text(card.next.date, style = MaterialTheme.typography.bodySmall.tabular(), color = JColors.Slate600)
             }
         }
     }

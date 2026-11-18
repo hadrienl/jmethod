@@ -85,13 +85,22 @@ import fr.jmethod.app.pronote.AccessPhase
 import fr.jmethod.app.pronote.AccountType
 import fr.jmethod.app.pronote.PronoteUiState
 import fr.jmethod.app.ui.theme.JColors
+import fr.jmethod.app.ui.theme.JIcons
+import fr.jmethod.app.ui.theme.JShapes
+import fr.jmethod.app.ui.theme.JSpacing
+import fr.jmethod.app.ui.components.BrandMark
+import fr.jmethod.app.ui.components.SectionTitle
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.ui.draw.clip
 import kotlinx.coroutines.delay
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private val CardShape = RoundedCornerShape(24.dp)
+private val CardShape = JShapes.card
 
 /** Icônes œil (tracés Material « visibility » et « visibility_off »), sans dépendance aux icônes étendues. */
 private fun eyeVector(name: String, path: String) = ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f)
@@ -108,18 +117,20 @@ private val EyeOffIcon = eyeVector(
 )
 
 @Composable
-private fun SectionCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+private fun SectionCard(modifier: Modifier = Modifier, padding: androidx.compose.ui.unit.Dp = JSpacing.l, content: @Composable () -> Unit) {
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = CardShape,
         colors = CardDefaults.cardColors(containerColor = Color.White),
         border = BorderStroke(1.dp, JColors.Slate200),
-    ) { Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) { content() } }
+    ) { Column(Modifier.padding(padding), verticalArrangement = Arrangement.spacedBy(JSpacing.m)) { content() } }
 }
 
 @Composable
 private fun Brand() {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        BrandMark(72.dp)
+        Spacer(Modifier.height(JSpacing.l))
         Text(
             buildAnnotatedString {
                 append("J-")
@@ -147,9 +158,9 @@ fun LoadingScreen(onSkip: () -> Unit) {
         verticalArrangement = Arrangement.Center,
     ) {
         Brand()
-        Spacer(Modifier.height(32.dp))
-        CircularProgressIndicator(color = JColors.Violet700)
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(JSpacing.xxl))
+        CircularProgressIndicator(color = JColors.Violet700, trackColor = JColors.Violet100, strokeWidth = 3.dp, modifier = Modifier.size(32.dp))
+        Spacer(Modifier.height(JSpacing.l))
         Text(
             "Connexion à Pronote…",
             style = MaterialTheme.typography.bodyLarge,
@@ -157,7 +168,7 @@ fun LoadingScreen(onSkip: () -> Unit) {
             modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
         )
         if (showSkip) {
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(JSpacing.l))
             TextButton(onClick = onSkip, modifier = Modifier.heightIn(min = 48.dp)) { Text("Ouvrir sans attendre") }
         }
     }
@@ -174,13 +185,13 @@ fun LoginScreen(viewModel: PronoteViewModel, state: PronoteUiState) {
     Box(Modifier.fillMaxSize().background(JColors.Slate50), contentAlignment = Alignment.TopCenter) {
         Column(
             Modifier.widthIn(max = 560.dp).fillMaxSize().verticalScroll(rememberScrollState())
-                .windowInsetsPadding(WindowInsets.safeDrawing).imePadding().padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(24.dp),
+                .windowInsetsPadding(WindowInsets.safeDrawing).imePadding().padding(JSpacing.l),
+            verticalArrangement = Arrangement.spacedBy(JSpacing.xl),
         ) {
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(JSpacing.xl))
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Brand() }
-            SectionCard {
-                Text("Connexion à Pronote", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() })
+            SectionCard(padding = JSpacing.xl) {
+                Text("Connexion à Pronote", style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() })
                 OutlinedTextField(
                     value = form.school,
                     onValueChange = controller::onSchoolChange,
@@ -251,12 +262,12 @@ fun LoginScreen(viewModel: PronoteViewModel, state: PronoteUiState) {
                 Button(
                     onClick = controller::submitCredentials,
                     enabled = canSubmit,
-                    shape = RoundedCornerShape(12.dp),
+                    shape = JShapes.control,
                     modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
                 ) {
                     if (working) {
                         CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = JColors.Violet700)
-                        Spacer(Modifier.size(12.dp))
+                        Spacer(Modifier.size(JSpacing.m))
                         Text("Connexion…")
                     } else {
                         Text("Se connecter", fontWeight = FontWeight.Bold)
@@ -308,18 +319,18 @@ private fun formatSync(value: String?): String? = value?.let { runCatching { syn
 fun PronoteAccountSection(viewModel: PronoteViewModel, state: PronoteUiState, syncInfo: PronoteSyncInfo?) {
     val controller = viewModel.controller
     var confirmDisconnect by rememberSaveable { mutableStateOf(false) }
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text("Compte Pronote", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() })
+    Column(verticalArrangement = Arrangement.spacedBy(JSpacing.m)) {
+        SectionTitle("Compte Pronote", Modifier.padding(top = JSpacing.s))
 
         if ((state.busy || state.isError) && state.access == AccessPhase.CONNECTED) {
             Column(
-                Modifier.fillMaxWidth().background(if (state.isError) JColors.Rose50 else JColors.Violet50, RoundedCornerShape(16.dp)).padding(16.dp)
+                Modifier.fillMaxWidth().background(if (state.isError) JColors.Rose50 else JColors.Violet50, JShapes.inner).padding(JSpacing.l)
                     .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
             ) {
                 Text(state.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = if (state.isError) JColors.Rose800 else JColors.Violet900)
                 Text(state.message, style = MaterialTheme.typography.bodyMedium, color = JColors.Slate700)
                 if (state.busy) {
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(JSpacing.m))
                     LinearProgressIndicator(Modifier.fillMaxWidth(), color = JColors.Violet700, trackColor = JColors.Violet100)
                 }
             }
@@ -327,7 +338,13 @@ fun PronoteAccountSection(viewModel: PronoteViewModel, state: PronoteUiState, sy
 
         SectionCard {
             val account = state.account
-            Text(account?.name ?: "Compte enregistré", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(40.dp).clip(CircleShape).background(JColors.Violet50), contentAlignment = Alignment.Center) {
+                    Icon(JIcons.School, contentDescription = null, tint = JColors.Violet700, modifier = Modifier.size(22.dp))
+                }
+                Spacer(Modifier.width(JSpacing.m))
+                Text(account?.name ?: "Compte enregistré", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            }
             formatSync(syncInfo?.lastSync)?.let {
                 Text("Dernière synchronisation le $it", style = MaterialTheme.typography.bodyMedium, color = JColors.Slate600)
             }
@@ -338,8 +355,8 @@ fun PronoteAccountSection(viewModel: PronoteViewModel, state: PronoteUiState, sy
                 )
             }
             if (account != null && account.children.size > 1) {
-                Text("Enfant", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Enfant", style = MaterialTheme.typography.titleSmall)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(JSpacing.s)) {
                     account.children.forEach { child ->
                         FilterChip(
                             selected = account.selectedChildId == child.id,
@@ -351,9 +368,13 @@ fun PronoteAccountSection(viewModel: PronoteViewModel, state: PronoteUiState, sy
                     }
                 }
             }
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = controller::retry, enabled = !state.busy, modifier = Modifier.heightIn(min = 48.dp)) { Text("Actualiser") }
-                OutlinedButton(onClick = { confirmDisconnect = true }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Se déconnecter") }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(JSpacing.s), verticalArrangement = Arrangement.spacedBy(JSpacing.s)) {
+                Button(onClick = controller::retry, enabled = !state.busy, shape = JShapes.control, modifier = Modifier.heightIn(min = 48.dp)) {
+                    Icon(androidx.compose.material.icons.Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(JSpacing.s))
+                    Text("Actualiser")
+                }
+                OutlinedButton(onClick = { confirmDisconnect = true }, shape = JShapes.control, modifier = Modifier.heightIn(min = 48.dp)) { Text("Se déconnecter") }
             }
         }
 
