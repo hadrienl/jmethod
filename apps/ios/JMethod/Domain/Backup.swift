@@ -20,12 +20,15 @@ enum Backup {
         var subjects: [Subject]?
         /// nil : réglages conservés ; sinon stockés tels quels puis complétés par les valeurs par défaut.
         var settings: AppSettings?
+        /// nil : suivi des imports du cahier de textes conservé (sauvegarde web ou ancienne).
+        var notebookImports: [String: NotebookImport]? = nil
 
         func apply(to document: AppDocument) -> AppDocument {
             var result = document
             result.courses = courses
             result.revisions = revisions
             if let subjects { result.subjects = subjects }
+            if let notebookImports { result.notebookImports = notebookImports }
             if let settings { result.settings = settings }
             result.initialized = true
             return result
@@ -96,7 +99,18 @@ enum Backup {
             settings = decoded
         default: return shapeError("les réglages sont illisibles")
         }
-        return .accepted(Accepted(courses: courses, revisions: revisions, subjects: subjects, settings: settings))
+        var imports: [String: NotebookImport]?
+        switch root["notebookImports"] {
+        case nil, is NSNull: imports = nil
+        case let object as [String: Any]:
+            guard let encoded = try? JSONSerialization.data(withJSONObject: object),
+                  let decoded = try? JSONDecoder().decode([String: NotebookImport].self, from: encoded) else {
+                return shapeError("le suivi du cahier de textes est illisible")
+            }
+            imports = decoded
+        default: return shapeError("le suivi du cahier de textes est illisible")
+        }
+        return .accepted(Accepted(courses: courses, revisions: revisions, subjects: subjects, settings: settings, notebookImports: imports))
     }
 
     // MARK: Export
@@ -111,7 +125,7 @@ enum Backup {
             ("revisions", .array(document.revisions.map(json))),
             ("subjects", .array(document.subjects.map(json))),
             ("settings", json(document.settings)),
-        ])
+        ] + (document.notebookImports.isEmpty ? [] : [("notebookImports", json(document.notebookImports))]))
         var output = ""
         value.write(to: &output, indent: "")
         return output
@@ -122,7 +136,32 @@ enum Backup {
             ("id", .string(course.id)), ("subjectId", .string(course.subjectId)), ("chapter", .string(course.chapter)),
             ("courseNumber", .number(Double(course.courseNumber))), ("title", .string(course.title)), ("date", .string(course.date)),
             ("description", course.description.map(JSValue.string)), ("createdAt", .string(course.createdAt)),
+            ("source", course.source.map(json)), ("documents", course.documents.map { .array($0.map(json)) }),
         ].compactMap { key, value in value.map { (key, $0) } })
+    }
+
+    private static func json(_ source: CourseSource) -> JSValue {
+        .object([("kind", .string(source.kind)), ("sessionKey", .string(source.sessionKey)),
+                 ("subjectLabel", .string(source.subjectLabel)), ("date", .string(source.date))]
+                + (source.ordinal.map { [("ordinal", JSValue.number(Double($0)))] } ?? []))
+    }
+
+    /// Métadonnées seulement : le contenu des fichiers ne quitte jamais l'appareil par l'export.
+    private static func json(_ document: CourseDocument) -> JSValue {
+        .object([
+            ("id", .string(document.id)), ("name", .string(document.name)), ("mime", .string(document.mime)),
+            ("size", .number(Double(document.size))), ("file", .string(document.file)),
+            ("extractedTitle", document.extractedTitle.map(JSValue.string)),
+        ].compactMap { key, value in value.map { (key, $0) } })
+    }
+
+    private static func json(_ imports: [String: NotebookImport]) -> JSValue {
+        .object(imports.keys.sorted().compactMap { key in
+            guard let item = imports[key] else { return nil }
+            return (key, .object([
+                ("status", .string(item.status.rawValue)), ("courseId", item.courseId.map(JSValue.string)), ("at", .string(item.at)),
+            ].compactMap { name, value in value.map { (name, $0) } }))
+        })
     }
 
     /// Ordre du stockage web (création, rattrapage, puis validation), identique à Android.
@@ -150,6 +189,8 @@ enum Backup {
             ("emergencyThreshold", .number(settings.emergencyThreshold)), ("pronoteIcalUrl", .string(settings.pronoteIcalUrl)),
             ("soundEnabled", .bool(settings.soundEnabled)), ("userName", .string(settings.userName)), ("userGrade", .string(settings.userGrade)),
             ("lastPronoteSync", settings.lastPronoteSync.map(JSValue.string)),
+            ("notebookAutoCreate", settings.notebookAutoCreate.map(JSValue.bool)),
+            ("notebookAutoCreateSince", settings.notebookAutoCreateSince.map(JSValue.string)),
         ].compactMap { key, value in value.map { (key, $0) } })
     }
 }

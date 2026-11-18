@@ -7,6 +7,7 @@ import UniformTypeIdentifiers
 struct SettingsView: View {
     let app: AppModel
     let pronote: PronoteSession
+    let importer: NotebookCourseImporter
 
     /// Modifications non enregistrées de l'algorithme et des paliers.
     struct Draft: Equatable {
@@ -35,7 +36,9 @@ struct SettingsView: View {
 
     private var current: Draft {
         // Un brouillon périmé (réglages changés ailleurs, restauration) repart des réglages enregistrés.
-        if let draft, draft.base == app.document.settings { return draft }
+        let saved = app.document.settings
+        if let draft, draft.base.sensitivity == saved.sensitivity, draft.base.emergencyThreshold == saved.emergencyThreshold,
+           draft.base.intervals == saved.intervals { return draft }
         return Draft(app.document.settings)
     }
 
@@ -50,6 +53,7 @@ struct SettingsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.m) {
                     PronoteAccountSection(app: app, pronote: pronote)
+                    notebookCourses
                     algorithm
                     intervals
                     colors
@@ -84,6 +88,16 @@ struct SettingsView: View {
         .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in
             handleImport(result)
         }
+        .confirmationDialog(
+            "Importer aussi les \(importer.backfillOffer?.count ?? 0) séance\((importer.backfillOffer?.count ?? 0) > 1 ? "s" : "") des 14 derniers jours ?",
+            isPresented: Binding(get: { importer.backfillOffer != nil }, set: { if !$0 { importer.answerBackfill(importOlder: false) } }),
+            titleVisibility: .visible
+        ) {
+            Button("Importer") { importer.answerBackfill(importOlder: true) }
+            Button("Seulement à partir d’aujourd’hui", role: .cancel) { importer.answerBackfill(importOlder: false) }
+        } message: {
+            Text("Un cours est créé pour chaque séance publiée dans le cahier de textes, avec ses documents.")
+        }
         .alert("Remplacer tes données ?", isPresented: Binding(get: { pendingImport != nil }, set: { if !$0 { pendingImport = nil } })) {
             Button("Remplacer mes données", role: .destructive) {
                 if let accepted = pendingImport { app.restore(accepted) }
@@ -97,6 +111,36 @@ struct SettingsView: View {
     }
 
     // MARK: Sections
+
+    /// « Cahier de textes » : création automatique des cours (désactivée par défaut).
+    private var notebookCourses: some View {
+        section("Cahier de textes", subtitle: "Chaque séance publiée dans Pronote peut devenir un cours, avec ses documents.") {
+            Toggle(isOn: Binding(
+                get: { app.document.settings.autoCreatesCourses },
+                set: { enabled in
+                    if enabled { Task { await importer.activate() } } else { importer.deactivate() }
+                }
+            )) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Créer les cours automatiquement").font(.subheadline.weight(.semibold))
+                    Text(app.document.settings.autoCreatesCourses
+                         ? "Après chaque synchronisation, les nouvelles séances de tes matières deviennent des cours. Un cours supprimé n’est jamais recréé."
+                         : "Désactivé : utilise « Créer un cours » sur une séance du cahier de textes.")
+                        .font(.footnote).foregroundStyle(Theme.textSecondary)
+                }
+            }
+            .tint(Theme.violet)
+            .frame(minHeight: 44)
+            .disabled(importer.running)
+            if importer.running {
+                HStack(spacing: Spacing.xs) {
+                    ProgressView()
+                    Text("Création des cours depuis le cahier de textes…").font(.footnote).foregroundStyle(Theme.textSecondary)
+                }
+                .accessibilityElement(children: .combine)
+            }
+        }
+    }
 
     private var algorithm: some View {
         let value = current

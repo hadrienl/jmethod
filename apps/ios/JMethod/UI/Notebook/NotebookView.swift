@@ -2,14 +2,16 @@ import QuickLook
 import SwiftUI
 
 /// Cahier de textes en lecture seule (contenus de séance, devoirs, pièces jointes et liens), ouvert depuis Mes cours
-/// ou la fiche d'un cours. Rien n'est modifié dans Pronote. Les liens s'ouvrent dans le navigateur, les pièces jointes
-/// sont téléchargées dans le cache privé puis présentées par QuickLook.
+/// ou la fiche d'un cours. Rien n'est modifié dans Pronote. Chaque séance peut devenir un cours (« Créer un cours »,
+/// « Voir le cours »). Les liens s'ouvrent dans le navigateur intégré, les pièces jointes sont téléchargées dans le
+/// cache privé puis présentées par QuickLook.
 struct NotebookView: View {
     let app: AppModel
     @Bindable var model: NotebookModel
+    let importer: NotebookCourseImporter
     let subjectId: String?
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.openURL) private var openURL
+    @State private var webLink: WebLink?
 
     private var subjects: [Subject] { app.document.subjects }
     private var subjectName: String? { model.subjectId.flatMap { id in subjects.first { $0.id == id }?.name } }
@@ -31,7 +33,9 @@ struct NotebookView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.m) {
-                    Label("Lecture seule : rien n’est modifié dans Pronote et aucun cours n’est créé automatiquement.", systemImage: "lock")
+                    Label(app.document.settings.autoCreatesCourses
+                          ? "Lecture seule : rien n’est modifié dans Pronote. Tes séances deviennent des cours automatiquement."
+                          : "Lecture seule : rien n’est modifié dans Pronote. Chaque séance peut devenir un cours.", systemImage: "lock")
                         .font(.footnote).foregroundStyle(Theme.textSecondary)
                     if let subjectName {
                         Button { model.subjectId = nil } label: {
@@ -74,7 +78,14 @@ struct NotebookView: View {
                         .sensoryFeedback(.selection, trigger: model.tab)
                         if model.tab == .contents {
                             if sessions.isEmpty { empty("Aucun contenu de cours publié sur cette période.") }
-                            ForEach(sessions) { SessionCard(session: $0, model: model, openLink: open) }
+                            ForEach(sessions) { session in
+                                SessionCard(session: session, model: model, openLink: open,
+                                            state: NotebookCourses.state(of: session, imports: app.document.notebookImports, courses: app.document.courses),
+                                            preparing: importer.preparingSessionId == session.id,
+                                            busy: importer.preparingSessionId != nil || model.readSession == nil,
+                                            onCreate: { if let read = model.readSession { importer.prepare(session, readSession: read) } },
+                                            onShow: { app.presented = .course(courseId: $0) })
+                            }
                         } else {
                             if homework.isEmpty { empty("Aucun devoir publié sur cette période.") }
                             ForEach(homework) { HomeworkCard(item: $0, model: model, openLink: open) }
@@ -103,12 +114,15 @@ struct NotebookView: View {
         } message: {
             Text(model.message ?? "")
         }
+        .sheet(item: $webLink) { link in
+            SafariView(url: link.url).ignoresSafeArea()
+        }
         .onAppear { model.open(subjectId: subjectId) }
     }
 
     private func open(_ url: String) {
-        // Navigateur externe, sans les cookies de la session Pronote.
-        if let target = URL(string: url), NotebookRules.validLinkURL(url) != nil { openURL(target) }
+        // Navigateur intégré, sans les cookies de la session Pronote.
+        if let target = URL(string: url), NotebookRules.validLinkURL(url) != nil { webLink = WebLink(url: target) }
     }
 
     private func summary(_ snapshot: NotebookSnapshot) -> some View {
@@ -152,6 +166,11 @@ private struct SessionCard: View {
     let session: NotebookSession
     let model: NotebookModel
     let openLink: (String) -> Void
+    let state: NotebookCourses.ImportState
+    let preparing: Bool
+    let busy: Bool
+    let onCreate: () -> Void
+    let onShow: (String) -> Void
 
     var body: some View {
         NotebookCard {
@@ -175,6 +194,34 @@ private struct SessionCard: View {
                 }
                 .padding(.top, Spacing.xxs)
             }
+            Divider().padding(.vertical, Spacing.xxs)
+            courseAction
+        }
+    }
+
+    @ViewBuilder private var courseAction: some View {
+        switch state {
+        case .created(let courseId):
+            HStack(spacing: Spacing.s) {
+                Label("Cours créé", systemImage: "checkmark.circle.fill")
+                    .font(.footnote.weight(.semibold)).foregroundStyle(Theme.success)
+                Spacer(minLength: Spacing.xs)
+                Button("Voir le cours") { onShow(courseId) }
+                    .buttonStyle(TintedButtonStyle(fullWidth: false))
+                    .accessibilityLabel("Voir le cours créé depuis cette séance")
+            }
+        case .none, .dismissed:
+            Button(action: onCreate) {
+                HStack(spacing: Spacing.s) {
+                    if preparing { ProgressView() } else { Image(systemName: "plus.circle").accessibilityHidden(true) }
+                    Text(preparing ? "Préparation du cours…" : "Créer un cours")
+                    Spacer(minLength: 0)
+                }
+            }
+            .buttonStyle(TintedButtonStyle())
+            .disabled(busy)
+            .accessibilityLabel(preparing ? "Préparation du cours en cours" : "Créer un cours à partir de cette séance")
+            .accessibilityHint("Télécharge les documents, puis ouvre le formulaire prérempli")
         }
     }
 }

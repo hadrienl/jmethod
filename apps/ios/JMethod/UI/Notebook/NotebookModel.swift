@@ -39,6 +39,11 @@ final class NotebookModel {
 
     @ObservationIgnored private let pronote: PronoteSession
     @ObservationIgnored private var session: UUID?
+    /// Lecture réussie au premier plan (création automatique des cours si le réglage est actif).
+    @ObservationIgnored var onRead: ((NotebookRead) -> Void)?
+
+    /// Session Pronote de la lecture affichée (préparation d'un cours depuis une séance).
+    var readSession: UUID? { session }
     @ObservationIgnored private var scope: Int
     @ObservationIgnored private var reading: Task<Void, Never>?
     @ObservationIgnored private var downloading: Task<Void, Never>?
@@ -88,12 +93,42 @@ final class NotebookModel {
                 self.session = read.session
                 self.snapshot = read.snapshot
                 self.loading = false
+                self.onRead?(read)
             } catch {
                 guard !Task.isCancelled, expected == self.scope else { return }
                 self.loading = false
                 self.error = Self.text(for: error, fallback: "Lecture du cahier de textes impossible. Réessaie plus tard.")
             }
         }
+    }
+
+    /// Lecture discrète demandée par une fiche (§8.1) : seulement sans aperçu, au plus une tentative toutes les 5 min.
+    @ObservationIgnored private var lastEnsure: Date?
+
+    func ensureRead(now: Date = Date()) {
+        guard snapshot == nil, !loading else { return }
+        if let lastEnsure, now.timeIntervalSince(lastEnsure) < 5 * 60 { return }
+        lastEnsure = now
+        refresh()
+    }
+
+    /// Téléchargement pour une fiche (§8.1, §8.5) : fichier du cache privé rendu à l'appelant (visionneuse de la feuille
+    /// ou copie dans un cours), mêmes règles de taille et de session que le cahier.
+    func fetch(_ attachment: NotebookAttachment) async throws -> URL {
+        guard attachment.kind == .file, let session else { throw PronoteFailure(code: "download-unavailable", message: NotebookRules.downloadUnavailable) }
+        let expected = scope
+        let destination = NotebookCache.destination(for: attachment.name)
+        do {
+            try await pronote.downloadAttachment(attachment, session: session, to: destination)
+        } catch {
+            try? FileManager.default.removeItem(at: destination.deletingLastPathComponent())
+            throw error
+        }
+        guard !Task.isCancelled, expected == scope, expected == pronote.notebookScope else {
+            try? FileManager.default.removeItem(at: destination.deletingLastPathComponent())
+            throw CancellationError()
+        }
+        return destination
     }
 
     func download(_ attachment: NotebookAttachment) {
@@ -147,11 +182,13 @@ final class NotebookModel {
         )
         loading = false
         error = nil
+        // Session fictive : « Créer un cours » ouvre le formulaire (téléchargements refusés, signalés).
+        session = UUID()
     }
     #endif
 
     /// Les messages des erreurs Pronote sont fixes et sans donnée de session ; les autres restent génériques.
-    private static func text(for error: Error, fallback: String) -> String {
+    static func text(for error: Error, fallback: String) -> String {
         if let failure = error as? PronoteFailure {
             return failure.code.hasPrefix("pronote-") || failure.code.hasPrefix("http") ? fallback : failure.message
         }

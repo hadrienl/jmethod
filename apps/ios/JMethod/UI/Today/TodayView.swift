@@ -13,12 +13,15 @@ struct TodayView: View {
                 VStack(alignment: .leading, spacing: Spacing.l) {
                     if screen.allDoneBanner { AllDoneBanner() }
                     TodayHeader(date: screen.headerDate)
-                    HeroCard(hero: screen.hero) { if let revision = screen.hero.revision { app.presented = .score(revisionId: revision.id) } }
+                    HeroCard(hero: screen.hero, canReview: RevisionSession.hasDocuments(screen.hero.course),
+                             onStart: { if let revision = screen.hero.revision { app.presented = .score(revisionId: revision.id) } },
+                             onReview: { if let revision = screen.hero.revision { app.presented = .review(revisionId: revision.id) } })
                     ProgressCard(screen: screen)
                     PhaseGuide()
                     ProgrammeSection(screen: screen, hasCourses: !document.courses.isEmpty, onScore: { app.presented = .score(revisionId: $0.id) },
                                      onDetail: { app.presented = .revision(revisionId: $0.id) })
-                    TomorrowSection(screen: screen) { app.openAddCourse(from: $0) }
+                    TomorrowSection(screen: screen, courseFor: { RevisionSession.courseForSlot($0, courses: document.courses, subjects: document.subjects) },
+                                    onAddCourse: { app.openAddCourse(from: $0) }, onOpenCourse: { app.presented = .course(courseId: $0.id) })
                     Text("Pas besoin de tout apprendre en un jour. Juste un peu, chaque jour.")
                         .font(.footnote)
                         .foregroundStyle(Theme.textMuted)
@@ -70,7 +73,10 @@ private struct TodayHeader: View {
 
 private struct HeroCard: View {
     let hero: TodayScreen.Hero
+    /// Le cours a au moins un document : « Revoir le cours » ouvre le document principal dans la fiche (§8.3).
+    let canReview: Bool
     let onStart: () -> Void
+    let onReview: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s) {
@@ -106,6 +112,20 @@ private struct HeroCard: View {
                 }
                 .buttonStyle(.plain)
                 .padding(.top, Spacing.xs)
+                if canReview {
+                    Button(action: onReview) {
+                        Label("Revoir le cours", systemImage: "book")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, Spacing.l - 4)
+                            .padding(.vertical, Spacing.xs)
+                            .frame(minHeight: 44)
+                            .overlay(RoundedRectangle(cornerRadius: Radius.panel, style: .continuous).strokeBorder(.white.opacity(0.7), lineWidth: 1.5))
+                            .contentShape(RoundedRectangle(cornerRadius: Radius.panel, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Ouvre le document principal du cours")
+                }
             } else {
                 Text("Tes révisions pour demain sont à jour. Bonne soirée !")
                     .font(.callout)
@@ -262,6 +282,13 @@ private struct RevisionRow: View {
                 VStack(alignment: .leading, spacing: Spacing.xxs) {
                     FlowRow(spacing: Spacing.xs) {
                         Tag(text: row.badge, foreground: colors.text, background: colors.background)
+                        if RevisionSession.hasDocuments(row.course) {
+                            Image(systemName: "paperclip")
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(Theme.textSecondary)
+                                .padding(.vertical, Spacing.xxs)
+                                .accessibilityLabel("Documents du cours disponibles")
+                        }
                         if let done = row.doneLabel {
                             Label(done, systemImage: "checkmark")
                                 .font(.tagLabel)
@@ -279,7 +306,7 @@ private struct RevisionRow: View {
             }
             .buttonStyle(.plain)
             .accessibilityElement(children: .combine)
-            .accessibilityHint("Ouvre le détail de la séance")
+            .accessibilityHint("Ouvre la fiche de la séance : cours, documents et cahier de textes")
             if row.canValidate {
                 Button { onScore(row.revision) } label: {
                     HStack(spacing: Spacing.xs) {
@@ -298,7 +325,9 @@ private struct RevisionRow: View {
 
 private struct TomorrowSection: View {
     let screen: TodayScreen
+    let courseFor: (PronoteEvent) -> Course?
     let onAddCourse: (PronoteEvent) -> Void
+    let onOpenCourse: (Course) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s) {
@@ -309,7 +338,7 @@ private struct TomorrowSection: View {
             } else {
                 VStack(spacing: 0) {
                     ForEach(screen.tomorrowEvents) { item in
-                        TomorrowEventRow(item: item, onAddCourse: onAddCourse)
+                        TomorrowEventRow(item: item, course: courseFor(item.event), onAddCourse: onAddCourse, onOpenCourse: onOpenCourse)
                         if item.id != screen.tomorrowEvents.last?.id { Divider().padding(.leading, Spacing.m) }
                     }
                 }
@@ -324,7 +353,10 @@ private struct TomorrowSection: View {
 /// Créneau de demain : heure, matière, professeur et salle ; « Ajouter » compact à droite.
 private struct TomorrowEventRow: View {
     let item: TodayScreen.TomorrowEvent
+    /// Cours déjà créé pour cette matière et ce jour : « Voir le cours » au lieu d'« Ajouter ce cours » (§8.3).
+    let course: Course?
     let onAddCourse: (PronoteEvent) -> Void
+    let onOpenCourse: (Course) -> Void
     @Environment(\.dynamicTypeSize) private var typeSize
 
     private var time: String {
@@ -356,7 +388,13 @@ private struct TomorrowEventRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .combine)
-            if item.canAddCourse {
+            if let course {
+                Button { onOpenCourse(course) } label: {
+                    Text("Voir le cours")
+                }
+                .buttonStyle(TintedButtonStyle(fullWidth: false))
+                .accessibilityLabel("Voir le cours de \(item.subjectName) : \(course.title)")
+            } else if item.canAddCourse {
                 AddCourseFromSlotButton(subjectName: item.subjectName, compact: true) { onAddCourse(item.event) }
             }
         }

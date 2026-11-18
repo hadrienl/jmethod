@@ -35,8 +35,12 @@ final class AppModel {
     var courseDraft: CourseDraft
 
     enum Sheet: Identifiable, Equatable {
+        /// Fiche de séance (§8.1) ouverte directement sur « Faire le point ».
         case score(revisionId: String)
+        /// Fiche de séance (§8.1).
         case revision(revisionId: String)
+        /// Fiche de séance ouverte sur le document principal du cours (« Revoir le cours »).
+        case review(revisionId: String)
         case course(courseId: String)
         case addCourse
         /// Cahier de textes ; une matière J-Method le filtre (ouverture depuis la fiche d'un cours).
@@ -46,6 +50,7 @@ final class AppModel {
             switch self {
             case .score(let id): "score-\(id)"
             case .revision(let id): "revision-\(id)"
+            case .review(let id): "review-\(id)"
             case .course(let id): "course-\(id)"
             case .addCourse: "add-course"
             case .notebook(let id): "notebook-\(id ?? "all")"
@@ -54,6 +59,8 @@ final class AppModel {
     }
 
     @ObservationIgnored private let store: DocumentStore?
+    /// Fichiers des cours créés depuis le cahier de textes (Application Support, hors sauvegarde).
+    @ObservationIgnored let documentStore: CourseDocumentStore
     @ObservationIgnored private let now: () -> Date
     @ObservationIgnored private let preferences: UserDefaults
     @ObservationIgnored private var version = 0
@@ -67,8 +74,13 @@ final class AppModel {
         AppDocument(settings: Constants.defaultSettings, subjects: Constants.defaultSubjects, courses: [], revisions: [], pronoteEvents: [], initialized: true)
     }
 
-    init(store: DocumentStore?, now: @escaping () -> Date = Date.init, preferences: UserDefaults = .standard) {
+    /// Séance du cahier de textes en cours de transformation en cours (formulaire prérempli ouvert).
+    var notebookDraft: NotebookCourseDraft?
+
+    init(store: DocumentStore?, now: @escaping () -> Date = Date.init, preferences: UserDefaults = .standard,
+         documentStore: CourseDocumentStore = .live) {
         self.store = store
+        self.documentStore = documentStore
         self.now = now
         self.preferences = preferences
         let launchDay = SchoolDay.today(now: now())
@@ -115,6 +127,12 @@ final class AppModel {
             if let saved = try await store.load() {
                 document = saved
                 await migrateDemoDataIfNeeded(store: store)
+                // Clés du cahier de textes stables entre sessions Pronote (migration unique, idempotente).
+                let migrated = NotebookCourses.migratingKeys(document)
+                if migrated != document {
+                    document = migrated
+                    persist()
+                }
             } else {
                 document = Self.emptyDocument
                 persist()
@@ -196,6 +214,7 @@ final class AppModel {
 
     /// Ouvre le formulaire de création ; un créneau Pronote préremplit la matière, la date et le titre.
     func openAddCourse(from event: PronoteEvent? = nil) {
+        discardNotebookDraft()
         if let event {
             let prefill = CourseCreation.prefill(event: event, subjects: document.subjects)
             if let subjectId = prefill.subjectId { courseDraft.subjectId = subjectId }
@@ -215,29 +234,135 @@ final class AppModel {
     @discardableResult
     func createCourse() -> Bool {
         refreshDay()
-        let outcome: CourseCreation.Outcome?
+        let pending = notebookDraft
+        let created: (outcome: CourseCreation.Outcome, course: Course)?
         do {
-            outcome = try CourseCreation.create(courseDraft, courses: document.courses, revisions: document.revisions,
-                                                settings: document.settings, now: now())
+            created = try insertCourse(courseDraft, notebook: pending, documents: pending?.documents.filter(\.selected) ?? [])
         } catch {
             toast = .init(title: "Cours non créé", message: "La date du cours est invalide.", kind: .warning)
             return false
         }
-        guard let outcome else { return false }
-        document.courses = outcome.courses
-        document.revisions = outcome.revisions
-        persist()
-        toast = .init(title: outcome.toast.title, message: outcome.toast.message, kind: .success)
+        guard let created else { return false }
+        if pending != nil { discardNotebookDraft() }
+        toast = .init(title: created.outcome.toast.title, message: created.outcome.toast.message, kind: .success)
         return true
     }
 
-    /// Supprime le cours et toutes ses révisions ; les créneaux Pronote ne changent pas.
+    /// Création effective : cours, révisions initiales et, depuis une séance, source, documents et suivi d'import.
+    private func insertCourse(_ draft: CourseDraft, notebook: NotebookCourseDraft?, documents staged: [StagedDocument]) throws
+        -> (outcome: CourseCreation.Outcome, course: Course)? {
+        // Identifiant `course-<ms>` unique même pour plusieurs créations dans la même milliseconde.
+        var at = now()
+        while document.courses.contains(where: { $0.id == "course-\(AdaptiveAlgorithm.epochMilliseconds(at))" }) {
+            at = at.addingTimeInterval(0.001)
+        }
+        guard var outcome = try CourseCreation.create(draft, courses: document.courses, revisions: document.revisions,
+                                                      settings: document.settings, now: at) else { return nil }
+        var course = outcome.course
+        if let notebook {
+            course.source = notebook.source
+            var stored: [CourseDocument] = []
+            for item in staged.prefix(CourseDocumentStore.maximumDocuments) {
+                if let document = try? documentStore.store(item.url, name: item.name, mime: item.mime, courseId: course.id, extractedTitle: item.extractedTitle) {
+                    stored.append(document)
+                }
+            }
+            course.documents = stored.isEmpty ? nil : stored
+            outcome.courses[0] = course
+            outcome.course = course
+            document.notebookImports[notebook.source.sessionKey] = NotebookImport(status: .created, courseId: course.id, at: Self.isoString(now()))
+        }
+        document.courses = outcome.courses
+        document.revisions = outcome.revisions
+        persist()
+        return (outcome, course)
+    }
+
+    /// Création automatique (réglage) : un cours par séance, sans formulaire. Retourne l'identifiant du cours créé.
+    @discardableResult
+    func createCourseFromNotebook(_ draft: NotebookCourseDraft) -> String? {
+        try? insertCourse(draft.form, notebook: draft, documents: draft.documents)?.course.id
+    }
+
+    /// Formulaire prérempli depuis une séance du cahier de textes (documents déjà téléchargés).
+    func openAddCourse(fromNotebook draft: NotebookCourseDraft) {
+        discardNotebookDraft()
+        courseDraft = draft.form
+        notebookDraft = draft
+        presented = .addCourse
+    }
+
+    /// Formulaire fermé sans création : les fichiers préparés sont effacés.
+    func discardNotebookDraft() {
+        guard let draft = notebookDraft else { return }
+        notebookDraft = nil
+        draft.removeStagedFiles()
+    }
+
+    func setNotebookDocument(_ id: String, selected: Bool) {
+        guard let index = notebookDraft?.documents.firstIndex(where: { $0.id == id }) else { return }
+        notebookDraft?.documents[index].selected = selected
+    }
+
+    /// Supprime le cours, toutes ses révisions et ses fichiers ; une séance du cahier n'est plus jamais recréée
+    /// automatiquement (`dismissed`). Les créneaux Pronote ne changent pas.
     func deleteCourse(id: String) {
+        let removed = course(id: id)
         let result = CourseDeletion.apply(courseId: id, courses: document.courses, revisions: document.revisions)
         document.courses = result.courses
         document.revisions = result.revisions
+        if let removed {
+            documentStore.removeAll(courseId: removed.id)
+            if let key = removed.source?.sessionKey {
+                document.notebookImports[key] = NotebookImport(status: .dismissed, courseId: removed.id, at: Self.isoString(now()))
+            }
+        }
         persist()
         toast = .init(title: CourseDeletion.toastTitle, message: CourseDeletion.toastMessage, kind: .info)
+    }
+
+    // MARK: Cahier de textes et documents
+
+    func documentURL(_ document: CourseDocument) -> URL? { documentStore.url(for: document) }
+
+    func documentExists(_ document: CourseDocument) -> Bool { documentStore.exists(document) }
+
+    enum AttachFailure: LocalizedError, Equatable {
+        case courseMissing, full, alreadyAttached
+        var errorDescription: String? {
+            switch self {
+            case .courseMissing: "Ce cours n’existe plus."
+            case .full: "Ce cours a déjà \(CourseDocumentStore.maximumDocuments) documents."
+            case .alreadyAttached: "Ce document est déjà joint à ce cours."
+            }
+        }
+    }
+
+    /// « Joindre à ce cours » (§8.5) : copie le fichier dans les documents du cours (nouvel identifiant, même nom,
+    /// titre lu conservé). L'autre cours et le titre de ce cours ne changent pas.
+    func attachDocument(from source: URL, name: String, mime: String?, extractedTitle: String?, to courseId: String) throws {
+        guard let index = document.courses.firstIndex(where: { $0.id == courseId }) else { throw AttachFailure.courseMissing }
+        let existing = document.courses[index].documents ?? []
+        guard !existing.contains(where: { $0.name == name }) else { throw AttachFailure.alreadyAttached }
+        guard existing.count < CourseDocumentStore.maximumDocuments else { throw AttachFailure.full }
+        let stored = try documentStore.store(source, name: name, mime: mime, courseId: courseId, extractedTitle: extractedTitle)
+        document.courses[index].documents = existing + [stored]
+        persist()
+        toast = .init(title: "Document joint", message: "« \(name) » est maintenant dans ce cours.", kind: .success)
+    }
+
+    /// « Créer les cours automatiquement » : activation à partir d'aujourd'hui, ou désactivation.
+    func setNotebookAutoCreate(_ enabled: Bool) {
+        refreshDay()
+        document.settings.notebookAutoCreate = enabled
+        document.settings.notebookAutoCreateSince = enabled ? today : document.settings.notebookAutoCreateSince
+        persist()
+    }
+
+    /// Proposition des 14 derniers jours acceptée : les séances éligibles commencent à `since`.
+    func setNotebookAutoCreateSince(_ since: String) {
+        document.settings.notebookAutoCreateSince = since
+        persist()
     }
 
     // MARK: Réglages et sauvegarde
@@ -264,7 +389,8 @@ final class AppModel {
 
     /// Restauration confirmée : cours et séances remplacés, matières et réglages s'ils sont fournis, créneaux Pronote conservés.
     func restore(_ accepted: Backup.Accepted) {
-        document = accepted.apply(to: document)
+        // Une sauvegarde ancienne peut porter des clés du cahier au format périmé.
+        document = NotebookCourses.migratingKeys(accepted.apply(to: document))
         presented = nil
         persist()
         toast = .init(title: "Sauvegarde restaurée", message: "\(accepted.courses.count) cours et \(accepted.revisions.count) séance\(accepted.revisions.count > 1 ? "s" : "") importé\(accepted.revisions.count > 1 ? "s" : "").", kind: .success)

@@ -18,7 +18,43 @@ enum PreviewFixture {
         }
         let suite = UserDefaults(suiteName: "fr.jmethod.preview") ?? .standard
         suite.set(true, forKey: AppModel.demoMigrationKey)
-        return AppModel(store: DocumentStore(url: url), preferences: suite)
+        return AppModel(store: DocumentStore(url: url), preferences: suite, documentStore: documentStore())
+    }
+
+    /// Fichiers fictifs des cours, dans un dossier temporaire distinct (jamais le stockage de l'utilisateur).
+    private static let documentsRoot = FileManager.default.temporaryDirectory.appendingPathComponent("jmethod-preview-documents", isDirectory: true)
+
+    /// Fiche fictive présente ; le second document est absent pour montrer l'état « À retélécharger ».
+    private static let notebookDocuments: [CourseDocument] = [
+        CourseDocument(id: "fixture-doc-fiche", name: "Fiche - Fonctions affines.md", mime: "text/markdown", size: 0,
+                       file: "documents/fixture-maths-1/fixture-doc-fiche.md", extractedTitle: "Fonctions affines"),
+        CourseDocument(id: "fixture-doc-exercices", name: "Exercices.pdf", mime: "application/pdf", size: 48_213,
+                       file: "documents/fixture-maths-1/fixture-doc-exercices.pdf", extractedTitle: nil),
+    ]
+
+    private static let notebookSheet = """
+    # Fonctions affines
+
+    ## Définition
+
+    Une fonction affine s'écrit f(x) = ax + b.
+
+    - a est le coefficient directeur ;
+    - b est l'ordonnée à l'origine.
+
+    ## Lecture graphique
+
+    La représentation graphique d'une fonction affine est une droite.
+    """
+
+    private static func documentStore() -> CourseDocumentStore {
+        let store = CourseDocumentStore(root: documentsRoot)
+        try? FileManager.default.removeItem(at: documentsRoot)
+        if let fiche = store.url(for: notebookDocuments[0]) {
+            try? FileManager.default.createDirectory(at: fiche.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try? Data(notebookSheet.utf8).write(to: fiche, options: .atomic)
+        }
+        return store
     }
 
     private struct Seed {
@@ -57,8 +93,16 @@ enum PreviewFixture {
         var revisions: [Revision] = []
         for seed in seeds {
             let day = SchoolDay.adding(seed.offset, to: today) ?? today
-            let course = Course(id: seed.id, subjectId: seed.subjectId, chapter: seed.chapter, courseNumber: seed.number, title: seed.title,
+            var course = Course(id: seed.id, subjectId: seed.subjectId, chapter: seed.chapter, courseNumber: seed.number, title: seed.title,
                                 date: day, description: seed.notes, createdAt: day)
+            if seed.id == "fixture-maths-1" {
+                // Cours créé depuis le cahier de textes (fictif) : origine et documents dans la fiche.
+                let key = NotebookCourses.sessionKey(date: day, subject: "MATHEMATIQUES", ordinal: 1)
+                course.source = CourseSource(kind: CourseSource.notebookKind, sessionKey: key, subjectLabel: "MATHEMATIQUES", date: day, ordinal: 1)
+                var documents = notebookDocuments
+                documents[0].size = notebookSheet.utf8.count
+                course.documents = documents
+            }
             courses.append(course)
             var scores = seed.scores[...]
             let initial = (try? AdaptiveAlgorithm.initialRevisions(for: course, intervals: Constants.defaultIntervals)) ?? []
@@ -73,8 +117,12 @@ enum PreviewFixture {
                 revisions.append(revision)
             }
         }
-        return AppDocument(settings: settings(today: today), subjects: Constants.defaultSubjects, courses: courses,
-                           revisions: revisions, pronoteEvents: events(today: today), initialized: true)
+        var document = AppDocument(settings: settings(today: today), subjects: Constants.defaultSubjects, courses: courses,
+                                   revisions: revisions, pronoteEvents: events(today: today), initialized: true)
+        if let key = courses.first(where: { $0.id == "fixture-maths-1" })?.source?.sessionKey {
+            document.notebookImports[key] = NotebookImport(status: .created, courseId: "fixture-maths-1", at: AppModel.isoString(Date()))
+        }
+        return document
     }
 
     private static func settings(today: String) -> AppSettings {

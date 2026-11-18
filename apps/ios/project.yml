@@ -59,6 +59,12 @@ targets:
         buildPhase: resources
       - path: ../../native/shared/domain/constants.json
         buildPhase: resources
+      - path: ../../native/shared/notebook-course-vectors.json
+        buildPhase: resources
+      # Documents synthétiques (dossier copié tel quel dans le bundle de test, sous « documents »).
+      - path: ../../native/shared/documents
+        type: folder
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: fr.jmethod.app.tests

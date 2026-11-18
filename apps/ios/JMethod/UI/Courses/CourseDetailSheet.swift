@@ -1,14 +1,18 @@
 import SwiftUI
 
-/// Fiche d'un cours (`CourseDetailModal.tsx`) : progression, calendrier des J, validation, suppression confirmée.
+/// Fiche d'un cours (`CourseDetailModal.tsx`) : progression, contenu du cours (documents, documents proches, séance du
+/// cahier de textes, §8.4), calendrier des J, suppression confirmée. « Valider » ouvre la fiche de la séance (§8.1).
 struct CourseDetailSheet: View {
     let app: AppModel
+    let notebook: NotebookModel
+    let importer: NotebookCourseImporter
     let courseId: String
     @Environment(\.dismiss) private var dismiss
     @State private var confirmingDelete = false
+    @State private var path: [SheetRoute] = []
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             Group {
                 if let course = app.course(id: courseId) {
                     content(CourseDetail(course: course, subjects: app.document.subjects,
@@ -24,6 +28,7 @@ struct CourseDetailSheet: View {
             }
             .navigationTitle("Fiche du cours")
             .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(for: SheetRoute.self) { SheetDocumentView(app: app, route: $0) }
         }
         .presentationDragIndicator(.visible)
     }
@@ -67,14 +72,7 @@ struct CourseDetailSheet: View {
                 .panel(padding: Spacing.m)
                 .accessibilityElement(children: .combine)
 
-                if let notes = detail.notes, !notes.isEmpty {
-                    VStack(alignment: .leading, spacing: Spacing.xs) {
-                        Label("Notes de cours", systemImage: "note.text").font(.subheadline.weight(.semibold)).foregroundStyle(Theme.textSecondary)
-                            .accessibilityAddTraits(.isHeader)
-                        Text(notes).font(.subheadline).foregroundStyle(Theme.text)
-                    }
-                    .panel(padding: Spacing.m)
-                }
+                CourseMaterialSections(app: app, notebook: notebook, importer: importer, course: detail.course) { path.append($0) }
 
                 if let subject = detail.subject {
                     Button { app.presented = .notebook(subjectId: subject.id) } label: {
@@ -103,10 +101,10 @@ struct CourseDetailSheet: View {
                     if detail.timeline.isEmpty {
                         Text("Aucune séance programmée pour ce cours.").font(.subheadline).foregroundStyle(Theme.textSecondary)
                     }
-                    let nextId = detail.timeline.first { $0.state != .completed }?.id
+                    let nextId = RevisionSession.nextOfCourse(detail.course.id, revisions: app.document.revisions)?.id
                     VStack(spacing: 0) {
                         ForEach(detail.timeline) { item in
-                            TimelineRow(item: item, isNext: item.id == nextId) { app.presented = .score(revisionId: item.revision.id) }
+                            TimelineRow(item: item, isNext: item.id == nextId) { app.presented = .revision(revisionId: item.revision.id) }
                             if item.id != detail.timeline.last?.id { Divider().padding(.leading, 64) }
                         }
                     }

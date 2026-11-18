@@ -46,6 +46,7 @@ final class JMethodUITests: XCTestCase {
         let sheets: [(String, String)] = [
             ("score:fixture-maths-1-rev-4", "10-sheet-score"),
             ("revision:fixture-pc-1-rev-3", "11-sheet-revision"),
+            ("revision:fixture-maths-1-rev-4", "11b-sheet-revision-documents"),
             ("course:fixture-maths-1", "12-sheet-course"),
             ("addCourse", "13-sheet-add-course"),
             ("notebook", "14-sheet-notebook"),
@@ -75,8 +76,73 @@ final class JMethodUITests: XCTestCase {
         capture(app, "16-score-selected")
         scrollTo(validate, in: app)
         validate.tap()
-        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10))
+        // §8.2 : le résultat reste dans la feuille, avec la séance suivante du programme du soir.
+        let next = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Séance suivante")).firstMatch
+        XCTAssertTrue(next.waitForExistence(timeout: 10), "« Séance suivante » absent après la validation")
+        XCTAssertTrue(app.buttons["Revenir à Aujourd’hui"].firstMatch.exists)
         capture(app, "17-after-validation")
+        next.tap()
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Faire le point")).firstMatch.waitForExistence(timeout: 10),
+                      "fiche de la séance suivante absente")
+        capture(app, "18-next-session")
+    }
+
+    /// Fiche de séance (§8.1, §8.5) : cours sans document, documents proches de la même matière, « Joindre à ce cours ».
+    func testRevisionSessionSheet() {
+        let app = launch(["-JMethodPreviewSheet", "revision:fixture-maths-2-rev-1"])
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Faire le point")).firstMatch.waitForExistence(timeout: 10),
+                      "« Faire le point » toujours visible")
+        XCTAssertTrue(app.staticTexts["Aucun document pour ce cours."].firstMatch.exists)
+        let attach = app.buttons["Joindre Fiche - Fonctions affines.md à ce cours"].firstMatch
+        XCTAssertTrue(attach.waitForExistence(timeout: 5), "documents proches absents")
+        scrollTo(attach, in: app)
+        captureScrolling(app, "19-session-sheet")
+        attach.tap()
+        XCTAssertTrue(app.buttons["Revoir le cours"].firstMatch.waitForExistence(timeout: 5), "document joint absent du cours")
+        app.buttons["Revoir le cours"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["Ouvrir avec une autre app ou partager"].firstMatch.waitForExistence(timeout: 10), "visionneuse absente")
+        capture(app, "20-session-document")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(app.navigationBars["Réviser"].waitForExistence(timeout: 5), "retour à la fiche")
+    }
+
+    /// « Revoir le cours » : la fiche s'ouvre directement sur le document principal.
+    func testReviewOpensPrincipalDocument() {
+        let app = launch(["-JMethodPreviewSheet", "review:fixture-maths-1-rev-4"])
+        XCTAssertTrue(app.buttons["Ouvrir avec une autre app ou partager"].firstMatch.waitForExistence(timeout: 10), "document principal absent")
+        XCTAssertTrue(app.staticTexts["Lecture graphique"].firstMatch.waitForExistence(timeout: 5))
+        capture(app, "21-review-document")
+    }
+
+    /// Cahier de textes : « Créer un cours » sur une séance ouvre le formulaire prérempli (documents non téléchargeables
+    /// dans l'aperçu : message affiché).
+    func testNotebookCreateCourse() {
+        let app = launch(["-JMethodPreviewSheet", "notebook"])
+        let create = app.buttons["Créer un cours à partir de cette séance"].firstMatch
+        XCTAssertTrue(create.waitForExistence(timeout: 10), "bouton « Créer un cours » absent")
+        capture(app, "40-notebook-create-button")
+        scrollTo(create, in: app)
+        create.tap()
+        XCTAssertTrue(app.navigationBars["Nouveau cours"].waitForExistence(timeout: 15), "formulaire prérempli absent")
+        let title = app.textFields["course-title"].firstMatch
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        XCTAssertEqual(title.value as? String, "Fonctions affines")
+        captureScrolling(app, "41-notebook-prefilled-form")
+    }
+
+    /// Fiche d'un cours issu du cahier de textes : section « Documents » (fichier présent, fichier à retélécharger),
+    /// puis visionneuse intégrée (vue « Lecture » d'une fiche Markdown fictive).
+    func testCourseDocuments() {
+        let app = launch(["-JMethodPreviewSheet", "course:fixture-maths-1"])
+        let fiche = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Fiche - Fonctions affines")).firstMatch
+        XCTAssertTrue(fiche.waitForExistence(timeout: 10), "document de la fiche absent")
+        scrollTo(fiche, in: app)
+        XCTAssertTrue(app.staticTexts["À retélécharger"].firstMatch.exists, "document manquant non signalé")
+        capture(app, "42-course-documents")
+        fiche.tap()
+        XCTAssertTrue(app.buttons["Ouvrir avec une autre app ou partager"].firstMatch.waitForExistence(timeout: 10), "visionneuse absente")
+        XCTAssertTrue(app.staticTexts["Lecture graphique"].firstMatch.waitForExistence(timeout: 5), "texte de la fiche absent")
+        capture(app, "43-document-viewer")
     }
 
     func testSignIn() {

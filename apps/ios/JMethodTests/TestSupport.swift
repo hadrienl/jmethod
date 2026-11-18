@@ -7,7 +7,12 @@ enum SharedVectors {
     static func url(_ name: String, subdirectory: String?) throws -> URL {
         let base = (name as NSString).deletingPathExtension
         let ext = (name as NSString).pathExtension
-        if let bundled = Bundle(for: BundleToken.self).url(forResource: base, withExtension: ext) { return bundled }
+        // Fichiers isolés copiés à la racine du bundle ; dossiers (`documents/`) copiés tels quels.
+        let bundle = Bundle(for: BundleToken.self)
+        if let bundled = bundle.url(forResource: base, withExtension: ext, subdirectory: subdirectory)
+            ?? bundle.url(forResource: base, withExtension: ext) {
+            return bundled
+        }
         var root = URL(fileURLWithPath: #filePath)
         for _ in 0..<4 { root.deleteLastPathComponent() }
         var url = root.appendingPathComponent("native/shared")
@@ -17,6 +22,22 @@ enum SharedVectors {
             throw XCTSkip("Vecteurs partagés introuvables : native/shared/\(subdirectory.map { $0 + "/" } ?? "")\(name)")
         }
         return url
+    }
+
+    /// Dossier des documents synthétiques (`native/shared/documents/files`), copié dans le bundle de test :
+    /// le simulateur ne lit pas les fichiers du dépôt.
+    static func documentsDirectory() throws -> URL {
+        var candidates: [URL] = []
+        if let resources = Bundle(for: BundleToken.self).resourceURL {
+            candidates.append(resources.appendingPathComponent("documents/files"))
+        }
+        var root = URL(fileURLWithPath: #filePath)
+        for _ in 0..<4 { root.deleteLastPathComponent() }
+        candidates.append(root.appendingPathComponent("native/shared/documents/files"))
+        guard let found = candidates.first(where: { FileManager.default.isReadableFile(atPath: $0.appendingPathComponent("fiche.md").path) }) else {
+            throw XCTSkip("Documents synthétiques introuvables : native/shared/documents/files")
+        }
+        return found
     }
 
     static func object(_ name: String, subdirectory: String? = nil) throws -> [String: Any] {

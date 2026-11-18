@@ -23,6 +23,10 @@ struct AddCourseSheet: View {
                     Text("J-Method programme automatiquement \(milestones > 1 ? "les \(milestones) échéances" : "l’échéance") de révision de ce cours.")
                         .font(.subheadline).foregroundStyle(Theme.textSecondary)
 
+                    if let notebook = app.notebookDraft {
+                        notebookSection(notebook)
+                    }
+
                     section("Matière") {
                         if app.document.subjects.isEmpty {
                             Text("Aucune matière disponible.").font(.subheadline).foregroundStyle(Theme.danger)
@@ -122,6 +126,7 @@ struct AddCourseSheet: View {
                 .background(.bar)
                 .overlay(alignment: .top) { Divider() }
             }
+            .onDisappear { app.discardNotebookDraft() }
             .navigationTitle("Nouveau cours")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -130,6 +135,42 @@ struct AddCourseSheet: View {
                 }
             }
         }
+    }
+
+    /// Séance du cahier de textes : documents joints cochés par défaut, fichiers non téléchargés signalés.
+    private func notebookSection(_ notebook: NotebookCourseDraft) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            Label("Depuis le cahier de textes : séance de \(notebook.source.subjectLabel) du \(FrenchDate.format(notebook.source.date, "d MMMM"))",
+                  systemImage: "text.book.closed")
+                .font(.footnote.weight(.semibold)).foregroundStyle(Theme.violetDark)
+            if !notebook.documents.isEmpty {
+                Text("Documents joints").font(.subheadline.weight(.semibold)).foregroundStyle(Theme.text)
+                    .accessibilityAddTraits(.isHeader)
+                ForEach(notebook.documents) { item in
+                    Toggle(isOn: Binding(get: { item.selected }, set: { app.setNotebookDocument(item.id, selected: $0) })) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(item.name).font(.subheadline).foregroundStyle(Theme.text).lineLimit(2)
+                            Text("\(item.kind.label) · \(ByteCountFormatter.string(fromByteCount: Int64(item.size), countStyle: .file))")
+                                .font(.caption).foregroundStyle(Theme.textSecondary)
+                        }
+                    }
+                    .tint(Theme.violet)
+                    .frame(minHeight: 44)
+                }
+            }
+            if !notebook.failedFiles.isEmpty {
+                Label(notebook.failedFiles.count > 1
+                      ? "\(notebook.failedFiles.count) documents n’ont pas pu être téléchargés : \(notebook.failedFiles.joined(separator: ", ")). Tu pourras les ouvrir depuis le cahier de textes."
+                      : "Le document « \(notebook.failedFiles[0]) » n’a pas pu être téléchargé. Tu pourras l’ouvrir depuis le cahier de textes.",
+                      systemImage: "exclamationmark.triangle")
+                    .font(.footnote).foregroundStyle(Theme.warning)
+            }
+            if notebook.skippedFiles > 0 {
+                Text("Au-delà de 10 documents, les suivants restent consultables dans le cahier de textes.")
+                    .font(.footnote).foregroundStyle(Theme.textSecondary)
+            }
+        }
+        .panel(padding: Spacing.m, fill: Theme.violetSoft)
     }
 
     private var dateBinding: Binding<Date> {

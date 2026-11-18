@@ -30,12 +30,16 @@ struct NotebookContent: Equatable, Sendable {
 }
 
 struct NotebookSession: Equatable, Sendable, Identifiable {
+    /// `N` Pronote : change à chaque session Pronote, jamais utilisé comme clé persistante.
     var id: String
     var lessonId: String
     /// `yyyy-MM-dd`
     var date: String
     var subject: String
     var contents: [NotebookContent]
+    /// Rang (à partir de 1) parmi les séances du même instantané de même date et même matière normalisée,
+    /// dans l'ordre de la réponse (`NotebookCourses.assigningOrdinals`).
+    var ordinal: Int = 1
 }
 
 struct NotebookHomework: Equatable, Sendable, Identifiable {
@@ -508,7 +512,9 @@ enum NotebookRules {
             ))
         }
         // Tris stables : séances par date décroissante, devoirs par échéance croissante.
-        let sortedSessions = sessions.enumerated().sorted { $0.element.date != $1.element.date ? $0.element.date > $1.element.date : $0.offset < $1.offset }.map(\.element)
+        let sortedSessions = NotebookCourses.assigningOrdinals(
+            sessions.enumerated().sorted { $0.element.date != $1.element.date ? $0.element.date > $1.element.date : $0.offset < $1.offset }.map(\.element)
+        )
         let sortedTasks = tasks.enumerated().sorted { $0.element.dueDate != $1.element.dueDate ? $0.element.dueDate < $1.element.dueDate : $0.offset < $1.offset }.map(\.element)
         let count = sortedSessions.reduce(0) { $0 + $1.contents.reduce(0) { $0 + $1.attachments.count } } + sortedTasks.reduce(0) { $0 + $1.attachments.count }
         return NotebookSnapshot(from: window.from, to: window.to, sessions: sortedSessions, homework: sortedTasks,

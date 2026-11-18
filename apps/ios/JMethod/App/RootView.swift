@@ -4,6 +4,7 @@ struct RootView: View {
     let app: AppModel
     let pronote: PronoteSession
     let notebook: NotebookModel
+    let importer: NotebookCourseImporter
     @Environment(\.scenePhase) private var scenePhase
     @State private var tab: Tab = .today
 
@@ -68,11 +69,16 @@ struct RootView: View {
             if new == .signedOut { app.presented = nil }
         }
         .onChange(of: pronote.notebookScope) { _, _ in notebook.scopeChanged() }
+        .onChange(of: app.document.settings.lastPronoteSync) { _, synced in
+            // Création automatique des cours : après une synchronisation réussie au premier plan seulement.
+            guard synced != nil, scenePhase == .active else { return }
+            Task { await importer.afterForegroundSync() }
+        }
     }
 
     #if DEBUG
     /// Vérification visuelle (Debug) : `-JMethodPreviewTab planning|courses|stats|settings`,
-    /// `-JMethodPreviewSheet addCourse|course:<id>|revision:<id>|score:<id>|notebook[:<id>]` ;
+    /// `-JMethodPreviewSheet addCourse|course:<id>|revision:<id>|score:<id>|review:<id>|notebook[:<id>]` ;
     /// `-JMethodPreviewFixture` charge un document fictif (`PreviewFixture`), `-JMethodPreviewSignIn` l'écran de connexion vide.
     private func applyPreviewArguments() {
         let defaults = UserDefaults.standard
@@ -90,6 +96,7 @@ struct RootView: View {
         case ("course", let id): app.presented = .course(courseId: id)
         case ("revision", let id): app.presented = .revision(revisionId: id)
         case ("score", let id): app.presented = .score(revisionId: id)
+        case ("review", let id): app.presented = .review(revisionId: id)
         case ("notebook", let id):
             notebook.loadPreview(today: app.today)
             app.presented = .notebook(subjectId: id.isEmpty ? nil : id)
@@ -131,17 +138,18 @@ struct RootView: View {
                     StatsView(app: app)
                         .tabItem { Label { Text("Progrès").accessibilityLabel("Mes progrès") } icon: { Image(systemName: "chart.bar") } }
                         .tag(Tab.stats)
-                    SettingsView(app: app, pronote: pronote)
+                    SettingsView(app: app, pronote: pronote, importer: importer)
                         .tabItem { Label("Réglages", systemImage: "gearshape") }
                         .tag(Tab.settings)
                 }
                 .sheet(item: Binding(get: { app.presented }, set: { app.presented = $0 })) { sheet in
                     switch sheet {
-                    case .score(let id): ScoreSheet(app: app, revisionId: id)
-                    case .revision(let id): RevisionDetailSheet(app: app, revisionId: id)
-                    case .course(let id): CourseDetailSheet(app: app, courseId: id)
+                    case .score(let id): RevisionSessionSheet(app: app, notebook: notebook, importer: importer, revisionId: id, start: .score)
+                    case .revision(let id): RevisionSessionSheet(app: app, notebook: notebook, importer: importer, revisionId: id)
+                    case .review(let id): RevisionSessionSheet(app: app, notebook: notebook, importer: importer, revisionId: id, start: .review)
+                    case .course(let id): CourseDetailSheet(app: app, notebook: notebook, importer: importer, courseId: id)
                     case .addCourse: AddCourseSheet(app: app)
-                    case .notebook(let subjectId): NotebookView(app: app, model: notebook, subjectId: subjectId)
+                    case .notebook(let subjectId): NotebookView(app: app, model: notebook, importer: importer, subjectId: subjectId)
                     }
                 }
             }
