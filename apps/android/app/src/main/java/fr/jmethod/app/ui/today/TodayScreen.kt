@@ -22,6 +22,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -96,43 +103,41 @@ fun TodayScreen(
     onViewCourse: (String) -> Unit = {},
 ) {
     val model = state.model
+    var programmeOpen by rememberSaveable { mutableStateOf(false) }
     LazyColumn(
         contentPadding = screenPadding(contentPadding, 24.dp),
         verticalArrangement = Arrangement.spacedBy(JSpacing.l),
     ) {
-        if (model.allDoneBanner) item(key = "done") { AllDoneBanner() }
         item(key = "header") { Header(model) }
         val hasCourses = state.document.courses.isNotEmpty()
         item(key = "hero") { Hero(model, hasCourses, onScore, onReview) }
-        if (hasCourses) item(key = "progress") { Progress(model) }
-        item(key = "phases") { PhaseLegend() }
-        item(key = "programme") { ProgrammeHeader(model) }
-        if (model.overdueBanner != null) {
-            item(key = "overdue") {
-                Text(
-                    model.overdueBanner,
-                    color = JColors.Amber900,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.fillMaxWidth().clip(JShapes.inner).background(JColors.Amber50).padding(JSpacing.l),
-                )
-            }
-        }
-        if (model.emptyProgramme) {
-            item(key = "empty") { EmptyProgramme(hasCourses) }
-        } else {
-            items(model.groups, key = { "group-" + it.subject.id }) { group -> SubjectGroup(group, onScore, onDetail) }
-        }
+        // Aujourd’hui montre seulement la carte pour démarrer et enchaîner, puis l’emploi du temps de demain ;
+        // le détail du programme est replié par défaut.
         item(key = "tomorrow") {
             TomorrowClasses(model, onViewCourse) { id -> state.document.pronoteEvents.firstOrNull { it.id == id }?.let(onAddCourse) }
         }
-        item(key = "footer") {
-            Text(
-                "Pas besoin de tout apprendre en un jour. Juste un peu, chaque jour.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = JColors.Slate500,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
-            )
+        item(key = "programme") {
+            ProgrammeHeader(model, expanded = programmeOpen, onToggle = { programmeOpen = !programmeOpen })
+        }
+        if (programmeOpen) {
+            if (model.allDoneBanner) item(key = "done") { AllDoneBanner() }
+            if (hasCourses) item(key = "progress") { Progress(model) }
+            item(key = "phases") { PhaseLegend() }
+            if (model.overdueBanner != null) {
+                item(key = "overdue") {
+                    Text(
+                        model.overdueBanner,
+                        color = JColors.Amber900,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.fillMaxWidth().clip(JShapes.inner).background(JColors.Amber50).padding(JSpacing.l),
+                    )
+                }
+            }
+            if (model.emptyProgramme) {
+                item(key = "empty") { EmptyProgramme(hasCourses) }
+            } else {
+                items(model.groups, key = { "group-" + it.subject.id }) { group -> SubjectGroup(group, onScore, onDetail) }
+            }
         }
     }
 }
@@ -305,11 +310,26 @@ private fun PhaseLegend() {
 }
 
 @Composable
-private fun ProgrammeHeader(model: TodayModel) {
-    Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.semantics(mergeDescendants = true) { heading() }) {
-        Text("Dans ton programme", style = MaterialTheme.typography.titleLarge)
+private fun ProgrammeHeader(model: TodayModel, expanded: Boolean, onToggle: () -> Unit) {
+    val summary = if (model.emptyProgramme) "Tout est fait" else model.dueLabel
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(JShapes.inner)
+            .clickable(role = Role.Button, onClickLabel = if (expanded) "Masquer le détail du programme" else "Afficher le détail du programme", onClick = onToggle)
+            .semantics(mergeDescendants = true) {
+                heading()
+                stateDescription = if (expanded) "déplié" else "replié"
+            }
+            .padding(vertical = JSpacing.s),
+    ) {
+        Text("Dans ton programme", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f, fill = false))
         Spacer(Modifier.width(8.dp))
-        Text(model.dueLabel, style = MaterialTheme.typography.bodyMedium, color = JColors.Slate500, modifier = Modifier.padding(bottom = 2.dp))
+        Text(summary, style = MaterialTheme.typography.bodyMedium, color = JColors.Slate500, modifier = Modifier.weight(1f))
+        Icon(
+            if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+            contentDescription = null,
+            tint = JColors.Slate600,
+        )
     }
 }
 
@@ -321,9 +341,9 @@ private fun EmptyProgramme(hasCourses: Boolean) {
             tint = JColors.Emerald700,
             title = if (hasCourses) "Tout est à jour" else "Ton programme est vide",
             message = if (hasCourses) {
-                "Aucune séance à faire pour l’instant. Tu peux ajouter un cours depuis ton emploi du temps ci-dessous."
+                "Aucune séance à faire pour l’instant. Tu peux ajouter un cours depuis ton emploi du temps ci-dessus."
             } else {
-                "Ajoute un cours depuis ton emploi du temps ci-dessous : ses séances apparaîtront ici."
+                "Ajoute un cours depuis ton emploi du temps ci-dessus : ses séances apparaîtront ici."
             },
         )
     }
