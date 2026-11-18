@@ -107,3 +107,41 @@ object SealedData {
         false
     }
 }
+
+/**
+ * Expiration de session (`protocol-reference.md`, « Session expiry ») : une seule règle pour la
+ * synchronisation, le cahier de textes, le changement d’enfant, les pièces jointes et l’arrière-plan.
+ */
+object PronoteSessionRules {
+    /** Comme pronotepy : au-delà de 10 minutes d’inactivité, reconnexion par jeton avant d’appeler. */
+    val IDLE_LIMIT: Duration = Duration.ofMinutes(10)
+
+    /** Codes d’erreur qui signifient une session perdue sur une session établie. */
+    private val LOST = setOf("http", "format", "crypto", "compression")
+
+    /**
+     * Toute erreur Pronote (`Erreur.G`) sauf 25, un statut HTTP inattendu, une réponse non JSON ou
+     * indéchiffrable : la session est perdue. Le réseau (IOException) et l’erreur 25 n’en sont pas.
+     */
+    fun isSessionLost(error: Throwable): Boolean = when (error) {
+        is PronoteException -> (error.code.startsWith("pronote-") && error.code != PronoteThrottle.BLOCKED_CODE) || error.code in LOST
+        is JSONException -> true
+        else -> false
+    }
+
+    /**
+     * Exécute [read] sur une session établie : reconnexion préventive si elle est inactive depuis plus
+     * de 10 minutes, puis, si la session s’avère perdue, une seule reconnexion par jeton et un seul rejeu.
+     * Un second échec est remonté tel quel.
+     */
+    fun <T> run(client: PronoteClient, now: Instant, relogin: () -> Unit, read: () -> T): T {
+        if (client.isIdle(now)) relogin()
+        return try {
+            read()
+        } catch (error: Exception) {
+            if (!isSessionLost(error)) throw error
+            relogin()
+            read()
+        }
+    }
+}

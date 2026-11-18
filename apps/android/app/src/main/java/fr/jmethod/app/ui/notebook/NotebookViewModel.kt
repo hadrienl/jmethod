@@ -138,7 +138,12 @@ class NotebookViewModel(
                     File(notebookDir(), UUID.randomUUID().toString()).apply { mkdirs() }.let { File(it, NotebookRules.saveAsName(attachment.rawName)) }
                 }
                 // Nom brut `L` (même vide) pour l’adresse FichiersExternes, comme pronotepy.
-                controller.downloadAttachment(session, attachment.id, attachment.rawName, target)
+                val reread = controller.downloadAttachment(session, attachment.id, attachment.rawName, target)
+                if (reread != null && generation == resetCount) {
+                    // Session renouvelée avant le téléchargement : l’aperçu reprend les identifiants à jour.
+                    stamp = reread.stamp
+                    state.update { it.copy(snapshot = reread.snapshot) }
+                }
                 if (generation != resetCount) {
                     withContext(Dispatchers.IO) { target.parentFile?.deleteRecursively() }
                     return@launch

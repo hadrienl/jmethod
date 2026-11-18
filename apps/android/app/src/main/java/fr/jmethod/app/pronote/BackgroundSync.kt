@@ -50,11 +50,18 @@ class BackgroundSync(
             // Non annulable : un arrêt du worker n’interrompt pas l’échange en cours, et le jeton
             // renouvelé par Pronote est toujours enregistré avant la fin.
             val lessons = withContext(io + NonCancellable) {
-                val client = PronoteClient(transport, credentials, save)
+                val client = PronoteClient(transport, credentials, save, now)
                 client.login(PronoteClient.Mode.TOKEN)
-                val child = vault.selectedChildId()
-                if (child != null && client.children.any { it.id == child }) client.selectChild(child)
-                client.timetable(today(), 14)
+                // Même règle qu’au premier plan : session perdue (erreur 8, réponse illisible…) ⇒ une
+                // reconnexion par jeton avec le jeton le plus récent, puis un seul rejeu.
+                PronoteSessionRules.run(client, now(), relogin = {
+                    vault.load()?.let { client.useCredentials(it) }
+                    client.login(PronoteClient.Mode.TOKEN)
+                }) {
+                    val child = vault.selectedChildId()
+                    if (child != null && client.children.any { it.id == child }) client.selectChild(child)
+                    client.timetable(today(), 14)
+                }
             }
             if (epoch != guard.epoch.get()) return@withLock Result.NO_SESSION
             storeLessons(lessons) { epoch == guard.epoch.get() }

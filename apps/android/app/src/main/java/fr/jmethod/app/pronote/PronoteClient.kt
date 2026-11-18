@@ -121,6 +121,8 @@ class PronoteClient(
     private val transport: PronoteTransport,
     credentials: Credentials,
     private val save: (Credentials) -> Unit = {},
+    /** Horloge du contrôle d’inactivité (injectée par les tests). */
+    private val clock: () -> java.time.Instant = { java.time.Instant.now() },
 ) {
     enum class Mode { QR, TOKEN }
 
@@ -135,6 +137,14 @@ class PronoteClient(
     private var compressed = false
     private var encrypted = false
     private val cookies = linkedMapOf<String, String>()
+    /** Instant du dernier appel réussi ; `null` avant la première connexion. */
+    @Volatile
+    var lastCallAt: java.time.Instant? = null
+        private set
+
+    /** Session inactive depuis plus de [limit] (ou jamais établie) : reconnexion par jeton avant d’appeler. */
+    fun isIdle(now: java.time.Instant, limit: java.time.Duration = PronoteSessionRules.IDLE_LIMIT): Boolean =
+        lastCallAt?.let { java.time.Duration.between(it, now) > limit } ?: true
     private val origin = PronotePolicy.originOf(credentials.url)
     private val root = credentials.url.substringBefore('?').substringBeforeLast('/')
 
@@ -197,21 +207,34 @@ class PronoteClient(
         val number = PronoteCrypto.hex(PronoteCrypto.encrypt(order.toString().toByteArray(UTF_8), key, iv))
         val session = attributes.getLong("h")
         val envelope = JSONObject().put("session", session).put("no", number).put("id", function).put("dataSec", secured)
-        val response = JSONObject(request("POST", "$root/appelfonction/${attributes.getInt("a")}/$session/$number", envelope.toString()).body)
+        val body = request("POST", "$root/appelfonction/${attributes.getInt("a")}/$session/$number", envelope.toString()).body
+        // Réponse non JSON (page HTML d’erreur, session perdue) : erreur typée, jamais de détail du contenu.
+        val response = try {
+            JSONObject(body)
+        } catch (_: org.json.JSONException) {
+            throw PronoteException("format", "Réponse Pronote inattendue.")
+        }
         order += 2
         if (response.has("Erreur")) {
             val code = response.optJSONObject("Erreur")?.optInt("G") ?: 0
             throw PronoteException("pronote-$code", "Pronote a refusé la requête. Réessaie plus tard sans multiplier les essais.")
         }
         if (nextIv != null) iv = nextIv
-        val raw = response.get("dataSec")
-        val decoded = when {
-            encrypted && compressed -> String(PronoteCrypto.inflate(PronoteCrypto.decrypt(PronoteCrypto.unhex(raw as String), key, iv)), UTF_8)
-            encrypted -> String(PronoteCrypto.decrypt(PronoteCrypto.unhex(raw as String), key, iv), UTF_8)
-            compressed -> String(PronoteCrypto.inflate(PronoteCrypto.unhex(raw as String)), UTF_8)
-            else -> raw.toString()
+        val section = try {
+            val raw = response.get("dataSec")
+            val decoded = when {
+                encrypted && compressed -> String(PronoteCrypto.inflate(PronoteCrypto.decrypt(PronoteCrypto.unhex(raw as String), key, iv)), UTF_8)
+                encrypted -> String(PronoteCrypto.decrypt(PronoteCrypto.unhex(raw as String), key, iv), UTF_8)
+                compressed -> String(PronoteCrypto.inflate(PronoteCrypto.unhex(raw as String)), UTF_8)
+                else -> raw.toString()
+            }
+            JSONObject(decoded)
+        } catch (error: PronoteException) {
+            throw error
+        } catch (_: Exception) {
+            throw PronoteException("format", "Réponse Pronote inattendue.")
         }
-        val section = JSONObject(decoded)
+        lastCallAt = clock()
         return section.optJSONObject("data") ?: section
     }
 
@@ -222,6 +245,9 @@ class PronoteClient(
 
     fun login(mode: Mode = Mode.TOKEN) {
         sessionStamp = Any()
+        // Reconnexion depuis un état propre : cookies, compteur, clé et IV de la session précédente oubliés.
+        cookies.clear()
+        lastCallAt = null
         order = 1
         key = PronoteCrypto.md5(byteArrayOf())
         iv = PronoteCrypto.zeroIv

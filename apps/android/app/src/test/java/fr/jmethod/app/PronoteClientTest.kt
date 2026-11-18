@@ -24,7 +24,7 @@ class PronoteClientTest {
     fun qrLoginOnSecuredAccountReconnectsWithRotatedToken() {
         val server = FakePronoteServer(token = "jeton-qr", secureMode = 1)
         val saved = mutableListOf<Pair<String, List<String>>>()
-        val client = PronoteClient(server.transport, qrCredentials(server)) { saved += it.password to server.calls.toList() }
+        val client = PronoteClient(server.transport, qrCredentials(server), save = { saved += it.password to server.calls.toList() })
         client.login(PronoteClient.Mode.QR)
         // Première connexion (QR) puis seconde connexion par jeton imposée par securisation.mode.
         assertEquals(2, server.calls.count { it == "Authentification" })

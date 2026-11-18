@@ -511,7 +511,7 @@ class PronoteConnectionController(
                 val connection = guard.mutex.withLock {
                     withContext(io) {
                         val credentials = PronotePolicy.credentialsFromQr(decodeQr(image), code, appUuid(), origin)
-                        PronoteClient(binding.transport, credentials, binding.save).also { it.login(PronoteClient.Mode.QR) }
+                        PronoteClient(binding.transport, credentials, binding.save, now).also { it.login(PronoteClient.Mode.QR) }
                     }
                 }
                 if (attempt != generation.get()) return@launch
@@ -581,7 +581,7 @@ class PronoteConnectionController(
                     // Une fois partie, la connexion par jeton va jusqu’à l’enregistrement du jeton renouvelé
                     // (« Ouvrir sans attendre », retour ou fin du ViewModel ne la coupent pas).
                     withContext(io + NonCancellable) {
-                        PronoteClient(binding.transport, credentials, binding.save).also { loginByToken(binding, it) }
+                        PronoteClient(binding.transport, credentials, binding.save, now).also { loginByToken(binding, it) }
                     }
                 }
                 if (attempt != generation.get()) return@launch
@@ -717,15 +717,7 @@ class PronoteConnectionController(
             val lessons = guard.mutex.withLock {
                 withContext(io) {
                     val wanted = childId ?: synchronized(guard.vaultLock) { vault.selectedChildId() }
-                    try {
-                        read(connection, wanted)
-                    } catch (error: PronoteException) {
-                        // Session Pronote expirée : une seule reconnexion par jeton, avec le jeton le plus récent.
-                        if (error.code !in setOf("pronote-10", "pronote-22", "http")) throw error
-                        vault.load()?.let { connection.useCredentials(it) }
-                        loginByToken(current.binding, connection)
-                        read(connection, wanted)
-                    }
+                    withSession(current) { read(connection, wanted) }
                 }
             }
             if (attempt != generation.get()) return
@@ -787,32 +779,71 @@ class PronoteConnectionController(
                     if (wanted != null && connection.children.any { it.id == wanted }) connection.selectChild(wanted)
                     return connection.notebook(today())
                 }
-                val snapshot = try {
-                    read()
-                } catch (error: PronoteException) {
-                    if (error.code !in setOf("pronote-10", "pronote-22", "http")) throw error
-                    vault.load()?.let { connection.useCredentials(it) }
-                    loginByToken(current.binding, connection)
-                    read()
-                }
+                val snapshot = withSession(current) { read() }
                 NotebookRead(snapshot, connection.sessionStamp)
             }
         }
     }
 
     /**
-     * Télécharge une pièce jointe lue avec la session [stamp] vers [target] (cache privé). Après une
-     * reconnexion, les identifiants sont périmés : il faut relire le cahier de textes.
+     * Règle d’expiration de session (`PronoteSessionRules`) : reconnexion préventive après 10 minutes
+     * d’inactivité, puis une reconnexion par jeton et un rejeu si la session s’avère perdue.
      */
-    suspend fun downloadAttachment(stamp: Any, id: String, name: String, target: java.io.File) {
+    private fun <T> withSession(current: Session, read: () -> T): T =
+        PronoteSessionRules.run(current.client, now(), relogin = { reloginByToken(current) }, read = read)
+
+    /** Reconnexion par jeton depuis un état propre, avec le jeton le plus récent du coffre. */
+    private fun reloginByToken(current: Session) {
+        vault.load()?.let { current.client.useCredentials(it) }
+        loginByToken(current.binding, current.client)
+    }
+
+    /**
+     * Télécharge une pièce jointe lue avec la session [stamp] vers [target] (cache privé). Si la session
+     * a changé (inactivité, reconnexion), le cahier de textes est relu avant le GET : les identifiants
+     * de pièces jointes sont liés à la session. Un échec est retenté une fois après reconnexion.
+     * @return la nouvelle lecture du cahier de textes si elle a eu lieu, sinon `null`.
+     */
+    suspend fun downloadAttachment(stamp: Any, id: String, name: String, target: java.io.File): NotebookRead? {
         val current = session ?: throw PronoteException("offline", NOTEBOOK_OFFLINE)
-        guard.mutex.withLock {
-            // Contrôlé sous le verrou, juste avant le GET : rien ne part après une déconnexion.
-            if (session !== current || current.binding.disconnected()) throw PronoteException("offline", NOTEBOOK_OFFLINE)
-            withContext(io) {
-                if (current.client.sessionStamp !== stamp) throw PronoteException("download", PronoteClient.DOWNLOAD_UNAVAILABLE)
-                current.client.download(id, name, files, target)
+        if (throttle.isBlocked(now())) throw PronoteException(PronoteThrottle.BLOCKED_CODE, PronoteThrottle.BLOCKED_MESSAGE)
+        return try {
+            guard.mutex.withLock {
+                // Contrôlé sous le verrou, juste avant le GET : rien ne part après une déconnexion.
+                if (session !== current || current.binding.disconnected()) throw PronoteException("offline", NOTEBOOK_OFFLINE)
+                withContext(io) {
+                    val connection = current.client
+                    var reread: NotebookRead? = null
+                    fun refreshIds() {
+                        val wanted = synchronized(guard.vaultLock) { vault.selectedChildId() }
+                        if (wanted != null && connection.children.any { it.id == wanted }) connection.selectChild(wanted)
+                        val snapshot = connection.notebook(today())
+                        val present = snapshot.sessions.any { s -> s.contents.any { c -> c.attachments.any { it.id == id } } } ||
+                            snapshot.homework.any { h -> h.attachments.any { it.id == id } }
+                        reread = NotebookRead(snapshot, connection.sessionStamp)
+                        if (!present) throw PronoteException("download", PronoteClient.DOWNLOAD_UNAVAILABLE)
+                    }
+                    if (connection.isIdle(now())) {
+                        reloginByToken(current)
+                        refreshIds()
+                    } else if (connection.sessionStamp !== stamp) {
+                        refreshIds()
+                    }
+                    try {
+                        connection.download(id, name, files, target)
+                    } catch (error: PronoteException) {
+                        // Statut inattendu : la session a pu expirer. Une reconnexion, une relecture, un essai.
+                        if (error.code != "download") throw error
+                        reloginByToken(current)
+                        refreshIds()
+                        connection.download(id, name, files, target)
+                    }
+                    reread
+                }
             }
+        } catch (error: PronoteException) {
+            noteThrottle(error)
+            throw error
         }
     }
 
