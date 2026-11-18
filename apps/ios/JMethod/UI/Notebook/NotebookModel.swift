@@ -190,6 +190,7 @@ final class NotebookModel {
     /// Les messages des erreurs Pronote sont fixes et sans donnée de session ; les autres restent génériques.
     static func text(for error: Error, fallback: String) -> String {
         if let failure = error as? PronoteFailure {
+            if failure.code == NotebookRules.notDocumentCode { return failure.message }
             return failure.code.hasPrefix("pronote-") || failure.code.hasPrefix("http") ? fallback : failure.message
         }
         if error is URLError { return "Pronote est injoignable. Vérifie ta connexion internet, puis réessaie." }

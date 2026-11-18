@@ -42,6 +42,21 @@ final class JMethodUITests: XCTestCase {
         captureScrolling(app, "07-settings", maxPages: 10)
     }
 
+    /// Aujourd'hui : carte « Pour demain », emploi du temps de demain, puis « Dans ton programme » replié par défaut.
+    func testTodayProgrammeCollapsible() {
+        let app = launch()
+        let toggle = app.buttons["today-programme-toggle"].firstMatch
+        XCTAssertTrue(toggle.waitForExistence(timeout: 15), "en-tête « Dans ton programme » absent")
+        XCTAssertTrue(toggle.label.hasPrefix("Dans ton programme, "), "libellé : \(toggle.label)")
+        XCTAssertEqual(toggle.value as? String, "replié")
+        XCTAssertFalse(app.staticTexts["Tes petits progrès"].exists, "progrès visibles alors que la section est repliée")
+        scrollTo(toggle, in: app)
+        toggle.tap()
+        XCTAssertEqual(app.buttons["today-programme-toggle"].firstMatch.value as? String, "déplié")
+        XCTAssertTrue(app.staticTexts["Tes petits progrès"].firstMatch.waitForExistence(timeout: 5), "détail du programme absent")
+        captureScrolling(app, "01b-today-programme", maxPages: 6)
+    }
+
     func testSheets() {
         let sheets: [(String, String)] = [
             ("score:fixture-maths-1-rev-4", "10-sheet-score"),

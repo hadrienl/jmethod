@@ -44,6 +44,7 @@
 		5794AAA0C72225F123DDCC37 /* DocumentText.swift in Sources */ = {isa = PBXBuildFile; fileRef = C09FCA37E6A70EF6F63AC633 /* DocumentText.swift */; };
 		5BF71C7D12A25CAA07755EAB /* Stats.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7BA9AB4269FEADE998EFAF2 /* Stats.swift */; };
 		632FD4334C83EEB2B23E670D /* Courses.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73975489E3EB909E81124124 /* Courses.swift */; };
+		6583696E719762E48CD5B648 /* AttachmentDownloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36CF3903B601E3E65191CD0B /* AttachmentDownloadTests.swift */; };
 		679359228AF16FE64B63F358 /* NotebookModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD1A2F5D2BFED3D2B90D17F4 /* NotebookModel.swift */; };
 		68618BA2A214A5A935827B39 /* NotebookDocumentVectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68FCEF29ACA52EEA64E3750C /* NotebookDocumentVectorTests.swift */; };
 		699C27268D3B17046E3F9653 /* NotebookCourseImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8EE9FECCD29D7EE44EC75E8 /* NotebookCourseImporter.swift */; };
@@ -135,6 +136,7 @@
 		2A03BA5B75BE65410D97450F /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
 		30F3FE1E243C0760E035480E /* SignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInView.swift; sourceTree = "<group>"; };
 		36B2619D07B1A8A3C2D22713 /* ProtocolCrypto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolCrypto.swift; sourceTree = "<group>"; };
+		36CF3903B601E3E65191CD0B /* AttachmentDownloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentDownloadTests.swift; sourceTree = "<group>"; };
 		3B54F0B8954EBB9661CBA1CE /* RevisionDetail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RevisionDetail.swift; sourceTree = "<group>"; };
 		3DEC45164EE70C944325FC70 /* domain-vectors.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "domain-vectors.json"; sourceTree = "<group>"; };
 		40C9976E84F3548293D826BE /* CoursesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoursesView.swift; sourceTree = "<group>"; };
@@ -325,6 +327,7 @@
 		3812F8F59D9F2CF2C5A05472 /* JMethodTests */ = {
 			isa = PBXGroup;
 			children = (
+				36CF3903B601E3E65191CD0B /* AttachmentDownloadTests.swift */,
 				AD52C730F458F692A288420E /* CourseFlowTests.swift */,
 				CEC33F7E47FC0C004F57CFF4 /* DeviationTests.swift */,
 				A9B8DBA03C580EE00D627346 /* DomainVectorTests.swift */,
@@ -716,6 +719,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6583696E719762E48CD5B648 /* AttachmentDownloadTests.swift in Sources */,
 				4DD0DD4E20C7D3269C7F2060 /* CourseFlowTests.swift in Sources */,
 				7A120E3B80030D66A603826A /* DeviationTests.swift in Sources */,
 				2DA33C90CD50329EF64899AE /* DomainVectorTests.swift in Sources */,

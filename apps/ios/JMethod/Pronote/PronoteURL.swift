@@ -76,6 +76,24 @@ enum PronoteURL {
         return url
     }
 
+    /// Racine Pronote (`https://hote/pronote`, sans `/` final) : page privée de sa requête, de son fragment et de son
+    /// dernier segment, comme Android (`substringBefore('?').substringBeforeLast('/')`) et pronotepy.
+    /// `URL.deletingLastPathComponent()` garde la requête : avec l'adresse mobile enregistrée (`?fd=1&…&login=true`),
+    /// `FichiersExternes` partait dans la requête et Pronote renvoyait sa page d'accueil au lieu du document.
+    static func root(_ page: URL) -> String {
+        guard var components = URLComponents(url: page, resolvingAgainstBaseURL: false) else {
+            let text = page.absoluteString
+            let bare = String(text.prefix { $0 != "?" && $0 != "#" })
+            return bare.lastIndex(of: "/").map { String(bare[..<$0]) } ?? bare
+        }
+        components.query = nil
+        components.fragment = nil
+        var path = components.path
+        if let slash = path.lastIndex(of: "/") { path = String(path[..<slash]) }
+        components.path = path
+        return components.string ?? page.absoluteString
+    }
+
     static func sameOrigin(_ lhs: URL, _ rhs: URL) -> Bool {
         lhs.scheme == rhs.scheme && lhs.host?.lowercased() == rhs.host?.lowercased() && (lhs.port ?? 443) == (rhs.port ?? 443)
     }

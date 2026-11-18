@@ -202,7 +202,9 @@ final class NotebookVectorTests: XCTestCase {
         let root = try XCTUnwrap(download["pronoteRoot"] as? String)
         let session = try XCTUnwrap(download["sessionH"] as? Int)
         let pageURL = try XCTUnwrap(URL(string: try XCTUnwrap(download["pageURL"] as? String)))
-        check(String(pageURL.deletingLastPathComponent().absoluteString.dropLast()), root, "racine")
+        check(PronoteURL.root(pageURL), root, "racine")
+        // Adresse réellement enregistrée (`PronoteURL.mobile`) : sa requête n'entre pas dans la racine.
+        check(PronoteURL.root(try XCTUnwrap(URL(string: try XCTUnwrap(download["storedPageURL"] as? String)))), root, "racine enregistrée")
         for item in try XCTUnwrap(download["cases"] as? [[String: Any]]) {
             let name = item["name"] as? String ?? ""
             let attachment = try XCTUnwrap(item["attachment"] as? [String: Any])
