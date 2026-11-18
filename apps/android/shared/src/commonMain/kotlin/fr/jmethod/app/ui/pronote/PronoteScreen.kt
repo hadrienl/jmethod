@@ -191,10 +191,10 @@ fun LoginScreen(viewModel: PronoteViewModel, state: PronoteUiState) {
         Column(
                 Modifier.align(Alignment.TopCenter).widthIn(max = 560.dp).fillMaxSize().verticalScroll(scrollState)
                     .windowInsetsPadding(WindowInsets.safeDrawing).imePadding().padding(JSpacing.l)
-                    // Clavier : Entrée envoie le formulaire depuis n’importe quel champ (les boutons gardent la leur).
+                    // Ordinateur : Entrée envoie le formulaire depuis n’importe quel champ (les boutons gardent la leur).
                     .onKeyEvent { event ->
                         val enter = event.key == Key.Enter || event.key == Key.NumPadEnter
-                        if (enter && event.type == KeyEventType.KeyUp && canSubmit) {
+                        if (platform.isDesktop && enter && event.type == KeyEventType.KeyUp && canSubmit) {
                             controller.submitCredentials()
                             true
                         } else {

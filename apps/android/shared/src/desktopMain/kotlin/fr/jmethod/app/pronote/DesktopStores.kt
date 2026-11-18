@@ -53,7 +53,9 @@ class SecretLoginStore(private val secrets: SecretStore) : LoginStore {
         val raw = JSONObject().put("school", login.school).put("accountType", login.accountType.name)
             .put("username", login.username ?: JSONObject.NULL).put("password", login.password ?: JSONObject.NULL)
             .put("autoReconnect", login.autoReconnect)
-        secrets.write(LOGIN, raw.toString())
+        // Coffre indisponible (trousseau verrouillé, session distante) : la connexion réussie n’échoue pas,
+        // l’app ne reste simplement pas connectée au prochain lancement.
+        runCatching { secrets.write(LOGIN, raw.toString()) }
     }
 
     @Synchronized

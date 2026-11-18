@@ -72,7 +72,7 @@ fun AdaptiveSheet(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val desktop = LocalPlatform.current.isDesktop
-    val mode = LocalSheetMode.current ?: if (LocalWindowLayout.current.wide) wideMode else SheetMode.BOTTOM
+    val mode = LocalSheetMode.current ?: if (LocalWindowLayout.current.sidePanels) wideMode else SheetMode.BOTTOM
     when (mode) {
         SheetMode.BOTTOM -> ModalBottomSheet(
             onDismissRequest = onDismissRequest,

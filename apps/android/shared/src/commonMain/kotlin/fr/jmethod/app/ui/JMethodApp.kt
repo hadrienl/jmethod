@@ -500,7 +500,7 @@ private fun AppContent(container: AppContainer, createConnection: (CoroutineScop
                 // Fenêtre moyenne ou étendue (paysage, tablette, ordinateur) : rail latéral et colonne de
                 // lecture centrée. Fenêtre étendue : la fiche ouverte se place à côté de la liste (deux volets).
                 val rail = maxWidth >= 600.dp
-                val twoPane = maxWidth >= 840.dp
+                val twoPane = WindowLayout(maxWidth, maxHeight).twoPane
                 val dockCourse = twoPane && tab == Tab.COURSES && courses?.detail != null
                 val dockSession = twoPane && !dockCourse && (tab == Tab.TODAY || tab == Tab.PLANNING) && today?.session != null
                 val pane = if (dockCourse || dockSession) DetailPaneWidth + 1.dp else 0.dp

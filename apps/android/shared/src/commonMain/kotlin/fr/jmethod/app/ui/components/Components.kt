@@ -69,11 +69,20 @@ data class WindowLayout(val width: Dp, val height: Dp) {
             else -> WidthClass.EXPANDED
         }
 
-    /** Deux volets côte à côte (liste et détail) : fenêtre étendue. */
-    val twoPane: Boolean get() = widthClass == WidthClass.EXPANDED
-
-    /** Les feuilles du bas deviennent des dialogues ou un panneau latéral. */
+    /** Au moins 600 dp de large (téléphone en paysage compris) : en-têtes compacts, rail de navigation. */
     val wide: Boolean get() = widthClass != WidthClass.COMPACT
+
+    /**
+     * Hauteur d’au moins 480 dp : exclut le téléphone en paysage, qui garde ses feuilles du bas et un
+     * seul volet comme avant ; tablettes, pliables et ordinateur passent aux mises en page adaptatives.
+     */
+    val tall: Boolean get() = height >= 480.dp
+
+    /** Les feuilles du bas deviennent un panneau latéral ou un dialogue. */
+    val sidePanels: Boolean get() = wide && tall
+
+    /** Deux volets côte à côte (liste et détail) : fenêtre étendue et assez haute. */
+    val twoPane: Boolean get() = widthClass == WidthClass.EXPANDED && tall
 }
 
 val LocalWindowLayout = compositionLocalOf { WindowLayout(400.dp, 800.dp) }
