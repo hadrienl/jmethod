@@ -1,7 +1,7 @@
 import XCTest
 @testable import JMethod
 
-/// Comportement corrigé des écarts D1, D2, D7 à D12 (`native/shared/domain/DEVIATIONS.md`) dans le périmètre des jalons 1 à 3.
+/// Comportement corrigé des écarts D1, D2, D7 à D12 et D14 (`native/shared/domain/DEVIATIONS.md`) dans le périmètre des jalons 1 à 3.
 final class DeviationTests: XCTestCase {
     private let subjects = Constants.defaultSubjects
 
@@ -51,6 +51,43 @@ final class DeviationTests: XCTestCase {
             }
         }
         XCTAssertEqual(touched, Deviation.d7Cases)
+    }
+
+    /// D14 : date de la prochaine révision en français, relative au jour réel de la validation.
+    func testD14NextReviewDateInFrench() throws {
+        XCTAssertEqual(AdaptiveAlgorithm.nextReviewPhrase("2026-11-19", today: "2026-11-18"), "demain")
+        XCTAssertEqual(AdaptiveAlgorithm.nextReviewPhrase("2026-11-20", today: "2026-11-18"), "après-demain")
+        XCTAssertEqual(AdaptiveAlgorithm.nextReviewPhrase("2026-11-27", today: "2026-11-18"), "le vendredi 27 novembre")
+        XCTAssertEqual(AdaptiveAlgorithm.nextReviewPhrase("2027-01-08", today: "2026-12-30"), "le vendredi 8 janvier 2027")
+        XCTAssertEqual(AdaptiveAlgorithm.nextReviewPhrase("2027-01-01", today: "2026-12-31"), "demain")
+
+        // Validation le soir du mercredi 18 novembre (prépare le 19) : J0 à 50 → 20 novembre ; J4 à 100 → 19 + 4 = lundi 23.
+        let base = course("c", date: "2026-11-18")
+        let revisions = try AdaptiveAlgorithm.initialRevisions(for: base, intervals: Constants.defaultIntervals)
+        let now = Date(timeIntervalSince1970: 1_795_028_400)
+        let evening = try AdaptiveAlgorithm.applyReview(courseRevisions: revisions, revisionId: "c-rev-0", score: 50, settings: Constants.defaultSettings,
+                                                        actualCompletionDate: "2026-11-18", schedulingReferenceDate: "2026-11-19", now: now)
+        XCTAssertEqual(evening.explanation.nextDate, "2026-11-20")
+        XCTAssertTrue(evening.explanation.message.hasSuffix("Prochaine révision après-demain."), evening.explanation.message)
+        let later = try AdaptiveAlgorithm.applyReview(courseRevisions: evening.updatedRevisions, revisionId: "c-rev-3", score: 100,
+                                                      settings: Constants.defaultSettings, actualCompletionDate: "2026-11-18",
+                                                      schedulingReferenceDate: "2026-11-19", now: now)
+        XCTAssertTrue(later.explanation.message.hasSuffix("Prochaine révision le lundi 23 novembre."), later.explanation.message)
+        XCTAssertNil(later.explanation.message.range(of: #"\d{4}-\d{2}-\d{2}"#, options: .regularExpression))
+    }
+
+    /// La liste D14 nomme exactement les cas des vecteurs dont un message contient une date ISO de prochaine révision.
+    func testD14CaseListIsClosed() throws {
+        let vectors = try SharedVectors.object("domain-vectors.json", subdirectory: "domain")
+        let suites = try XCTUnwrap(vectors["suites"] as? [String: [[String: Any]]])
+        var touched = Set<String>()
+        for (_, cases) in suites {
+            for item in cases {
+                let text = String(decoding: try JSONSerialization.data(withJSONObject: item), as: UTF8.self)
+                if text.contains(Deviation.isoNextReview), let name = item["name"] as? String { touched.insert(name) }
+            }
+        }
+        XCTAssertEqual(touched, Deviation.d14Cases)
     }
 
     func testD8ToastCountsGeneratedMilestones() throws {

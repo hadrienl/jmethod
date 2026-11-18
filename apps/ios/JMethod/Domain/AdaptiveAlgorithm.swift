@@ -135,15 +135,15 @@ enum AdaptiveAlgorithm {
 
             if score == 50 {
                 actionType = .exact
-                message = "Niveau idéal (50/100) : Intervalle d'origine parfaitement conservé (\(dayCount(adaptedGap))). Prochaine révision le \(scheduled)."
+                message = "Niveau idéal (50/100) : Intervalle d'origine parfaitement conservé (\(dayCount(adaptedGap))). Prochaine révision \(nextReviewPhrase(scheduled, today: completionDate))."
             } else if score > 50 {
                 actionType = .expanded
                 let percent = jsRound((factor - 1) * 100)
-                message = "Excellente maîtrise (\(score)/100) : Intervalle espacé de +\(percent)% (\(dayCount(adaptedGap)) au lieu de \(defaultStepGap)j). Prochaine révision le \(scheduled)."
+                message = "Excellente maîtrise (\(score)/100) : Intervalle espacé de +\(percent)% (\(dayCount(adaptedGap)) au lieu de \(defaultStepGap)j). Prochaine révision \(nextReviewPhrase(scheduled, today: completionDate))."
             } else {
                 actionType = .shortened
                 let percent = jsRound((1 - factor) * 100)
-                message = "Difficultés constatées (\(score)/100) : Intervalle rapproché de -\(percent)% (\(dayCount(adaptedGap)) au lieu de \(defaultStepGap)j). Prochaine révision le \(scheduled)."
+                message = "Difficultés constatées (\(score)/100) : Intervalle rapproché de -\(percent)% (\(dayCount(adaptedGap)) au lieu de \(defaultStepGap)j). Prochaine révision \(nextReviewPhrase(scheduled, today: completionDate))."
             }
         } else {
             message = "Bravo ! Tu as validé le cycle complet de révisions de ce cours avec la note de \(score)/100 !"
@@ -153,6 +153,18 @@ enum AdaptiveAlgorithm {
             updatedRevisions: revisions,
             explanation: .init(score: score, factor: factor, message: message, actionType: actionType, nextDate: nextDate)
         )
+    }
+
+    /// Écart D14 (`DEVIATIONS.md`) : date de la prochaine révision en français, par rapport au jour réel de la validation.
+    /// « demain », « après-demain », sinon « le vendredi 27 novembre » (année ajoutée si elle diffère), au lieu de la date ISO du web.
+    static func nextReviewPhrase(_ day: String, today: String) -> String {
+        switch SchoolDay.daysBetween(today, day) {
+        case 1: return "demain"
+        case 2: return "après-demain"
+        default:
+            let sameYear = SchoolDay.components(day)?.year == SchoolDay.components(today)?.year
+            return "le \(FrenchDate.format(day, sameYear ? "EEEE d MMMM" : "EEEE d MMMM yyyy"))"
+        }
     }
 
     /// Écart D7 (`DEVIATIONS.md`) : accord du pluriel, « 1 jour » au lieu de « 1 jours » du web.

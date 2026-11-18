@@ -19,11 +19,49 @@ enum Deviation {
 
     static func d7(_ message: String) -> String { message.replacingOccurrences(of: "(1 jours", with: "(1 jour") }
 
-    /// Texte attendu après D7, ou nil si le cas contient « 1 jours » sans figurer dans la liste (liste à mettre à jour).
-    static func expectedMessage(_ message: String, caseName: String) -> String? {
-        guard message.contains("(1 jours") else { return message }
+    /// D14 : « Prochaine révision le 2026-11-27. » devient « Prochaine révision demain. », « après-demain » ou
+    /// « le vendredi 27 novembre » (année si elle diffère), par rapport au jour réel de la validation.
+    /// Les autres champs de ces cas (dont `nextDate`, donnée ISO non affichée) restent comparés à l'identique.
+    static let d14Cases: Set<String> = [
+        "all_steps_at_50", "completed_later_step_is_overwritten", "custom_intervals_expanded", "custom_intervals_shortened",
+        "default_dates_from_clock_after_midnight", "dst_autumn_expanded", "dst_autumn_reference_on_change_day",
+        "dst_spring_reference_day_before", "dst_spring_reference_on_change_day", "early_validation_reschedules_from_reference_date",
+        "february_threshold_50_sensitivity_0.1", "j0_default_score_100", "j0_default_score_30", "j0_default_score_50",
+        "j0_default_score_70", "j14_sensitivity_0.1_score_100", "j14_sensitivity_0.1_score_30", "j14_sensitivity_0.1_score_70",
+        "j14_sensitivity_0.4_score_100", "j14_sensitivity_0.4_score_30", "j14_sensitivity_0.4_score_70", "j14_sensitivity_1_score_100",
+        "j14_sensitivity_1_score_30", "j14_sensitivity_1_score_70", "j4_sensitivity_0.1_score_100", "j4_sensitivity_0.1_score_30",
+        "j4_sensitivity_0.1_score_50", "j4_sensitivity_0.1_score_70", "j4_sensitivity_0.4_score_100", "j4_sensitivity_0.4_score_30",
+        "j4_sensitivity_0.4_score_50", "j4_sensitivity_0.4_score_70", "j4_sensitivity_1_score_100", "j4_sensitivity_1_score_30",
+        "j4_sensitivity_1_score_50", "j4_sensitivity_1_score_70", "last_due_triggers_celebration",
+        "late_validation_reschedules_from_reference_date", "mixed_scores_emergencies_dst_autumn", "month_change_february_to_march",
+        "month_change_january_to_february", "only_actual_date_given_reference_defaults_to_it", "overdue_status_is_not_next_pending",
+        "reference_without_actual_date", "rounding_large_gap_sensitivity_0.1_score_100", "rounding_tie_2.5_rounds_up",
+        "score_51_sensitivity_0.1_rounds_to_plus_0_percent", "settings_intervals_shorter_than_schedule",
+        "threshold_0_score_0_is_not_emergency", "unsorted_input_is_sorted_by_step_index", "validate_after_midnight_uses_new_day",
+        "validate_emergency_session", "validate_j0_at_50_keeps_others_pending", "validate_regular_step_while_emergency_pending",
+        "year_change", "year_end_to_spring_sensitivity_1",
+    ]
+
+    static var isoNextReview: Regex<(Substring, Substring)> { #/Prochaine révision le (\d{4}-\d{2}-\d{2})\./# }
+
+    static func d14(_ message: String, today: String) -> String {
+        message.replacing(isoNextReview) { match in "Prochaine révision \(AdaptiveAlgorithm.nextReviewPhrase(String(match.1), today: today))." }
+    }
+
+    /// Texte attendu après D7 et D14, ou nil si le cas touché ne figure pas dans la liste de l'écart (liste à mettre à jour).
+    /// `today` : jour réel de la validation (date de fin de séance).
+    static func expectedMessage(_ message: String, caseName: String, today: String) -> String? {
         let base = caseName.components(separatedBy: " étape ").first ?? caseName
-        return d7Cases.contains(base) ? d7(message) : nil
+        var result = message
+        if result.contains("(1 jours") {
+            guard d7Cases.contains(base) else { return nil }
+            result = d7(result)
+        }
+        if result.contains(isoNextReview) {
+            guard d14Cases.contains(base) else { return nil }
+            result = d14(result, today: today)
+        }
+        return result
     }
 
     /// D10 : Découvrir / S'entraîner / Se tester au lieu de Encodage / Consolidation / Récupération (Planning et détail de séance).

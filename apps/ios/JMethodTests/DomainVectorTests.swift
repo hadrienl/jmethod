@@ -102,7 +102,8 @@ final class DomainVectorTests: XCTestCase {
                     check((error as? LocalizedError)?.errorDescription, errorInfo["message"] as? String, name)
                 }
             } else {
-                try assertResult(try run(), item["expected"], name)
+                let today = try (input["actualCompletionDate"] as? String) ?? SchoolDay.today(now: vectorDate(item["now"]))
+                try assertResult(try run(), item["expected"], name, today: today)
             }
             count += 1
         }
@@ -125,7 +126,8 @@ final class DomainVectorTests: XCTestCase {
                     schedulingReferenceDate: step["schedulingReferenceDate"] as? String,
                     now: try vectorDate(step["now"])
                 )
-                try assertResult(result, step["expected"], "\(name) étape \(index)")
+                let today = try (step["actualCompletionDate"] as? String) ?? SchoolDay.today(now: vectorDate(step["now"]))
+                try assertResult(result, step["expected"], "\(name) étape \(index)", today: today)
                 // L'étape suivante part du résultat attendu, comme le générateur.
                 revisions = try decodeJSON([Revision].self, (step["expected"] as? [String: Any])?["updatedRevisions"])
                 steps += 1
@@ -134,19 +136,20 @@ final class DomainVectorTests: XCTestCase {
         check(steps, 44)
     }
 
-    private func assertResult(_ result: AdaptiveAlgorithm.Result, _ expectedValue: Any?, _ name: String) throws {
+    private func assertResult(_ result: AdaptiveAlgorithm.Result, _ expectedValue: Any?, _ name: String, today: String) throws {
         let expected = try XCTUnwrap(expectedValue as? [String: Any])
         check(result.updatedRevisions, try decodeJSON([Revision].self, expected["updatedRevisions"]), name)
         let explanation = try XCTUnwrap(expected["explanation"] as? [String: Any])
         check(result.explanation.score, explanation["score"] as? Int, name)
         let factor = try XCTUnwrap((explanation["factor"] as? NSNumber)?.doubleValue)
         if abs(result.explanation.factor - factor) > 1e-12 { problems.append("\(name) factor : \(result.explanation.factor) ≠ \(factor)") }
-        // D7 (`Deviation.d7Cases`) : « 1 jour » au singulier ; le reste du message est identique au web.
+        // D7 (`Deviation.d7Cases`) : « 1 jour » au singulier ; D14 (`Deviation.d14Cases`) : date en français.
+        // Le reste du message est identique au web.
         let message = try XCTUnwrap(explanation["message"] as? String)
-        if let expectedMessage = Deviation.expectedMessage(message, caseName: name) {
+        if let expectedMessage = Deviation.expectedMessage(message, caseName: name, today: today) {
             check(result.explanation.message, expectedMessage, name)
         } else {
-            problems.append("\(name) : « 1 jours » hors de la liste D7")
+            problems.append("\(name) : message hors des listes D7/D14")
         }
         check(result.explanation.actionType.rawValue, explanation["actionType"] as? String, name)
         check(result.explanation.nextDate, explanation["nextDate"] as? String, name)
@@ -303,9 +306,9 @@ final class DomainVectorTests: XCTestCase {
             var comparable = expected
             comparable.removeValue(forKey: "revisions")
             if var toast = comparable["toast"] as? [String: Any], let message = toast["message"] as? String {
-                // D7 (`Deviation.d7Cases`).
-                guard let corrected = Deviation.expectedMessage(message, caseName: name) else {
-                    problems.append("\(name) : « 1 jours » hors de la liste D7")
+                // D7 (`Deviation.d7Cases`) et D14 (`Deviation.d14Cases`), relatif au jour réel de la validation.
+                guard let corrected = Deviation.expectedMessage(message, caseName: name, today: outcome.today) else {
+                    problems.append("\(name) : message hors des listes D7/D14")
                     continue
                 }
                 toast["message"] = corrected
