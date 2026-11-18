@@ -70,6 +70,7 @@ import fr.jmethod.app.pronote.NotebookAttachment
 import fr.jmethod.app.pronote.NotebookContent
 import fr.jmethod.app.pronote.NotebookLink
 import fr.jmethod.app.pronote.SessionEntry
+import androidx.compose.material.icons.filled.Lock
 import fr.jmethod.app.ui.theme.JColors
 import fr.jmethod.app.ui.theme.JIcons
 import fr.jmethod.app.ui.theme.JShapes
@@ -162,10 +163,15 @@ fun NotebookScreen(ui: NotebookUiState, viewModel: NotebookViewModel, modifier: 
             verticalArrangement = Arrangement.spacedBy(JSpacing.m),
         ) {
             item(key = "intro") {
-                Text(
-                    "Contenus de séance, devoirs et pièces jointes publiés dans Pronote, en lecture seule. Rien n’est modifié dans Pronote et aucun cours n’est créé automatiquement.",
-                    style = MaterialTheme.typography.bodyMedium, color = JColors.Slate600,
-                )
+                // Mention courte, alignée sur iOS.
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.semantics(mergeDescendants = true) {}) {
+                    Icon(Icons.Filled.Lock, contentDescription = null, tint = JColors.Slate500, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(JSpacing.s))
+                    Text(
+                        "Lecture seule : rien n’est modifié dans Pronote et aucun cours n’est créé automatiquement.",
+                        style = MaterialTheme.typography.bodySmall, color = JColors.Slate600,
+                    )
+                }
             }
             if (ui.subjectName != null) {
                 item(key = "subject") {

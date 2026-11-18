@@ -57,6 +57,17 @@ object FrenchDates {
     /** `dd/MM`. */
     fun numericShort(date: LocalDate) = "${two(date.dayOfMonth)}/${two(date.monthValue)}"
 
+    /**
+     * Écart D14 : jour d’une prochaine révision dit en français par rapport au jour réel [today] :
+     * « demain », « après-demain », sinon « le vendredi 27 novembre » (année ajoutée seulement si
+     * elle diffère de celle de [today]). Remplace la date ISO brute du message du web.
+     */
+    fun relativeDay(date: LocalDate, today: LocalDate): String = when (date) {
+        today.plusDays(1) -> "demain"
+        today.plusDays(2) -> "après-demain"
+        else -> "le " + weekdayDayMonth(date) + if (date.year != today.year) " ${date.year}" else ""
+    }
+
     /** `parseISO` d’une chaîne `yyyy-MM-dd` (éventuellement suivie d’une heure). */
     fun parse(value: String): LocalDate? = runCatching { LocalDate.parse(value.take(10)) }.getOrNull()
 

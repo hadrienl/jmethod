@@ -219,8 +219,7 @@ fun ScoreSheet(
                 Modifier.fillMaxWidth().clip(JShapes.inner).background(background).padding(JSpacing.l)
                     .semantics(mergeDescendants = true) {},
             ) {
-                Text(preview.title.uppercase(Locale.FRENCH), color = foreground, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.semantics { contentDescription = preview.title })
+                Text(preview.title, color = foreground, style = MaterialTheme.typography.titleSmall)
                 Spacer(Modifier.height(4.dp))
                 Text(preview.description, color = foreground, style = MaterialTheme.typography.bodySmall)
             }

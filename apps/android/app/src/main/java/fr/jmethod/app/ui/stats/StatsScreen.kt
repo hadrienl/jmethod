@@ -113,13 +113,19 @@ fun StatsScreen(model: StatsModel, contentPadding: PaddingValues) {
                     Spacer(Modifier.height(JSpacing.m))
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(JSpacing.s), verticalArrangement = Arrangement.spacedBy(JSpacing.s)) {
                         model.weakSubjects.forEach { row ->
-                            Text(
-                                "${row.subject.name} (${row.avgScore}/100)",
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = JColors.Amber900,
-                                modifier = Modifier.clip(JShapes.badge).background(Color.White).padding(horizontal = JSpacing.m, vertical = JSpacing.s),
-                            )
+                            // Comme iOS : point de matière, nom, puis la note, sans parenthèses.
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.clip(JShapes.pill).background(Color.White)
+                                    .padding(horizontal = JSpacing.m, vertical = JSpacing.s)
+                                    .semantics(mergeDescendants = true) {},
+                            ) {
+                                SubjectDot(row.subject.color, 8.dp)
+                                Spacer(Modifier.width(JSpacing.s))
+                                Text(row.subject.name, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = JColors.Amber900)
+                                Spacer(Modifier.width(JSpacing.s))
+                                Text("${row.avgScore}/100", style = MaterialTheme.typography.labelLarge.tabular(), color = JColors.Amber900)
+                            }
                         }
                     }
                 }

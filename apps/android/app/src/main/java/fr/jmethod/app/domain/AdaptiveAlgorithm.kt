@@ -132,21 +132,23 @@ object AdaptiveAlgorithm {
                 revisions[i] = revisions[i].copy(scheduledDate = lastDate.toString(), adjustedIntervalDays = scaledStepGap)
             }
 
+            // Écart D14 : « Prochaine révision demain. » plutôt que la date ISO, par rapport au jour réel.
+            val nextDay = FrenchDates.relativeDay(nextDate, now.atZone(zone).toLocalDate())
             // Écart D7 : accord du nombre de jours (« 1 jour », le web écrit « 1 jours »).
             message = when {
                 score == 50 -> {
                     actionType = ActionType.EXACT
-                    "Niveau idéal (50/100) : Intervalle d'origine parfaitement conservé ($adaptedGap ${plural(adaptedGap, "jour")}). Prochaine révision le $nextDateStr."
+                    "Niveau idéal (50/100) : Intervalle d'origine parfaitement conservé ($adaptedGap ${plural(adaptedGap, "jour")}). Prochaine révision $nextDay."
                 }
                 score > 50 -> {
                     actionType = ActionType.EXPANDED
                     val percent = jsRound((factor - 1) * 100)
-                    "Excellente maîtrise ($score/100) : Intervalle espacé de +$percent% ($adaptedGap ${plural(adaptedGap, "jour")} au lieu de ${defaultStepGap}j). Prochaine révision le $nextDateStr."
+                    "Excellente maîtrise ($score/100) : Intervalle espacé de +$percent% ($adaptedGap ${plural(adaptedGap, "jour")} au lieu de ${defaultStepGap}j). Prochaine révision $nextDay."
                 }
                 else -> {
                     actionType = ActionType.SHORTENED
                     val percent = jsRound((1 - factor) * 100)
-                    "Difficultés constatées ($score/100) : Intervalle rapproché de -$percent% ($adaptedGap ${plural(adaptedGap, "jour")} au lieu de ${defaultStepGap}j). Prochaine révision le $nextDateStr."
+                    "Difficultés constatées ($score/100) : Intervalle rapproché de -$percent% ($adaptedGap ${plural(adaptedGap, "jour")} au lieu de ${defaultStepGap}j). Prochaine révision $nextDay."
                 }
             }
         } else {

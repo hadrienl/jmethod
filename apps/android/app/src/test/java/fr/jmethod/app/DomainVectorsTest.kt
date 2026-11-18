@@ -39,6 +39,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
@@ -49,6 +50,11 @@ import java.time.ZoneId
  * Rejoue intégralement les vecteurs générés depuis le TypeScript (`native/shared/domain/`).
  * Les fichiers sont lus directement dans le dossier partagé (ressources de test), sans copie.
  */
+/** Nombre de cas nommés dont le message attendu est corrigé par l’écart D14 (dates ISO). */
+private const val D14_REVIEW_CASES = 49
+private const val D14_CHAIN_STEPS = 34
+private const val D14_SUBMIT_CASES = 3
+
 class DomainVectorsTest {
     private val json = AppDocumentCodec.json
     private val paris: ZoneId = ZoneId.of("Europe/Paris")
@@ -133,12 +139,22 @@ class DomainVectorsTest {
         }
     }
 
-    private fun assertReview(label: String, expected: JsonObject, result: AdaptiveAlgorithm.Result) {
+    /** Cas nommés dont le message attendu a été corrigé par D14 (date ISO → français relatif). */
+    private val d14Cases = mutableSetOf<String>()
+
+    /** D7 puis D14 sur un message attendu du web, en notant le cas touché par D14. */
+    private fun nativeMessage(label: String, expected: String?, now: Instant): String? {
+        if (Deviations.touchedByD14(expected)) d14Cases += label
+        return Deviations.d14(Deviations.d7Days(expected), now.atZone(paris).toLocalDate())
+    }
+
+    private fun assertReview(label: String, expected: JsonObject, result: AdaptiveAlgorithm.Result, now: Instant) {
         assertEquals(label, revisions(expected.getValue("updatedRevisions")), result.updatedRevisions)
         val explanation = expected.getValue("explanation").jsonObject
         assertEquals(label, explanation.getValue("score").jsonPrimitive.int, result.explanation.score)
         assertEquals(label, explanation.getValue("factor").jsonPrimitive.double, result.explanation.factor, 1e-12)
-        assertEquals(label, Deviations.d7Days(explanation.str("message")), result.explanation.message)
+        assertEquals(label, nativeMessage(label, explanation.str("message"), now), result.explanation.message)
+        assertFalse(label, Regex("""\d{4}-\d{2}-\d{2}""").containsMatchIn(result.explanation.message))
         assertEquals(label, explanation.str("actionType"), result.explanation.actionType.wire)
         assertEquals(label, explanation.str("nextDate"), result.explanation.nextDate)
     }
@@ -169,10 +185,11 @@ class DomainVectorsTest {
                     assertEquals(name(case), error.str("message"), thrown.message)
                 }
             } else {
-                assertReview(name(case), case.getValue("expected").jsonObject, run())
+                assertReview(name(case), case.getValue("expected").jsonObject, run(), now(case))
             }
         }
         assertEquals(65, cases.size)
+        assertEquals("cas corrigés par D14", D14_REVIEW_CASES, d14Cases.size)
     }
 
     @Test
@@ -187,12 +204,13 @@ class DomainVectorsTest {
                     step.str("actualCompletionDate"), step.str("schedulingReferenceDate"), now(step), paris,
                 )
                 val expected = step.getValue("expected").jsonObject
-                assertReview("${name(chain)} étape $index", expected, result)
+                assertReview("${name(chain)} étape $index", expected, result, now(step))
                 current = result.updatedRevisions
                 steps++
             }
         }
         assertEquals(44, steps)
+        assertEquals("étapes corrigées par D14", D14_CHAIN_STEPS, d14Cases.size)
     }
 
     @Test
@@ -363,10 +381,11 @@ class DomainVectorsTest {
                 assertEquals(label, null, outcome.toast)
             } else {
                 assertEquals(label, toast.str("title"), outcome.toast?.title)
-                assertEquals(label, Deviations.d7Days(toast.str("message")), outcome.toast?.message)
+                assertEquals(label, nativeMessage(label, toast.str("message"), now(case)), outcome.toast?.message)
                 assertEquals(label, toast.str("type"), outcome.toast?.type?.wire)
             }
         }
+        assertEquals("cas corrigés par D14", D14_SUBMIT_CASES, d14Cases.size)
     }
 
     @Test
