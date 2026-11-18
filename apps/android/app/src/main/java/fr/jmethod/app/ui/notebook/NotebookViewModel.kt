@@ -425,6 +425,48 @@ class NotebookViewModel(
         }
     }
 
+    /**
+     * « Joindre à ce cours » depuis une pièce jointe du cahier (section 8.5) : téléchargée, analysée (titre
+     * lu) puis copiée dans les documents du cours.
+     */
+    fun attachToCourse(courseId: String, sessionKey: String, attachment: NotebookAttachment) {
+        if (attachment.kind != NotebookAttachment.Kind.FILE || state.value.downloadingId != null) return
+        val current = stamp ?: return
+        val generation = resetCount
+        state.update { it.copy(downloadingId = attachment.id) }
+        viewModelScope.launch {
+            var target: File? = null
+            try {
+                val file = withContext(Dispatchers.IO) {
+                    File(preparedDir(), UUID.randomUUID().toString()).apply { mkdirs() }.let { File(it, NotebookRules.saveAsName(attachment.rawName)) }
+                }
+                target = file
+                controller.downloadAttachment(current, attachment.id, attachment.rawName, file)?.let { reread ->
+                    if (generation == resetCount) {
+                        stamp = reread.stamp
+                        state.update { it.copy(snapshot = reread.snapshot) }
+                    }
+                }
+                if (generation != resetCount) return@launch
+                val subjects = repository.current().subjects
+                val session = state.value.snapshot?.sessions?.firstOrNull { it.key == sessionKey }
+                val names = session?.let { NotebookCourses.subjectNames(it, subjects) } ?: emptyList()
+                val analysis = withContext(Dispatchers.Default) { DocumentAnalyzer.analyze(file, attachment.name) }
+                val title = if (analysis.type != null) NotebookCourses.extractedTitle(analysis.extraction, attachment.name, names) else null
+                val attached = withContext(Dispatchers.IO) {
+                    creator.attach(courseId, file, attachment.name, analysis.type ?: DocType.displayTypeOf(attachment.name), title)
+                }
+                events.send(NotebookEvent.Message(if (attached != null) "Document joint au cours." else "Ce document n’a pas pu être joint au cours."))
+            } catch (_: CancellationException) {
+            } catch (error: Exception) {
+                if (generation == resetCount) events.send(NotebookEvent.Message(message(error, "Document indisponible. Réessaie plus tard.")))
+            } finally {
+                withContext(kotlinx.coroutines.NonCancellable + Dispatchers.IO) { target?.parentFile?.deleteRecursively() }
+                if (generation == resetCount) state.update { it.copy(downloadingId = null) }
+            }
+        }
+    }
+
     /** Document absent (restauration) : relit le cahier et le retélécharge si la séance est encore dans la fenêtre. */
     fun redownload(course: Course, document: CourseDocument) {
         val key = course.source?.sessionKey ?: return

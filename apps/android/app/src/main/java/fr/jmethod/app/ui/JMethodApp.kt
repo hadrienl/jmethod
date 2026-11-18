@@ -458,7 +458,7 @@ fun JMethodApp() {
                                 state.session?.let { session ->
                                     SessionSheetHost(
                                         session, state, notebook, pronote, container.courseFiles, sheetViewer,
-                                        todayViewModel, notebookViewModel,
+                                        todayViewModel, notebookViewModel, coursesViewModel,
                                         onOpenDocument = openDocument,
                                         onCloseViewer = { sheetViewer = null },
                                         onBackToToday = {
@@ -476,7 +476,7 @@ fun JMethodApp() {
                             courses?.detail?.let { detail ->
                                 val course = detail.course
                                 LaunchedEffect(course.id, course.source != null) {
-                                    if (course.source != null && pronote.access == AccessPhase.CONNECTED) notebookViewModel.ensureRead()
+                                    if (pronote.access == AccessPhase.CONNECTED) notebookViewModel.ensureRead() // cahier (8.1) et documents proches (8.5)
                                 }
                                 val documents = remember(course.documents) { course.documents.orEmpty().map { it to container.courseFiles.exists(it) } }
                                 CourseDetailSheet(
@@ -512,6 +512,11 @@ fun JMethodApp() {
                                     onLink = { openLink(appContext, it) },
                                     viewer = sheetViewer,
                                     onCloseViewer = { sheetViewer = null },
+                                    nearby = today?.document?.let { doc ->
+                                        RevisionSession.nearbyDocuments(course, doc.courses, notebook?.state?.snapshot, doc.subjects, container.courseFiles::exists)
+                                    }.orEmpty(),
+                                    onOpenNearby = { item -> openNearby(item, openDocument, notebookViewModel) },
+                                    onAttachNearby = { item -> attachNearby(course.id, item, coursesViewModel, notebookViewModel) },
                                 )
                             }
                         }
@@ -627,6 +632,7 @@ private fun SessionSheetHost(
     viewer: SheetDocument?,
     todayViewModel: TodayViewModel,
     notebookViewModel: NotebookViewModel,
+    coursesViewModel: CoursesViewModel,
     onOpenDocument: (CourseDocument) -> Unit,
     onCloseViewer: () -> Unit,
     onBackToToday: () -> Unit,
@@ -642,7 +648,7 @@ private fun SessionSheetHost(
     }
     val course = model.course
     LaunchedEffect(course.id, course.source != null) {
-        if (course.source != null && pronote.access == AccessPhase.CONNECTED) notebookViewModel.ensureRead()
+        if (pronote.access == AccessPhase.CONNECTED) notebookViewModel.ensureRead() // cahier (8.1) et documents proches (8.5)
     }
     val documents = remember(course.documents) { course.documents.orEmpty().map { it to courseFiles.exists(it) } }
     val page = session.page
@@ -660,6 +666,9 @@ private fun SessionSheetHost(
         nextLabel = next?.let { RevisionSession.nextLabel(it, document.courses, document.subjects) },
         remainingLabel = if (remaining > 0) "Encore $remaining séance${if (remaining > 1) "s" else ""} au programme ce soir." else null,
         viewer = viewer,
+        nearby = RevisionSession.nearbyDocuments(course, document.courses, notebook?.state?.snapshot, document.subjects, courseFiles::exists),
+        onOpenNearby = { item -> openNearby(item, onOpenDocument, notebookViewModel) },
+        onAttachNearby = { item -> attachNearby(course.id, item, coursesViewModel, notebookViewModel) },
         onOpenDocument = onOpenDocument,
         onCloseViewer = onCloseViewer,
         onRedownload = if (course.source != null) {
@@ -678,4 +687,20 @@ private fun SessionSheetHost(
         onBackToToday = onBackToToday,
         onDismiss = onDismiss,
     )
+}
+
+/** Document proche : ouvert dans la feuille (téléchargé au besoin depuis le cahier). */
+private fun openNearby(item: RevisionSession.Nearby, onOpenDocument: (CourseDocument) -> Unit, notebookViewModel: NotebookViewModel) {
+    when (item) {
+        is RevisionSession.Nearby.FromCourse -> onOpenDocument(item.document)
+        is RevisionSession.Nearby.FromNotebook -> notebookViewModel.download(item.attachment, inApp = true)
+    }
+}
+
+/** « Joindre à ce cours » : copie du document, l’autre cours n’est pas modifié. */
+private fun attachNearby(courseId: String, item: RevisionSession.Nearby, coursesViewModel: CoursesViewModel, notebookViewModel: NotebookViewModel) {
+    when (item) {
+        is RevisionSession.Nearby.FromCourse -> coursesViewModel.attachFromCourse(courseId, item.document)
+        is RevisionSession.Nearby.FromNotebook -> notebookViewModel.attachToCourse(courseId, item.sessionKey, item.attachment)
+    }
 }

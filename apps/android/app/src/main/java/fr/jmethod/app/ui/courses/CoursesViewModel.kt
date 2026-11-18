@@ -186,6 +186,23 @@ class CoursesViewModel(
     }
 
     /** Suppression confirmée : le cours et toutes ses révisions ; les créneaux Pronote restent. */
+    /** « Joindre à ce cours » depuis le document d’un autre cours (section 8.5) : copie, l’autre cours est inchangé. */
+    fun attachFromCourse(courseId: String, document: fr.jmethod.app.model.CourseDocument) {
+        val file = files.fileOf(document)?.takeIf { it.isFile } ?: return
+        viewModelScope.launch {
+            val attached = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                creator.attach(
+                    courseId, file, document.name, fr.jmethod.app.documents.DocType.displayTypeOf(document.name),
+                    document.extractedTitle, document.mime,
+                )
+            }
+            events.send(
+                if (attached != null) CoursesEvent.Toast("Document joint", "« ${document.name} » est joint à ce cours.", info = false)
+                else CoursesEvent.Toast("Document", "Ce document n’a pas pu être joint au cours.", info = true),
+            )
+        }
+    }
+
     fun delete(courseId: String) {
         detailCourseId.value = null
         viewModelScope.launch {

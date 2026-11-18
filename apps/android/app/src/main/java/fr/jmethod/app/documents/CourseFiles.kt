@@ -132,6 +132,27 @@ class CourseCreator(private val repository: AppRepository, private val clock: Ap
         return created
     }
 
+    /**
+     * « Joindre à ce cours » (section 8.5) : copie [source] dans les documents du cours (nouvel `id`, même
+     * nom, [extractedTitle] conservé), sans toucher au cours d’origine ni au titre. `null` si le cours a
+     * disparu, a déjà un document de ce nom ou en a déjà 10.
+     */
+    suspend fun attach(courseId: String, source: File, name: String, type: DocType, extractedTitle: String?, mime: String? = null): CourseDocument? {
+        val current = repository.current().courses.firstOrNull { it.id == courseId } ?: return null
+        if (!source.isFile || current.documents.orEmpty().let { docs -> docs.size >= fr.jmethod.app.domain.NotebookCourses.MAX_DOCUMENTS || docs.any { it.name == name } }) return null
+        val stored = files.store(courseId, source, name, type, extractedTitle).let { if (mime != null) it.copy(mime = mime) else it }
+        var attached = false
+        repository.update { document ->
+            val course = document.courses.firstOrNull { it.id == courseId }
+            val docs = course?.documents.orEmpty()
+            if (course == null || docs.size >= fr.jmethod.app.domain.NotebookCourses.MAX_DOCUMENTS || docs.any { it.name == name }) return@update document
+            attached = true
+            document.copy(courses = document.courses.map { if (it.id == courseId) it.copy(documents = docs + stored) else it })
+        }
+        if (!attached) files.fileOf(stored)?.delete()
+        return stored.takeIf { attached }
+    }
+
     /** Suppression : fichiers effacés et séance marquée `dismissed` (jamais recréée automatiquement). */
     suspend fun delete(courseId: String): CourseEditing.Deleted? {
         var deleted: CourseEditing.Deleted? = null

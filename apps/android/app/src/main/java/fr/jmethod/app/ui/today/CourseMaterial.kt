@@ -78,8 +78,10 @@ internal fun CollapsibleDescription(text: String) {
     }
 }
 
-private fun typeIcon(document: CourseDocument): ImageVector {
-    val type = DocType.displayTypeOf(document.name)
+private fun typeIcon(document: CourseDocument): ImageVector = typeIcon(document.name)
+
+private fun typeIcon(name: String): ImageVector {
+    val type = DocType.displayTypeOf(name)
     return when {
         type == DocType.PDF -> JIcons.Pdf
         type.isImage -> JIcons.Image
@@ -164,6 +166,73 @@ internal fun NotebookPartSection(
             ) {
                 contents.forEach { content -> NotebookContentBlock(content, downloadingId, onDownload, onLink) }
             }
+        }
+    }
+}
+
+/** « Aucun document joint à cette séance dans Pronote » (section 8.5). */
+@Composable
+internal fun NoDocumentLine(fromNotebook: Boolean) {
+    Text(
+        if (fromNotebook) "Aucun document joint à cette séance dans Pronote" else "Aucun document joint à ce cours",
+        style = MaterialTheme.typography.bodyMedium, color = JColors.Slate600,
+    )
+}
+
+/**
+ * « Documents proches en <matière> » (section 8.5) : 5 au plus, « Afficher tout » au-delà. Toucher une
+ * ligne ouvre le document dans la feuille ; « Joindre à ce cours » le copie dans les documents du cours.
+ */
+@Composable
+internal fun NearbyDocumentsSection(
+    subjectName: String,
+    items: List<RevisionSession.Nearby>,
+    downloadingId: String?,
+    onOpen: (RevisionSession.Nearby) -> Unit,
+    onAttach: (RevisionSession.Nearby) -> Unit,
+) {
+    if (items.isEmpty()) return
+    var all by rememberSaveable(subjectName, items.size) { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(JSpacing.s)) {
+        SheetSectionTitle("Documents proches en $subjectName")
+        val shown = if (all) items else items.take(RevisionSession.NEARBY_VISIBLE)
+        shown.forEach { item ->
+            val busy = item is RevisionSession.Nearby.FromNotebook && downloadingId == item.attachment.id
+            val blocked = item is RevisionSession.Nearby.FromNotebook && downloadingId != null
+            Column(
+                Modifier.fillMaxWidth().clip(JShapes.control).border(1.dp, JColors.Slate200, JShapes.control)
+                    .clickable(enabled = !blocked, onClickLabel = "Ouvrir dans l’app", role = Role.Button) { onOpen(item) }
+                    .padding(start = JSpacing.m, end = JSpacing.xs, top = JSpacing.s),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.semantics(mergeDescendants = true) {}) {
+                    Box(Modifier.size(36.dp).clip(JShapes.badge).background(JColors.Slate50), contentAlignment = Alignment.Center) {
+                        if (busy) {
+                            CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = JColors.Violet700)
+                        } else {
+                            Icon(typeIcon(item.name), contentDescription = null, tint = JColors.Slate600, modifier = Modifier.size(20.dp))
+                        }
+                    }
+                    Spacer(Modifier.width(JSpacing.m))
+                    Column(Modifier.weight(1f).padding(end = JSpacing.s)) {
+                        Text(item.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        item.title?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = JColors.Slate600, maxLines = 2, overflow = TextOverflow.Ellipsis) }
+                        Text(item.dayLine, style = MaterialTheme.typography.bodySmall, color = JColors.Slate500)
+                    }
+                }
+                TextButton(
+                    onClick = { onAttach(item) },
+                    enabled = !blocked,
+                    contentPadding = PaddingValues(horizontal = JSpacing.s),
+                    modifier = Modifier.align(Alignment.End).heightIn(min = 48.dp),
+                ) { Text("Joindre à ce cours", color = if (blocked) JColors.Slate500 else JColors.Violet800, fontWeight = FontWeight.SemiBold) }
+            }
+        }
+        if (items.size > RevisionSession.NEARBY_VISIBLE) {
+            TextButton(
+                onClick = { all = !all },
+                contentPadding = PaddingValues(horizontal = JSpacing.s),
+                modifier = Modifier.offset(x = (-8).dp).heightIn(min = 48.dp),
+            ) { Text(if (all) "Afficher moins" else "Afficher tout (${items.size})", color = JColors.Violet800, fontWeight = FontWeight.SemiBold) }
         }
     }
 }

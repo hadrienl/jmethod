@@ -273,6 +273,9 @@ fun SessionSheet(
     nextLabel: String?,
     remainingLabel: String?,
     viewer: SheetDocument?,
+    nearby: List<RevisionSession.Nearby>,
+    onOpenNearby: (RevisionSession.Nearby) -> Unit,
+    onAttachNearby: (RevisionSession.Nearby) -> Unit,
     onOpenDocument: (CourseDocument) -> Unit,
     onCloseViewer: () -> Unit,
     onRedownload: ((CourseDocument) -> Unit)?,
@@ -309,7 +312,7 @@ fun SessionSheet(
             page is SessionPage.Result -> ResultPage(page, nextLabel, remainingLabel, onNext = { onNext(page.nextRevisionId) }, onBackToToday = onBackToToday, onClose = onDismiss)
             else -> MainPage(
                 model, today, documents, notebookPart, notebookLoading, downloadingId,
-                onOpenDocument, onRedownload, onDownloadAttachment, onLink,
+                onOpenDocument, onRedownload, onDownloadAttachment, onLink, nearby, onOpenNearby, onAttachNearby,
                 onScore = { onPage(SessionPage.Score) }, onClose = onDismiss,
             )
         }
@@ -328,6 +331,9 @@ private fun MainPage(
     onRedownload: ((CourseDocument) -> Unit)?,
     onDownloadAttachment: (NotebookAttachment) -> Unit,
     onLink: (String) -> Unit,
+    nearby: List<RevisionSession.Nearby>,
+    onOpenNearby: (RevisionSession.Nearby) -> Unit,
+    onAttachNearby: (RevisionSession.Nearby) -> Unit,
     onScore: () -> Unit,
     onClose: () -> Unit,
 ) {
@@ -369,10 +375,12 @@ private fun MainPage(
                 model.description?.let { CollapsibleDescription(it) }
                 if (documents.isNotEmpty()) {
                     CourseDocumentsList(documents, onOpenDocument, onRedownload)
-                } else if (model.description == null) {
-                    Text("Aucune note ni document pour ce cours.", style = MaterialTheme.typography.bodyMedium, color = JColors.Slate600)
+                } else {
+                    NoDocumentLine(fromNotebook = course.source != null)
                 }
             }
+            // Documents proches de la même matière (section 8.5).
+            NearbyDocumentsSection(model.subjectName, nearby, downloadingId, onOpenNearby, onAttachNearby)
             // 3. Dans le cahier de textes.
             notebookPart?.let { NotebookPartSection(it, notebookLoading, downloadingId, onDownloadAttachment, onLink) }
             // 4. Séances précédentes (repliable).

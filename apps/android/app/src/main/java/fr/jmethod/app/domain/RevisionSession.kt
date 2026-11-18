@@ -7,6 +7,7 @@ import fr.jmethod.app.model.Revision
 import fr.jmethod.app.model.RevisionStatus
 import fr.jmethod.app.model.Subject
 import fr.jmethod.app.pronote.NotebookAttachment
+import fr.jmethod.app.pronote.NotebookRules
 import fr.jmethod.app.pronote.NotebookContent
 import fr.jmethod.app.pronote.NotebookSnapshot
 import java.time.LocalDate
@@ -94,6 +95,101 @@ object RevisionSession {
         }
         return NotebookPart(sessionLine(source.date), contents)
     }
+
+    // region Documents proches (section 8.5)
+
+    const val NEARBY_DAYS = 10L
+    const val NEARBY_VISIBLE = 5
+
+    /** Document joint à une autre séance de la même matière, à 10 jours au plus. */
+    sealed interface Nearby {
+        val name: String
+        val title: String?
+        /** YYYY-MM-DD, date de la séance d’origine. */
+        val date: String
+        /** « Séance du 5 novembre ». */
+        val dayLine: String get() = dayLine(date)
+
+        /** Document enregistré dans un autre cours. */
+        data class FromCourse(val courseId: String, val document: CourseDocument, override val date: String) : Nearby {
+            override val name get() = document.name
+            override val title get() = document.extractedTitle?.takeIf { it.isNotBlank() && it != document.name }
+        }
+
+        /** Pièce jointe du cahier de textes lu (téléchargée au besoin). */
+        data class FromNotebook(val sessionKey: String, val attachment: NotebookAttachment, override val date: String) : Nearby {
+            override val name get() = attachment.name
+            override val title: String? get() = null
+        }
+    }
+
+    fun dayLine(date: String): String {
+        val parsed = FrenchDates.parse(date) ?: return "Séance"
+        val day = if (parsed.dayOfMonth == 1) "1er" else parsed.dayOfMonth.toString()
+        return "Séance du $day ${FrenchDates.monthName(parsed)}"
+    }
+
+    /** Date de la séance d’un cours : celle de sa séance d’origine, sinon sa date (J0). */
+    private fun courseDate(course: Course) = course.source?.date ?: course.date
+
+    /**
+     * Fichiers (pas les liens) joints à d’autres séances de la même matière normalisée à ±10 jours,
+     * hors documents déjà joints à [course] (même nom) : documents des autres cours, puis pièces jointes du
+     * cahier [snapshot]. Tri : écart de date croissant, séance postérieure avant antérieure, ordre d’origine.
+     * Une pièce jointe déjà enregistrée dans le cours de sa séance n’apparaît qu’une fois.
+     * @param available documents présents sur ce téléphone (les autres ne peuvent être ni ouverts ni copiés).
+     */
+    fun nearbyDocuments(
+        course: Course,
+        courses: List<Course>,
+        snapshot: NotebookSnapshot?,
+        subjects: List<Subject>,
+        available: (CourseDocument) -> Boolean = { true },
+    ): List<Nearby> {
+        val origin = FrenchDates.parse(courseDate(course)) ?: return emptyList()
+        val label = course.source?.subjectLabel?.let(NotebookRules::normalizeSubject)
+        fun sameSubjectCourse(other: Course): Boolean {
+            val otherLabel = other.source?.subjectLabel?.let(NotebookRules::normalizeSubject)
+            return if (label != null && otherLabel != null) otherLabel == label else other.subjectId == course.subjectId
+        }
+        fun sameSubjectSession(subject: String): Boolean =
+            if (label != null) NotebookRules.normalizeSubject(subject) == label else SubjectMatcher.match(subject, subjects)?.id == course.subjectId
+        fun near(date: String): Long? {
+            val parsed = FrenchDates.parse(date) ?: return null
+            val delta = ChronoUnit.DAYS.between(origin, parsed)
+            return delta.takeIf { kotlin.math.abs(it) <= NEARBY_DAYS }
+        }
+        val own = course.documents.orEmpty().mapTo(HashSet()) { it.name }
+        val candidates = mutableListOf<Pair<Long, Nearby>>()
+        val stored = HashSet<Pair<String, String>>()
+        for (other in courses) {
+            if (other.id == course.id || !sameSubjectCourse(other)) continue
+            val date = courseDate(other)
+            val delta = near(date) ?: continue
+            other.documents.orEmpty().forEach { document ->
+                other.source?.sessionKey?.let { stored += it to document.name }
+                if (document.name !in own && available(document)) candidates += delta to Nearby.FromCourse(other.id, document, date)
+            }
+        }
+        snapshot?.sessions.orEmpty().forEach { session ->
+            if (session.key == course.source?.sessionKey || !sameSubjectSession(session.subject)) return@forEach
+            val date = session.date.toString()
+            val delta = near(date) ?: return@forEach
+            session.contents.flatMap { it.attachments }
+                .filter { it.kind == NotebookAttachment.Kind.FILE }
+                .distinctBy { it.id }
+                .forEach { attachment ->
+                    if (attachment.name !in own && (session.key to attachment.name) !in stored) {
+                        candidates += delta to Nearby.FromNotebook(session.key, attachment, date)
+                    }
+                }
+        }
+        return candidates.withIndex()
+            .sortedWith(compareBy({ kotlin.math.abs(it.value.first) }, { if (it.value.first >= 0) 0 else 1 }, { it.index }))
+            .map { it.value.second }
+    }
+
+    // endregion
 
     /** Description repliée au-delà de cette hauteur, « Afficher plus ». */
     const val DESCRIPTION_LINES = 6

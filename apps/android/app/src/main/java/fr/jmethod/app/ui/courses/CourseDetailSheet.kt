@@ -62,6 +62,8 @@ import fr.jmethod.app.pronote.NotebookAttachment
 import fr.jmethod.app.ui.documents.DocumentViewerScreen
 import fr.jmethod.app.ui.documents.SheetDocument
 import fr.jmethod.app.ui.today.CollapsibleDescription
+import fr.jmethod.app.ui.today.NearbyDocumentsSection
+import fr.jmethod.app.ui.today.NoDocumentLine
 import fr.jmethod.app.ui.today.CourseDocumentsList
 import fr.jmethod.app.ui.today.NotebookPartSection
 import fr.jmethod.app.ui.today.SheetSectionTitle
@@ -104,6 +106,10 @@ fun CourseDetailSheet(
     /** Document ouvert dans la feuille. */
     viewer: SheetDocument? = null,
     onCloseViewer: () -> Unit = {},
+    /** Documents proches de la même matière (section 8.5). */
+    nearby: List<RevisionSession.Nearby> = emptyList(),
+    onOpenNearby: (RevisionSession.Nearby) -> Unit = {},
+    onAttachNearby: (RevisionSession.Nearby) -> Unit = {},
 ) {
     var confirmDelete by rememberSaveable(model.course.id) { mutableStateOf(false) }
     ModalBottomSheet(
@@ -124,13 +130,12 @@ fun CourseDetailSheet(
         ) {
             Header(model, onDismiss)
             // Le cours : notes puis documents (mêmes accès que la fiche de séance).
-            if (model.notes != null || documents.isNotEmpty()) {
-                Column(verticalArrangement = Arrangement.spacedBy(JSpacing.s)) {
-                    SheetSectionTitle("Le cours")
-                    model.notes?.let { CollapsibleDescription(it) }
-                    if (documents.isNotEmpty()) CourseDocumentsList(documents, onOpenDocument, onRedownload)
-                }
+            Column(verticalArrangement = Arrangement.spacedBy(JSpacing.s)) {
+                SheetSectionTitle("Le cours")
+                model.notes?.let { CollapsibleDescription(it) }
+                if (documents.isNotEmpty()) CourseDocumentsList(documents, onOpenDocument, onRedownload) else NoDocumentLine(model.course.source != null)
             }
+            NearbyDocumentsSection(model.subjectLabel, nearby, downloadingId, onOpenNearby, onAttachNearby)
             notebookPart?.let { NotebookPartSection(it, notebookLoading, downloadingId, onDownloadAttachment, onLink) }
             Column(
                 Modifier.fillMaxWidth().clip(JShapes.inner).background(JColors.Slate50)
