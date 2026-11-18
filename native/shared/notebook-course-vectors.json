@@ -1,0 +1,2611 @@
+{
+  "schemaVersion": 1,
+  "generator": "native/shared/documents/reference.py",
+  "regenerate": "python3 native/shared/documents/reference.py",
+  "spec": "native/shared/notebook-to-course.md §1–§5, native/shared/documents/README.md",
+  "containsPersonalData": false,
+  "today": "2026-11-18",
+  "subjects": [
+    {
+      "id": "maths",
+      "name": "Mathématiques",
+      "color": "#38BDF8",
+      "description": "Algèbre, Géométrie, Arithmétique, Probabilités"
+    },
+    {
+      "id": "francais",
+      "name": "Français",
+      "color": "#EF4444",
+      "description": "Grammaire, Littérature, Rédaction, Orthographe"
+    },
+    {
+      "id": "physique-chimie",
+      "name": "Physique-chimie",
+      "color": "#6366F1",
+      "description": "Énergie, Mouvement, Organisation de la matière"
+    },
+    {
+      "id": "histoire-geo",
+      "name": "Histoire-géographie",
+      "color": "#94A3B8",
+      "description": "Histoire, Géographie, EMC"
+    },
+    {
+      "id": "espagnol",
+      "name": "Espagnol",
+      "color": "#1D4ED8",
+      "description": "Vocabulaire, Grammaire, Conjugaison"
+    },
+    {
+      "id": "musique",
+      "name": "Musique",
+      "color": "#84CC16",
+      "description": "Éducation musicale et chant"
+    },
+    {
+      "id": "svt",
+      "name": "S.V.T.",
+      "color": "#14B8A6",
+      "description": "Sciences de la Vie et de la Terre, Génétique"
+    },
+    {
+      "id": "anglais",
+      "name": "Anglais",
+      "color": "#8B5CF6",
+      "description": "Grammar, Vocabulary, Reading & Listening"
+    },
+    {
+      "id": "techno",
+      "name": "Technologie",
+      "color": "#B45309",
+      "description": "Design, Informatique, Systèmes automatisés"
+    },
+    {
+      "id": "arts-plastiques",
+      "name": "Arts plastiques",
+      "color": "#EC4899",
+      "description": "Pratiques artistiques, Histoire des arts"
+    }
+  ],
+  "sessions": [
+    {
+      "id": "cdt-20",
+      "lessonId": "cours-maths",
+      "date": "2026-11-20",
+      "subject": "MATHEMATIQUES",
+      "contents": [
+        {
+          "title": "Chapitre 4 : Les fractions",
+          "description": "Préparer la leçon.",
+          "links": [],
+          "category": "Cours",
+          "attachments": [
+            {
+              "kind": "file",
+              "id": "pj-20",
+              "name": "Les fractions.odt",
+              "fixture": "files/odt-meta-title.odt"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cdt-18a",
+      "lessonId": "cours-hg",
+      "date": "2026-11-18",
+      "subject": "HISTOIRE-GEOGRAPHIE",
+      "contents": [
+        {
+          "title": "La Révolution française",
+          "description": "Lire le document 2 p. 112.",
+          "links": [],
+          "category": "Cours",
+          "attachments": [
+            {
+              "kind": "file",
+              "id": "pj-18a",
+              "name": "Chapitre 2.pdf",
+              "fixture": "files/pdf-word-title.pdf"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cours:cours-svt@2026-11-18",
+      "lessonId": "cours-svt",
+      "date": "2026-11-18",
+      "subject": "SCIENCES VIE & TERRE",
+      "contents": [
+        {
+          "title": "",
+          "description": "Observer les lames au microscope.",
+          "links": [],
+          "category": "",
+          "attachments": [
+            {
+              "kind": "link",
+              "id": "pj-18b",
+              "name": "Vidéo",
+              "url": "https://video.exemple.fr/microscope"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cdt-17",
+      "lessonId": "cours-maths",
+      "date": "2026-11-17",
+      "subject": "MATHEMATIQUES",
+      "contents": [
+        {
+          "title": "Exercices",
+          "description": "Ex. 12 et 13 p. 45",
+          "links": [],
+          "category": "Exercices",
+          "attachments": [
+            {
+              "kind": "file",
+              "id": "pj-17a",
+              "name": "Photo du tableau.png",
+              "fixture": "files/schema.png"
+            },
+            {
+              "kind": "file",
+              "id": "pj-17b",
+              "name": "Cours fonctions.odt",
+              "fixture": "files/odt-heading.odt"
+            }
+          ]
+        },
+        {
+          "title": "Correction",
+          "description": "",
+          "links": [],
+          "category": "",
+          "attachments": []
+        }
+      ]
+    },
+    {
+      "id": "cdt-16",
+      "lessonId": "cours-ang",
+      "date": "2026-11-16",
+      "subject": "ANGLAIS LV1",
+      "contents": [
+        {
+          "title": "Daily routine",
+          "description": "Learn the vocabulary list.",
+          "links": [],
+          "category": "",
+          "attachments": []
+        }
+      ]
+    },
+    {
+      "id": "cdt-13",
+      "lessonId": "cours-pc",
+      "date": "2026-11-13",
+      "subject": "PHYSIQUE-CHIMIE",
+      "contents": [
+        {
+          "title": "Les états de la matière",
+          "description": "",
+          "links": [],
+          "category": "",
+          "attachments": [
+            {
+              "kind": "file",
+              "id": "pj-13",
+              "name": "Etats.pptx",
+              "fixture": "files/pptx-ctrtitle.pptx"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cdt-13b",
+      "lessonId": "cours-eps",
+      "date": "2026-11-13",
+      "subject": "ED.PHYSIQUE & SPORT.",
+      "contents": [
+        {
+          "title": "Course d’endurance",
+          "description": "Apporter une tenue de sport.",
+          "links": [],
+          "category": "",
+          "attachments": []
+        }
+      ]
+    },
+    {
+      "id": "cdt-12",
+      "lessonId": "cours-fr",
+      "date": "2026-11-12",
+      "subject": "FRANCAIS",
+      "contents": [
+        {
+          "title": "Cours",
+          "description": "Relire les exemples.",
+          "links": [],
+          "category": "Cours",
+          "attachments": [
+            {
+              "kind": "file",
+              "id": "pj-12a",
+              "name": "Cours complet.pdf",
+              "downloadError": "tooLarge"
+            },
+            {
+              "kind": "file",
+              "id": "pj-12b",
+              "name": "Fiche.md",
+              "fixture": "files/fiche.md"
+            }
+          ]
+        },
+        {
+          "title": "Exercices",
+          "description": "Trouver trois métaphores.\n• dans le poème\n• dans la chanson",
+          "links": [],
+          "category": "",
+          "attachments": []
+        }
+      ]
+    },
+    {
+      "id": "cdt-12b",
+      "lessonId": "cours-techno",
+      "date": "2026-11-12",
+      "subject": "TECHNOLOGIE",
+      "contents": [
+        {
+          "title": "TP",
+          "description": "",
+          "links": [],
+          "category": "",
+          "attachments": [
+            {
+              "kind": "file",
+              "id": "pj-12b-0",
+              "name": "Programme.txt",
+              "downloadError": "unavailable"
+            },
+            {
+              "kind": "file",
+              "id": "pj-12b-1",
+              "name": "Fiche 1.txt",
+              "fixture": "files/techno.txt"
+            },
+            {
+              "kind": "file",
+              "id": "pj-12b-2",
+              "name": "Fiche 2.txt",
+              "fixture": "files/techno.txt"
+            },
+            {
+              "kind": "file",
+              "id": "pj-12b-3",
+              "name": "Fiche 3.txt",
+              "fixture": "files/techno.txt"
+            },
+            {
+              "kind": "file",
+              "id": "pj-12b-4",
+              "name": "Fiche 4.txt",
+              "fixture": "files/techno.txt"
+            },
+            {
+              "kind": "file",
+              "id": "pj-12b-5",
+              "name": "Fiche 5.txt",
+              "fixture": "files/techno.txt"
+            },
+            {
+              "kind": "file",
+              "id": "pj-12b-6",
+              "name": "Fiche 6.txt",
+              "fixture": "files/techno.txt"
+            },
+            {
+              "kind": "file",
+              "id": "pj-12b-7",
+              "name": "Fiche 7.txt",
+              "fixture": "files/techno.txt"
+            },
+            {
+              "kind": "file",
+              "id": "pj-12b-8",
+              "name": "Fiche 8.txt",
+              "fixture": "files/techno.txt"
+            },
+            {
+              "kind": "file",
+              "id": "pj-12b-9",
+              "name": "Fiche 9.txt",
+              "fixture": "files/techno.txt"
+            },
+            {
+              "kind": "file",
+              "id": "pj-12b-10",
+              "name": "Fiche 10.txt",
+              "fixture": "files/techno.txt"
+            },
+            {
+              "kind": "file",
+              "id": "pj-12b-11",
+              "name": "Fiche 11.txt",
+              "fixture": "files/techno.txt"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cdt-10",
+      "lessonId": "cours-esp",
+      "date": "2026-11-10",
+      "subject": "ESPAGNOL LV2",
+      "contents": [
+        {
+          "title": "La casa",
+          "description": "La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios.",
+          "links": [],
+          "category": "",
+          "attachments": []
+        }
+      ]
+    },
+    {
+      "id": "cdt-09",
+      "lessonId": "cours-vie",
+      "date": "2026-11-09",
+      "subject": "Cours",
+      "contents": [
+        {
+          "title": "Sortie au musée",
+          "description": "Autorisation à signer.",
+          "links": [],
+          "category": "",
+          "attachments": []
+        }
+      ]
+    },
+    {
+      "id": "cdt-05",
+      "lessonId": "cours-mus",
+      "date": "2026-11-05",
+      "subject": "MUSIQUE",
+      "contents": [
+        {
+          "title": "Le rythme et la pulsation",
+          "description": "",
+          "links": [],
+          "category": "",
+          "attachments": [
+            {
+              "kind": "file",
+              "id": "pj-05",
+              "name": "Corrigé.pdf",
+              "fixture": "files/pdf-encrypted.pdf"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cdt-04",
+      "lessonId": "cours-maths",
+      "date": "2026-11-04",
+      "subject": "MATHEMATIQUES",
+      "contents": [
+        {
+          "title": "Mathématiques",
+          "description": "Fiche de synthèse.",
+          "links": [],
+          "category": "",
+          "attachments": [
+            {
+              "kind": "file",
+              "id": "pj-04",
+              "name": "Chapitre_7_-_Statistiques.pdf",
+              "fixture": "files/controle_SVT__version_finale.pdf"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "prefill": [
+    {
+      "sessionKey": "cdt-20",
+      "subjectId": "maths",
+      "date": "2026-11-20",
+      "chapter": "Chapitre 4",
+      "title": "Les fractions",
+      "titleSource": "metadata",
+      "candidates": [
+        {
+          "source": "metadata",
+          "detail": "metaXmlDcTitle",
+          "raw": "Les fractions",
+          "value": "Les fractions",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "firstHeading",
+          "raw": "Chapitre 4 : Les fractions",
+          "value": "Chapitre 4 : Les fractions",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "pronoteTitle",
+          "raw": "Chapitre 4 : Les fractions",
+          "value": "Chapitre 4 : Les fractions",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "fileName",
+          "raw": "Les fractions",
+          "value": "Les fractions",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "dateFallback",
+          "raw": "Cours du 20 novembre",
+          "value": "Cours du 20 novembre",
+          "accepted": true,
+          "reason": null
+        }
+      ],
+      "description": "Chapitre 4 : Les fractions\n\nPréparer la leçon.",
+      "principalDocument": "Les fractions.odt",
+      "documents": [
+        {
+          "name": "Les fractions.odt",
+          "mime": "application/vnd.oasis.opendocument.text",
+          "size": 1941,
+          "extractedTitle": "Les fractions"
+        }
+      ],
+      "skippedAttachments": [],
+      "courseNumber": 1
+    },
+    {
+      "sessionKey": "cdt-18a",
+      "subjectId": "histoire-geo",
+      "date": "2026-11-18",
+      "chapter": "Chapitre 2",
+      "title": "La Révolution",
+      "titleSource": "metadata",
+      "candidates": [
+        {
+          "source": "metadata",
+          "detail": "pdfInfoTitle",
+          "raw": "Microsoft Word - Chapitre 2 - La Révolution.docx",
+          "value": "Chapitre 2 - La Révolution",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "firstHeading",
+          "raw": "La Révolution française",
+          "value": "La Révolution française",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "pronoteTitle",
+          "raw": "La Révolution française",
+          "value": "La Révolution française",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "fileName",
+          "raw": "Chapitre 2",
+          "value": "Chapitre 2",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "dateFallback",
+          "raw": "Cours du 18 novembre",
+          "value": "Cours du 18 novembre",
+          "accepted": true,
+          "reason": null
+        }
+      ],
+      "description": "La Révolution française\n\nLire le document 2 p. 112.",
+      "principalDocument": "Chapitre 2.pdf",
+      "documents": [
+        {
+          "name": "Chapitre 2.pdf",
+          "mime": "application/pdf",
+          "size": 987,
+          "extractedTitle": "La Révolution"
+        }
+      ],
+      "skippedAttachments": [],
+      "courseNumber": 2
+    },
+    {
+      "sessionKey": "cours:cours-svt@2026-11-18",
+      "subjectId": "svt",
+      "date": "2026-11-18",
+      "chapter": "Sans chapitre",
+      "title": "Cours du 18 novembre",
+      "titleSource": "dateFallback",
+      "candidates": [
+        {
+          "source": "dateFallback",
+          "raw": "Cours du 18 novembre",
+          "value": "Cours du 18 novembre",
+          "accepted": true,
+          "reason": null
+        }
+      ],
+      "description": "Observer les lames au microscope.",
+      "principalDocument": null,
+      "documents": [],
+      "skippedAttachments": [],
+      "courseNumber": 1
+    },
+    {
+      "sessionKey": "cdt-17",
+      "subjectId": "maths",
+      "date": "2026-11-17",
+      "chapter": "Chapitre 3",
+      "title": "Les fonctions affines",
+      "titleSource": "firstHeading",
+      "candidates": [
+        {
+          "source": "firstHeading",
+          "raw": "Chapitre 3 : Les fonctions affines",
+          "value": "Chapitre 3 : Les fonctions affines",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "pronoteTitle",
+          "raw": "Exercices",
+          "value": "Exercices",
+          "accepted": false,
+          "reason": "generic"
+        },
+        {
+          "source": "fileName",
+          "raw": "Cours fonctions",
+          "value": "Cours fonctions",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "dateFallback",
+          "raw": "Cours du 17 novembre",
+          "value": "Cours du 17 novembre",
+          "accepted": true,
+          "reason": null
+        }
+      ],
+      "description": "Exercices\n\nEx. 12 et 13 p. 45\n\nCorrection",
+      "principalDocument": "Cours fonctions.odt",
+      "documents": [
+        {
+          "name": "Photo du tableau.png",
+          "mime": "image/png",
+          "size": 69,
+          "extractedTitle": null
+        },
+        {
+          "name": "Cours fonctions.odt",
+          "mime": "application/vnd.oasis.opendocument.text",
+          "size": 2058,
+          "extractedTitle": "Les fonctions affines"
+        }
+      ],
+      "skippedAttachments": [],
+      "courseNumber": 5
+    },
+    {
+      "sessionKey": "cdt-16",
+      "subjectId": "anglais",
+      "date": "2026-11-16",
+      "chapter": "Sans chapitre",
+      "title": "Daily routine",
+      "titleSource": "pronoteTitle",
+      "candidates": [
+        {
+          "source": "pronoteTitle",
+          "raw": "Daily routine",
+          "value": "Daily routine",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "dateFallback",
+          "raw": "Cours du 16 novembre",
+          "value": "Cours du 16 novembre",
+          "accepted": true,
+          "reason": null
+        }
+      ],
+      "description": "Daily routine\n\nLearn the vocabulary list.",
+      "principalDocument": null,
+      "documents": [],
+      "skippedAttachments": [],
+      "courseNumber": 2
+    },
+    {
+      "sessionKey": "cdt-13",
+      "subjectId": "physique-chimie",
+      "date": "2026-11-13",
+      "chapter": "Sans chapitre",
+      "title": "Les états de la matière",
+      "titleSource": "firstHeading",
+      "candidates": [
+        {
+          "source": "firstHeading",
+          "raw": "Les états de la matière",
+          "value": "Les états de la matière",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "pronoteTitle",
+          "raw": "Les états de la matière",
+          "value": "Les états de la matière",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "fileName",
+          "raw": "Etats",
+          "value": "Etats",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "dateFallback",
+          "raw": "Cours du 13 novembre",
+          "value": "Cours du 13 novembre",
+          "accepted": true,
+          "reason": null
+        }
+      ],
+      "description": "Les états de la matière",
+      "principalDocument": "Etats.pptx",
+      "documents": [
+        {
+          "name": "Etats.pptx",
+          "mime": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+          "size": 5841,
+          "extractedTitle": "Les états de la matière"
+        }
+      ],
+      "skippedAttachments": [],
+      "courseNumber": 1
+    },
+    {
+      "sessionKey": "cdt-13b",
+      "subjectId": null,
+      "date": "2026-11-13",
+      "chapter": "Sans chapitre",
+      "title": "Course d’endurance",
+      "titleSource": "pronoteTitle",
+      "candidates": [
+        {
+          "source": "pronoteTitle",
+          "raw": "Course d’endurance",
+          "value": "Course d’endurance",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "dateFallback",
+          "raw": "Cours du 13 novembre",
+          "value": "Cours du 13 novembre",
+          "accepted": true,
+          "reason": null
+        }
+      ],
+      "description": "Course d’endurance\n\nApporter une tenue de sport.",
+      "principalDocument": null,
+      "documents": [],
+      "skippedAttachments": []
+    },
+    {
+      "sessionKey": "cdt-12",
+      "subjectId": "francais",
+      "date": "2026-11-12",
+      "chapter": "Sans chapitre",
+      "title": "Les figures de style",
+      "titleSource": "firstHeading",
+      "candidates": [
+        {
+          "source": "firstHeading",
+          "raw": " Les figures de style :",
+          "value": "Les figures de style",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "pronoteTitle",
+          "raw": "Cours",
+          "value": "Cours",
+          "accepted": false,
+          "reason": "generic"
+        },
+        {
+          "source": "fileName",
+          "raw": "Fiche",
+          "value": "Fiche",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "dateFallback",
+          "raw": "Cours du 12 novembre",
+          "value": "Cours du 12 novembre",
+          "accepted": true,
+          "reason": null
+        }
+      ],
+      "description": "Cours\n\nRelire les exemples.\n\nExercices\n\nTrouver trois métaphores.\n• dans le poème\n• dans la chanson",
+      "principalDocument": "Fiche.md",
+      "documents": [
+        {
+          "name": "Fiche.md",
+          "mime": "text/markdown",
+          "size": 112,
+          "extractedTitle": "Les figures de style"
+        }
+      ],
+      "skippedAttachments": [
+        {
+          "id": "pj-12a",
+          "name": "Cours complet.pdf",
+          "reason": "tooLarge"
+        }
+      ],
+      "courseNumber": 3
+    },
+    {
+      "sessionKey": "cdt-12b",
+      "subjectId": "techno",
+      "date": "2026-11-12",
+      "chapter": "Thème 2",
+      "title": "Les objets connectés",
+      "titleSource": "firstHeading",
+      "candidates": [
+        {
+          "source": "firstHeading",
+          "raw": "Thème 2 – Les objets connectés",
+          "value": "Thème 2 – Les objets connectés",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "pronoteTitle",
+          "raw": "TP",
+          "value": "TP",
+          "accepted": false,
+          "reason": "tooFewLetters"
+        },
+        {
+          "source": "fileName",
+          "raw": "Fiche 1",
+          "value": "Fiche 1",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "dateFallback",
+          "raw": "Cours du 12 novembre",
+          "value": "Cours du 12 novembre",
+          "accepted": true,
+          "reason": null
+        }
+      ],
+      "description": "TP",
+      "principalDocument": "Fiche 1.txt",
+      "documents": [
+        {
+          "name": "Fiche 1.txt",
+          "mime": "text/plain",
+          "size": 60,
+          "extractedTitle": "Les objets connectés"
+        },
+        {
+          "name": "Fiche 2.txt",
+          "mime": "text/plain",
+          "size": 60,
+          "extractedTitle": "Les objets connectés"
+        },
+        {
+          "name": "Fiche 3.txt",
+          "mime": "text/plain",
+          "size": 60,
+          "extractedTitle": "Les objets connectés"
+        },
+        {
+          "name": "Fiche 4.txt",
+          "mime": "text/plain",
+          "size": 60,
+          "extractedTitle": "Les objets connectés"
+        },
+        {
+          "name": "Fiche 5.txt",
+          "mime": "text/plain",
+          "size": 60,
+          "extractedTitle": "Les objets connectés"
+        },
+        {
+          "name": "Fiche 6.txt",
+          "mime": "text/plain",
+          "size": 60,
+          "extractedTitle": "Les objets connectés"
+        },
+        {
+          "name": "Fiche 7.txt",
+          "mime": "text/plain",
+          "size": 60,
+          "extractedTitle": "Les objets connectés"
+        },
+        {
+          "name": "Fiche 8.txt",
+          "mime": "text/plain",
+          "size": 60,
+          "extractedTitle": "Les objets connectés"
+        },
+        {
+          "name": "Fiche 9.txt",
+          "mime": "text/plain",
+          "size": 60,
+          "extractedTitle": "Les objets connectés"
+        },
+        {
+          "name": "Fiche 10.txt",
+          "mime": "text/plain",
+          "size": 60,
+          "extractedTitle": "Les objets connectés"
+        }
+      ],
+      "skippedAttachments": [
+        {
+          "id": "pj-12b-0",
+          "name": "Programme.txt",
+          "reason": "unavailable"
+        },
+        {
+          "id": "pj-12b-11",
+          "name": "Fiche 11.txt",
+          "reason": "limit"
+        }
+      ],
+      "courseNumber": 1
+    },
+    {
+      "sessionKey": "cdt-10",
+      "subjectId": "espagnol",
+      "date": "2026-11-10",
+      "chapter": "Sans chapitre",
+      "title": "La casa",
+      "titleSource": "pronoteTitle",
+      "candidates": [
+        {
+          "source": "pronoteTitle",
+          "raw": "La casa",
+          "value": "La casa",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "dateFallback",
+          "raw": "Cours du 10 novembre",
+          "value": "Cours du 10 novembre",
+          "accepted": true,
+          "reason": null
+        }
+      ],
+      "description": "La casa\n\nLa casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos",
+      "principalDocument": null,
+      "documents": [],
+      "skippedAttachments": [],
+      "courseNumber": 1
+    },
+    {
+      "sessionKey": "cdt-09",
+      "subjectId": null,
+      "date": "2026-11-09",
+      "chapter": "Sans chapitre",
+      "title": "Sortie au musée",
+      "titleSource": "pronoteTitle",
+      "candidates": [
+        {
+          "source": "pronoteTitle",
+          "raw": "Sortie au musée",
+          "value": "Sortie au musée",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "dateFallback",
+          "raw": "Cours du 9 novembre",
+          "value": "Cours du 9 novembre",
+          "accepted": true,
+          "reason": null
+        }
+      ],
+      "description": "Sortie au musée\n\nAutorisation à signer.",
+      "principalDocument": null,
+      "documents": [],
+      "skippedAttachments": []
+    },
+    {
+      "sessionKey": "cdt-05",
+      "subjectId": "musique",
+      "date": "2026-11-05",
+      "chapter": "Sans chapitre",
+      "title": "Le rythme et la pulsation",
+      "titleSource": "pronoteTitle",
+      "candidates": [
+        {
+          "source": "pronoteTitle",
+          "raw": "Le rythme et la pulsation",
+          "value": "Le rythme et la pulsation",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "fileName",
+          "raw": "Corrigé",
+          "value": "Corrigé",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "dateFallback",
+          "raw": "Cours du 5 novembre",
+          "value": "Cours du 5 novembre",
+          "accepted": true,
+          "reason": null
+        }
+      ],
+      "description": "Le rythme et la pulsation",
+      "principalDocument": "Corrigé.pdf",
+      "documents": [
+        {
+          "name": "Corrigé.pdf",
+          "mime": "application/pdf",
+          "size": 1092,
+          "extractedTitle": null
+        }
+      ],
+      "skippedAttachments": [],
+      "courseNumber": 1
+    },
+    {
+      "sessionKey": "cdt-04",
+      "subjectId": "maths",
+      "date": "2026-11-04",
+      "chapter": "Chapitre 7",
+      "title": "Statistiques",
+      "titleSource": "fileName",
+      "candidates": [
+        {
+          "source": "pronoteTitle",
+          "raw": "Mathématiques",
+          "value": "Mathématiques",
+          "accepted": false,
+          "reason": "subjectName"
+        },
+        {
+          "source": "fileName",
+          "raw": "Chapitre_7_-_Statistiques",
+          "value": "Chapitre 7 - Statistiques",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "dateFallback",
+          "raw": "Cours du 4 novembre",
+          "value": "Cours du 4 novembre",
+          "accepted": true,
+          "reason": null
+        }
+      ],
+      "description": "Mathématiques\n\nFiche de synthèse.",
+      "principalDocument": "Chapitre_7_-_Statistiques.pdf",
+      "documents": [
+        {
+          "name": "Chapitre_7_-_Statistiques.pdf",
+          "mime": "application/pdf",
+          "size": 623,
+          "extractedTitle": null
+        }
+      ],
+      "skippedAttachments": [],
+      "courseNumber": 1
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "auto-since-nov-12",
+      "note": "Réglage actif depuis le 12 novembre : éligibilité, dédoublonnage, dismissed, matière inconnue, date future, numérotation, limites de fichiers",
+      "today": "2026-11-18",
+      "settings": {
+        "intervals": [
+          0,
+          1,
+          2,
+          4,
+          7,
+          14,
+          25,
+          45,
+          60,
+          90
+        ],
+        "sensitivity": 0.4,
+        "emergencyThreshold": 30,
+        "pronoteIcalUrl": "",
+        "soundEnabled": true,
+        "userName": "Élève",
+        "userGrade": "3ème",
+        "notebookAutoCreate": true,
+        "notebookAutoCreateSince": "2026-11-12"
+      },
+      "courses": [
+        {
+          "id": "course-hg-ch2",
+          "subjectId": "histoire-geo",
+          "chapter": "Chapitre 2",
+          "courseNumber": 1,
+          "title": "La monarchie absolue",
+          "date": "2026-10-06"
+        },
+        {
+          "id": "course-maths-ch3a",
+          "subjectId": "maths",
+          "chapter": "chapitre 3",
+          "courseNumber": 1,
+          "title": "Notion de fonction",
+          "date": "2026-10-13"
+        },
+        {
+          "id": "course-maths-ch3b",
+          "subjectId": "maths",
+          "chapter": "Chapitre 3",
+          "courseNumber": 4,
+          "title": "Fonctions linéaires",
+          "date": "2026-11-03"
+        },
+        {
+          "id": "course-fr-sans",
+          "subjectId": "francais",
+          "chapter": "Sans chapitre",
+          "courseNumber": 2,
+          "title": "Le conte",
+          "date": "2026-10-20"
+        },
+        {
+          "id": "course-nb-anglais",
+          "subjectId": "anglais",
+          "chapter": "Sans chapitre",
+          "courseNumber": 1,
+          "title": "Daily routine",
+          "date": "2026-11-16",
+          "source": {
+            "kind": "pronote-notebook",
+            "sessionKey": "cdt-16",
+            "subjectLabel": "ANGLAIS LV1",
+            "date": "2026-11-16"
+          }
+        }
+      ],
+      "notebookImports": {
+        "cdt-16": {
+          "status": "created",
+          "courseId": "course-nb-anglais",
+          "at": "2026-11-16T18:00:00Z"
+        },
+        "cdt-13": {
+          "status": "dismissed",
+          "courseId": "course-deleted-pc",
+          "at": "2026-11-14T18:00:00Z"
+        }
+      },
+      "expected": {
+        "eligibleSessionKeys": [
+          "cdt-12",
+          "cdt-12b",
+          "cdt-17",
+          "cdt-18a",
+          "cours:cours-svt@2026-11-18"
+        ],
+        "skipped": [
+          {
+            "sessionKey": "cdt-20",
+            "reason": "future"
+          },
+          {
+            "sessionKey": "cdt-16",
+            "reason": "created"
+          },
+          {
+            "sessionKey": "cdt-13",
+            "reason": "dismissed"
+          },
+          {
+            "sessionKey": "cdt-13b",
+            "reason": "unknownSubject"
+          },
+          {
+            "sessionKey": "cdt-10",
+            "reason": "beforeSince"
+          },
+          {
+            "sessionKey": "cdt-09",
+            "reason": "beforeSince"
+          },
+          {
+            "sessionKey": "cdt-05",
+            "reason": "beforeSince"
+          },
+          {
+            "sessionKey": "cdt-04",
+            "reason": "beforeSince"
+          }
+        ],
+        "createdCourses": [
+          {
+            "sessionKey": "cdt-12",
+            "titleSource": "firstHeading",
+            "id": "course-nb-cdt-12",
+            "subjectId": "francais",
+            "chapter": "Sans chapitre",
+            "courseNumber": 3,
+            "title": "Les figures de style",
+            "date": "2026-11-12",
+            "description": "Cours\n\nRelire les exemples.\n\nExercices\n\nTrouver trois métaphores.\n• dans le poème\n• dans la chanson",
+            "source": {
+              "kind": "pronote-notebook",
+              "sessionKey": "cdt-12",
+              "subjectLabel": "FRANCAIS",
+              "date": "2026-11-12"
+            },
+            "documents": [
+              {
+                "name": "Fiche.md",
+                "mime": "text/markdown",
+                "size": 112,
+                "extractedTitle": "Les figures de style"
+              }
+            ]
+          },
+          {
+            "sessionKey": "cdt-12b",
+            "titleSource": "firstHeading",
+            "id": "course-nb-cdt-12b",
+            "subjectId": "techno",
+            "chapter": "Thème 2",
+            "courseNumber": 1,
+            "title": "Les objets connectés",
+            "date": "2026-11-12",
+            "description": "TP",
+            "source": {
+              "kind": "pronote-notebook",
+              "sessionKey": "cdt-12b",
+              "subjectLabel": "TECHNOLOGIE",
+              "date": "2026-11-12"
+            },
+            "documents": [
+              {
+                "name": "Fiche 1.txt",
+                "mime": "text/plain",
+                "size": 60,
+                "extractedTitle": "Les objets connectés"
+              },
+              {
+                "name": "Fiche 2.txt",
+                "mime": "text/plain",
+                "size": 60,
+                "extractedTitle": "Les objets connectés"
+              },
+              {
+                "name": "Fiche 3.txt",
+                "mime": "text/plain",
+                "size": 60,
+                "extractedTitle": "Les objets connectés"
+              },
+              {
+                "name": "Fiche 4.txt",
+                "mime": "text/plain",
+                "size": 60,
+                "extractedTitle": "Les objets connectés"
+              },
+              {
+                "name": "Fiche 5.txt",
+                "mime": "text/plain",
+                "size": 60,
+                "extractedTitle": "Les objets connectés"
+              },
+              {
+                "name": "Fiche 6.txt",
+                "mime": "text/plain",
+                "size": 60,
+                "extractedTitle": "Les objets connectés"
+              },
+              {
+                "name": "Fiche 7.txt",
+                "mime": "text/plain",
+                "size": 60,
+                "extractedTitle": "Les objets connectés"
+              },
+              {
+                "name": "Fiche 8.txt",
+                "mime": "text/plain",
+                "size": 60,
+                "extractedTitle": "Les objets connectés"
+              },
+              {
+                "name": "Fiche 9.txt",
+                "mime": "text/plain",
+                "size": 60,
+                "extractedTitle": "Les objets connectés"
+              },
+              {
+                "name": "Fiche 10.txt",
+                "mime": "text/plain",
+                "size": 60,
+                "extractedTitle": "Les objets connectés"
+              }
+            ]
+          },
+          {
+            "sessionKey": "cdt-17",
+            "titleSource": "firstHeading",
+            "id": "course-nb-cdt-17",
+            "subjectId": "maths",
+            "chapter": "Chapitre 3",
+            "courseNumber": 5,
+            "title": "Les fonctions affines",
+            "date": "2026-11-17",
+            "description": "Exercices\n\nEx. 12 et 13 p. 45\n\nCorrection",
+            "source": {
+              "kind": "pronote-notebook",
+              "sessionKey": "cdt-17",
+              "subjectLabel": "MATHEMATIQUES",
+              "date": "2026-11-17"
+            },
+            "documents": [
+              {
+                "name": "Photo du tableau.png",
+                "mime": "image/png",
+                "size": 69,
+                "extractedTitle": null
+              },
+              {
+                "name": "Cours fonctions.odt",
+                "mime": "application/vnd.oasis.opendocument.text",
+                "size": 2058,
+                "extractedTitle": "Les fonctions affines"
+              }
+            ]
+          },
+          {
+            "sessionKey": "cdt-18a",
+            "titleSource": "metadata",
+            "id": "course-nb-cdt-18a",
+            "subjectId": "histoire-geo",
+            "chapter": "Chapitre 2",
+            "courseNumber": 2,
+            "title": "La Révolution",
+            "date": "2026-11-18",
+            "description": "La Révolution française\n\nLire le document 2 p. 112.",
+            "source": {
+              "kind": "pronote-notebook",
+              "sessionKey": "cdt-18a",
+              "subjectLabel": "HISTOIRE-GEOGRAPHIE",
+              "date": "2026-11-18"
+            },
+            "documents": [
+              {
+                "name": "Chapitre 2.pdf",
+                "mime": "application/pdf",
+                "size": 987,
+                "extractedTitle": "La Révolution"
+              }
+            ]
+          },
+          {
+            "sessionKey": "cours:cours-svt@2026-11-18",
+            "titleSource": "dateFallback",
+            "id": "course-nb-cours:cours-svt@2026-11-18",
+            "subjectId": "svt",
+            "chapter": "Sans chapitre",
+            "courseNumber": 1,
+            "title": "Cours du 18 novembre",
+            "date": "2026-11-18",
+            "description": "Observer les lames au microscope.",
+            "source": {
+              "kind": "pronote-notebook",
+              "sessionKey": "cours:cours-svt@2026-11-18",
+              "subjectLabel": "SCIENCES VIE & TERRE",
+              "date": "2026-11-18"
+            },
+            "documents": []
+          }
+        ],
+        "notebookImportsAfter": {
+          "cdt-12": {
+            "status": "created",
+            "courseId": "course-nb-cdt-12"
+          },
+          "cdt-12b": {
+            "status": "created",
+            "courseId": "course-nb-cdt-12b"
+          },
+          "cdt-13": {
+            "status": "dismissed",
+            "courseId": "course-deleted-pc"
+          },
+          "cdt-16": {
+            "status": "created",
+            "courseId": "course-nb-anglais"
+          },
+          "cdt-17": {
+            "status": "created",
+            "courseId": "course-nb-cdt-17"
+          },
+          "cdt-18a": {
+            "status": "created",
+            "courseId": "course-nb-cdt-18a"
+          },
+          "cours:cours-svt@2026-11-18": {
+            "status": "created",
+            "courseId": "course-nb-cours:cours-svt@2026-11-18"
+          }
+        },
+        "toast": "5 cours créés depuis le cahier de textes",
+        "buttons": {
+          "cdt-20": "createCourse",
+          "cdt-18a": "viewCourse",
+          "cours:cours-svt@2026-11-18": "viewCourse",
+          "cdt-17": "viewCourse",
+          "cdt-16": "viewCourse",
+          "cdt-13": "createCourse",
+          "cdt-13b": "createCourse",
+          "cdt-12": "viewCourse",
+          "cdt-12b": "viewCourse",
+          "cdt-10": "createCourse",
+          "cdt-09": "createCourse",
+          "cdt-05": "createCourse",
+          "cdt-04": "createCourse"
+        }
+      }
+    },
+    {
+      "id": "activation-today",
+      "note": "Activation aujourd’hui (since = today) : seules les séances du jour ; proposition des 14 derniers jours",
+      "today": "2026-11-18",
+      "settings": {
+        "intervals": [
+          0,
+          1,
+          2,
+          4,
+          7,
+          14,
+          25,
+          45,
+          60,
+          90
+        ],
+        "sensitivity": 0.4,
+        "emergencyThreshold": 30,
+        "pronoteIcalUrl": "",
+        "soundEnabled": true,
+        "userName": "Élève",
+        "userGrade": "3ème",
+        "notebookAutoCreate": true,
+        "notebookAutoCreateSince": "2026-11-18"
+      },
+      "courses": [
+        {
+          "id": "course-hg-ch2",
+          "subjectId": "histoire-geo",
+          "chapter": "Chapitre 2",
+          "courseNumber": 1,
+          "title": "La monarchie absolue",
+          "date": "2026-10-06"
+        },
+        {
+          "id": "course-maths-ch3a",
+          "subjectId": "maths",
+          "chapter": "chapitre 3",
+          "courseNumber": 1,
+          "title": "Notion de fonction",
+          "date": "2026-10-13"
+        },
+        {
+          "id": "course-maths-ch3b",
+          "subjectId": "maths",
+          "chapter": "Chapitre 3",
+          "courseNumber": 4,
+          "title": "Fonctions linéaires",
+          "date": "2026-11-03"
+        },
+        {
+          "id": "course-fr-sans",
+          "subjectId": "francais",
+          "chapter": "Sans chapitre",
+          "courseNumber": 2,
+          "title": "Le conte",
+          "date": "2026-10-20"
+        },
+        {
+          "id": "course-nb-anglais",
+          "subjectId": "anglais",
+          "chapter": "Sans chapitre",
+          "courseNumber": 1,
+          "title": "Daily routine",
+          "date": "2026-11-16",
+          "source": {
+            "kind": "pronote-notebook",
+            "sessionKey": "cdt-16",
+            "subjectLabel": "ANGLAIS LV1",
+            "date": "2026-11-16"
+          }
+        }
+      ],
+      "notebookImports": {
+        "cdt-16": {
+          "status": "created",
+          "courseId": "course-nb-anglais",
+          "at": "2026-11-16T18:00:00Z"
+        },
+        "cdt-13": {
+          "status": "dismissed",
+          "courseId": "course-deleted-pc",
+          "at": "2026-11-14T18:00:00Z"
+        }
+      },
+      "expected": {
+        "eligibleSessionKeys": [
+          "cdt-18a",
+          "cours:cours-svt@2026-11-18"
+        ],
+        "skipped": [
+          {
+            "sessionKey": "cdt-20",
+            "reason": "future"
+          },
+          {
+            "sessionKey": "cdt-17",
+            "reason": "beforeSince"
+          },
+          {
+            "sessionKey": "cdt-16",
+            "reason": "created"
+          },
+          {
+            "sessionKey": "cdt-13",
+            "reason": "dismissed"
+          },
+          {
+            "sessionKey": "cdt-13b",
+            "reason": "beforeSince"
+          },
+          {
+            "sessionKey": "cdt-12",
+            "reason": "beforeSince"
+          },
+          {
+            "sessionKey": "cdt-12b",
+            "reason": "beforeSince"
+          },
+          {
+            "sessionKey": "cdt-10",
+            "reason": "beforeSince"
+          },
+          {
+            "sessionKey": "cdt-09",
+            "reason": "beforeSince"
+          },
+          {
+            "sessionKey": "cdt-05",
+            "reason": "beforeSince"
+          },
+          {
+            "sessionKey": "cdt-04",
+            "reason": "beforeSince"
+          }
+        ],
+        "createdCourses": [
+          {
+            "sessionKey": "cdt-18a",
+            "titleSource": "metadata",
+            "id": "course-nb-cdt-18a",
+            "subjectId": "histoire-geo",
+            "chapter": "Chapitre 2",
+            "courseNumber": 2,
+            "title": "La Révolution",
+            "date": "2026-11-18",
+            "description": "La Révolution française\n\nLire le document 2 p. 112.",
+            "source": {
+              "kind": "pronote-notebook",
+              "sessionKey": "cdt-18a",
+              "subjectLabel": "HISTOIRE-GEOGRAPHIE",
+              "date": "2026-11-18"
+            },
+            "documents": [
+              {
+                "name": "Chapitre 2.pdf",
+                "mime": "application/pdf",
+                "size": 987,
+                "extractedTitle": "La Révolution"
+              }
+            ]
+          },
+          {
+            "sessionKey": "cours:cours-svt@2026-11-18",
+            "titleSource": "dateFallback",
+            "id": "course-nb-cours:cours-svt@2026-11-18",
+            "subjectId": "svt",
+            "chapter": "Sans chapitre",
+            "courseNumber": 1,
+            "title": "Cours du 18 novembre",
+            "date": "2026-11-18",
+            "description": "Observer les lames au microscope.",
+            "source": {
+              "kind": "pronote-notebook",
+              "sessionKey": "cours:cours-svt@2026-11-18",
+              "subjectLabel": "SCIENCES VIE & TERRE",
+              "date": "2026-11-18"
+            },
+            "documents": []
+          }
+        ],
+        "notebookImportsAfter": {
+          "cdt-13": {
+            "status": "dismissed",
+            "courseId": "course-deleted-pc"
+          },
+          "cdt-16": {
+            "status": "created",
+            "courseId": "course-nb-anglais"
+          },
+          "cdt-18a": {
+            "status": "created",
+            "courseId": "course-nb-cdt-18a"
+          },
+          "cours:cours-svt@2026-11-18": {
+            "status": "created",
+            "courseId": "course-nb-cours:cours-svt@2026-11-18"
+          }
+        },
+        "toast": "2 cours créés depuis le cahier de textes",
+        "buttons": {
+          "cdt-20": "createCourse",
+          "cdt-18a": "viewCourse",
+          "cours:cours-svt@2026-11-18": "viewCourse",
+          "cdt-17": "createCourse",
+          "cdt-16": "viewCourse",
+          "cdt-13": "createCourse",
+          "cdt-13b": "createCourse",
+          "cdt-12": "createCourse",
+          "cdt-12b": "createCourse",
+          "cdt-10": "createCourse",
+          "cdt-09": "createCourse",
+          "cdt-05": "createCourse",
+          "cdt-04": "createCourse"
+        },
+        "backfillProposal": {
+          "from": "2026-11-04",
+          "to": "2026-11-17",
+          "count": 6,
+          "sessionKeys": [
+            "cdt-17",
+            "cdt-12",
+            "cdt-12b",
+            "cdt-10",
+            "cdt-05",
+            "cdt-04"
+          ],
+          "message": "Importer aussi les 6 séances des 14 derniers jours ?",
+          "acceptSetsSince": "2026-11-04"
+        }
+      }
+    },
+    {
+      "id": "backfill-accepted",
+      "note": "Proposition acceptée : since = today − 14",
+      "today": "2026-11-18",
+      "settings": {
+        "intervals": [
+          0,
+          1,
+          2,
+          4,
+          7,
+          14,
+          25,
+          45,
+          60,
+          90
+        ],
+        "sensitivity": 0.4,
+        "emergencyThreshold": 30,
+        "pronoteIcalUrl": "",
+        "soundEnabled": true,
+        "userName": "Élève",
+        "userGrade": "3ème",
+        "notebookAutoCreate": true,
+        "notebookAutoCreateSince": "2026-11-04"
+      },
+      "courses": [
+        {
+          "id": "course-hg-ch2",
+          "subjectId": "histoire-geo",
+          "chapter": "Chapitre 2",
+          "courseNumber": 1,
+          "title": "La monarchie absolue",
+          "date": "2026-10-06"
+        },
+        {
+          "id": "course-maths-ch3a",
+          "subjectId": "maths",
+          "chapter": "chapitre 3",
+          "courseNumber": 1,
+          "title": "Notion de fonction",
+          "date": "2026-10-13"
+        },
+        {
+          "id": "course-maths-ch3b",
+          "subjectId": "maths",
+          "chapter": "Chapitre 3",
+          "courseNumber": 4,
+          "title": "Fonctions linéaires",
+          "date": "2026-11-03"
+        },
+        {
+          "id": "course-fr-sans",
+          "subjectId": "francais",
+          "chapter": "Sans chapitre",
+          "courseNumber": 2,
+          "title": "Le conte",
+          "date": "2026-10-20"
+        },
+        {
+          "id": "course-nb-anglais",
+          "subjectId": "anglais",
+          "chapter": "Sans chapitre",
+          "courseNumber": 1,
+          "title": "Daily routine",
+          "date": "2026-11-16",
+          "source": {
+            "kind": "pronote-notebook",
+            "sessionKey": "cdt-16",
+            "subjectLabel": "ANGLAIS LV1",
+            "date": "2026-11-16"
+          }
+        }
+      ],
+      "notebookImports": {
+        "cdt-16": {
+          "status": "created",
+          "courseId": "course-nb-anglais",
+          "at": "2026-11-16T18:00:00Z"
+        },
+        "cdt-13": {
+          "status": "dismissed",
+          "courseId": "course-deleted-pc",
+          "at": "2026-11-14T18:00:00Z"
+        }
+      },
+      "expected": {
+        "eligibleSessionKeys": [
+          "cdt-04",
+          "cdt-05",
+          "cdt-10",
+          "cdt-12",
+          "cdt-12b",
+          "cdt-17",
+          "cdt-18a",
+          "cours:cours-svt@2026-11-18"
+        ],
+        "skipped": [
+          {
+            "sessionKey": "cdt-20",
+            "reason": "future"
+          },
+          {
+            "sessionKey": "cdt-16",
+            "reason": "created"
+          },
+          {
+            "sessionKey": "cdt-13",
+            "reason": "dismissed"
+          },
+          {
+            "sessionKey": "cdt-13b",
+            "reason": "unknownSubject"
+          },
+          {
+            "sessionKey": "cdt-09",
+            "reason": "unknownSubject"
+          }
+        ],
+        "createdCourses": [
+          {
+            "sessionKey": "cdt-04",
+            "titleSource": "fileName",
+            "id": "course-nb-cdt-04",
+            "subjectId": "maths",
+            "chapter": "Chapitre 7",
+            "courseNumber": 1,
+            "title": "Statistiques",
+            "date": "2026-11-04",
+            "description": "Mathématiques\n\nFiche de synthèse.",
+            "source": {
+              "kind": "pronote-notebook",
+              "sessionKey": "cdt-04",
+              "subjectLabel": "MATHEMATIQUES",
+              "date": "2026-11-04"
+            },
+            "documents": [
+              {
+                "name": "Chapitre_7_-_Statistiques.pdf",
+                "mime": "application/pdf",
+                "size": 623,
+                "extractedTitle": null
+              }
+            ]
+          },
+          {
+            "sessionKey": "cdt-05",
+            "titleSource": "pronoteTitle",
+            "id": "course-nb-cdt-05",
+            "subjectId": "musique",
+            "chapter": "Sans chapitre",
+            "courseNumber": 1,
+            "title": "Le rythme et la pulsation",
+            "date": "2026-11-05",
+            "description": "Le rythme et la pulsation",
+            "source": {
+              "kind": "pronote-notebook",
+              "sessionKey": "cdt-05",
+              "subjectLabel": "MUSIQUE",
+              "date": "2026-11-05"
+            },
+            "documents": [
+              {
+                "name": "Corrigé.pdf",
+                "mime": "application/pdf",
+                "size": 1092,
+                "extractedTitle": null
+              }
+            ]
+          },
+          {
+            "sessionKey": "cdt-10",
+            "titleSource": "pronoteTitle",
+            "id": "course-nb-cdt-10",
+            "subjectId": "espagnol",
+            "chapter": "Sans chapitre",
+            "courseNumber": 1,
+            "title": "La casa",
+            "date": "2026-11-10",
+            "description": "La casa\n\nLa casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos dormitorios. La casa tiene una cocina, un salón y dos",
+            "source": {
+              "kind": "pronote-notebook",
+              "sessionKey": "cdt-10",
+              "subjectLabel": "ESPAGNOL LV2",
+              "date": "2026-11-10"
+            },
+            "documents": []
+          },
+          {
+            "sessionKey": "cdt-12",
+            "titleSource": "firstHeading",
+            "id": "course-nb-cdt-12",
+            "subjectId": "francais",
+            "chapter": "Sans chapitre",
+            "courseNumber": 3,
+            "title": "Les figures de style",
+            "date": "2026-11-12",
+            "description": "Cours\n\nRelire les exemples.\n\nExercices\n\nTrouver trois métaphores.\n• dans le poème\n• dans la chanson",
+            "source": {
+              "kind": "pronote-notebook",
+              "sessionKey": "cdt-12",
+              "subjectLabel": "FRANCAIS",
+              "date": "2026-11-12"
+            },
+            "documents": [
+              {
+                "name": "Fiche.md",
+                "mime": "text/markdown",
+                "size": 112,
+                "extractedTitle": "Les figures de style"
+              }
+            ]
+          },
+          {
+            "sessionKey": "cdt-12b",
+            "titleSource": "firstHeading",
+            "id": "course-nb-cdt-12b",
+            "subjectId": "techno",
+            "chapter": "Thème 2",
+            "courseNumber": 1,
+            "title": "Les objets connectés",
+            "date": "2026-11-12",
+            "description": "TP",
+            "source": {
+              "kind": "pronote-notebook",
+              "sessionKey": "cdt-12b",
+              "subjectLabel": "TECHNOLOGIE",
+              "date": "2026-11-12"
+            },
+            "documents": [
+              {
+                "name": "Fiche 1.txt",
+                "mime": "text/plain",
+                "size": 60,
+                "extractedTitle": "Les objets connectés"
+              },
+              {
+                "name": "Fiche 2.txt",
+                "mime": "text/plain",
+                "size": 60,
+                "extractedTitle": "Les objets connectés"
+              },
+              {
+                "name": "Fiche 3.txt",
+                "mime": "text/plain",
+                "size": 60,
+                "extractedTitle": "Les objets connectés"
+              },
+              {
+                "name": "Fiche 4.txt",
+                "mime": "text/plain",
+                "size": 60,
+                "extractedTitle": "Les objets connectés"
+              },
+              {
+                "name": "Fiche 5.txt",
+                "mime": "text/plain",
+                "size": 60,
+                "extractedTitle": "Les objets connectés"
+              },
+              {
+                "name": "Fiche 6.txt",
+                "mime": "text/plain",
+                "size": 60,
+                "extractedTitle": "Les objets connectés"
+              },
+              {
+                "name": "Fiche 7.txt",
+                "mime": "text/plain",
+                "size": 60,
+                "extractedTitle": "Les objets connectés"
+              },
+              {
+                "name": "Fiche 8.txt",
+                "mime": "text/plain",
+                "size": 60,
+                "extractedTitle": "Les objets connectés"
+              },
+              {
+                "name": "Fiche 9.txt",
+                "mime": "text/plain",
+                "size": 60,
+                "extractedTitle": "Les objets connectés"
+              },
+              {
+                "name": "Fiche 10.txt",
+                "mime": "text/plain",
+                "size": 60,
+                "extractedTitle": "Les objets connectés"
+              }
+            ]
+          },
+          {
+            "sessionKey": "cdt-17",
+            "titleSource": "firstHeading",
+            "id": "course-nb-cdt-17",
+            "subjectId": "maths",
+            "chapter": "Chapitre 3",
+            "courseNumber": 5,
+            "title": "Les fonctions affines",
+            "date": "2026-11-17",
+            "description": "Exercices\n\nEx. 12 et 13 p. 45\n\nCorrection",
+            "source": {
+              "kind": "pronote-notebook",
+              "sessionKey": "cdt-17",
+              "subjectLabel": "MATHEMATIQUES",
+              "date": "2026-11-17"
+            },
+            "documents": [
+              {
+                "name": "Photo du tableau.png",
+                "mime": "image/png",
+                "size": 69,
+                "extractedTitle": null
+              },
+              {
+                "name": "Cours fonctions.odt",
+                "mime": "application/vnd.oasis.opendocument.text",
+                "size": 2058,
+                "extractedTitle": "Les fonctions affines"
+              }
+            ]
+          },
+          {
+            "sessionKey": "cdt-18a",
+            "titleSource": "metadata",
+            "id": "course-nb-cdt-18a",
+            "subjectId": "histoire-geo",
+            "chapter": "Chapitre 2",
+            "courseNumber": 2,
+            "title": "La Révolution",
+            "date": "2026-11-18",
+            "description": "La Révolution française\n\nLire le document 2 p. 112.",
+            "source": {
+              "kind": "pronote-notebook",
+              "sessionKey": "cdt-18a",
+              "subjectLabel": "HISTOIRE-GEOGRAPHIE",
+              "date": "2026-11-18"
+            },
+            "documents": [
+              {
+                "name": "Chapitre 2.pdf",
+                "mime": "application/pdf",
+                "size": 987,
+                "extractedTitle": "La Révolution"
+              }
+            ]
+          },
+          {
+            "sessionKey": "cours:cours-svt@2026-11-18",
+            "titleSource": "dateFallback",
+            "id": "course-nb-cours:cours-svt@2026-11-18",
+            "subjectId": "svt",
+            "chapter": "Sans chapitre",
+            "courseNumber": 1,
+            "title": "Cours du 18 novembre",
+            "date": "2026-11-18",
+            "description": "Observer les lames au microscope.",
+            "source": {
+              "kind": "pronote-notebook",
+              "sessionKey": "cours:cours-svt@2026-11-18",
+              "subjectLabel": "SCIENCES VIE & TERRE",
+              "date": "2026-11-18"
+            },
+            "documents": []
+          }
+        ],
+        "notebookImportsAfter": {
+          "cdt-04": {
+            "status": "created",
+            "courseId": "course-nb-cdt-04"
+          },
+          "cdt-05": {
+            "status": "created",
+            "courseId": "course-nb-cdt-05"
+          },
+          "cdt-10": {
+            "status": "created",
+            "courseId": "course-nb-cdt-10"
+          },
+          "cdt-12": {
+            "status": "created",
+            "courseId": "course-nb-cdt-12"
+          },
+          "cdt-12b": {
+            "status": "created",
+            "courseId": "course-nb-cdt-12b"
+          },
+          "cdt-13": {
+            "status": "dismissed",
+            "courseId": "course-deleted-pc"
+          },
+          "cdt-16": {
+            "status": "created",
+            "courseId": "course-nb-anglais"
+          },
+          "cdt-17": {
+            "status": "created",
+            "courseId": "course-nb-cdt-17"
+          },
+          "cdt-18a": {
+            "status": "created",
+            "courseId": "course-nb-cdt-18a"
+          },
+          "cours:cours-svt@2026-11-18": {
+            "status": "created",
+            "courseId": "course-nb-cours:cours-svt@2026-11-18"
+          }
+        },
+        "toast": "8 cours créés depuis le cahier de textes",
+        "buttons": {
+          "cdt-20": "createCourse",
+          "cdt-18a": "viewCourse",
+          "cours:cours-svt@2026-11-18": "viewCourse",
+          "cdt-17": "viewCourse",
+          "cdt-16": "viewCourse",
+          "cdt-13": "createCourse",
+          "cdt-13b": "createCourse",
+          "cdt-12": "viewCourse",
+          "cdt-12b": "viewCourse",
+          "cdt-10": "viewCourse",
+          "cdt-09": "createCourse",
+          "cdt-05": "viewCourse",
+          "cdt-04": "viewCourse"
+        }
+      }
+    },
+    {
+      "id": "auto-disabled",
+      "note": "Réglage désactivé (défaut) : aucune création, boutons seulement",
+      "today": "2026-11-18",
+      "settings": {
+        "intervals": [
+          0,
+          1,
+          2,
+          4,
+          7,
+          14,
+          25,
+          45,
+          60,
+          90
+        ],
+        "sensitivity": 0.4,
+        "emergencyThreshold": 30,
+        "pronoteIcalUrl": "",
+        "soundEnabled": true,
+        "userName": "Élève",
+        "userGrade": "3ème",
+        "notebookAutoCreate": false
+      },
+      "courses": [
+        {
+          "id": "course-hg-ch2",
+          "subjectId": "histoire-geo",
+          "chapter": "Chapitre 2",
+          "courseNumber": 1,
+          "title": "La monarchie absolue",
+          "date": "2026-10-06"
+        },
+        {
+          "id": "course-maths-ch3a",
+          "subjectId": "maths",
+          "chapter": "chapitre 3",
+          "courseNumber": 1,
+          "title": "Notion de fonction",
+          "date": "2026-10-13"
+        },
+        {
+          "id": "course-maths-ch3b",
+          "subjectId": "maths",
+          "chapter": "Chapitre 3",
+          "courseNumber": 4,
+          "title": "Fonctions linéaires",
+          "date": "2026-11-03"
+        },
+        {
+          "id": "course-fr-sans",
+          "subjectId": "francais",
+          "chapter": "Sans chapitre",
+          "courseNumber": 2,
+          "title": "Le conte",
+          "date": "2026-10-20"
+        },
+        {
+          "id": "course-nb-anglais",
+          "subjectId": "anglais",
+          "chapter": "Sans chapitre",
+          "courseNumber": 1,
+          "title": "Daily routine",
+          "date": "2026-11-16",
+          "source": {
+            "kind": "pronote-notebook",
+            "sessionKey": "cdt-16",
+            "subjectLabel": "ANGLAIS LV1",
+            "date": "2026-11-16"
+          }
+        }
+      ],
+      "notebookImports": {
+        "cdt-16": {
+          "status": "created",
+          "courseId": "course-nb-anglais",
+          "at": "2026-11-16T18:00:00Z"
+        },
+        "cdt-13": {
+          "status": "dismissed",
+          "courseId": "course-deleted-pc",
+          "at": "2026-11-14T18:00:00Z"
+        }
+      },
+      "expected": {
+        "eligibleSessionKeys": [],
+        "skipped": [
+          {
+            "sessionKey": "cdt-20",
+            "reason": "autoCreateDisabled"
+          },
+          {
+            "sessionKey": "cdt-18a",
+            "reason": "autoCreateDisabled"
+          },
+          {
+            "sessionKey": "cours:cours-svt@2026-11-18",
+            "reason": "autoCreateDisabled"
+          },
+          {
+            "sessionKey": "cdt-17",
+            "reason": "autoCreateDisabled"
+          },
+          {
+            "sessionKey": "cdt-16",
+            "reason": "autoCreateDisabled"
+          },
+          {
+            "sessionKey": "cdt-13",
+            "reason": "autoCreateDisabled"
+          },
+          {
+            "sessionKey": "cdt-13b",
+            "reason": "autoCreateDisabled"
+          },
+          {
+            "sessionKey": "cdt-12",
+            "reason": "autoCreateDisabled"
+          },
+          {
+            "sessionKey": "cdt-12b",
+            "reason": "autoCreateDisabled"
+          },
+          {
+            "sessionKey": "cdt-10",
+            "reason": "autoCreateDisabled"
+          },
+          {
+            "sessionKey": "cdt-09",
+            "reason": "autoCreateDisabled"
+          },
+          {
+            "sessionKey": "cdt-05",
+            "reason": "autoCreateDisabled"
+          },
+          {
+            "sessionKey": "cdt-04",
+            "reason": "autoCreateDisabled"
+          }
+        ],
+        "createdCourses": [],
+        "notebookImportsAfter": {
+          "cdt-13": {
+            "status": "dismissed",
+            "courseId": "course-deleted-pc"
+          },
+          "cdt-16": {
+            "status": "created",
+            "courseId": "course-nb-anglais"
+          }
+        },
+        "toast": null,
+        "buttons": {
+          "cdt-20": "createCourse",
+          "cdt-18a": "createCourse",
+          "cours:cours-svt@2026-11-18": "createCourse",
+          "cdt-17": "createCourse",
+          "cdt-16": "viewCourse",
+          "cdt-13": "createCourse",
+          "cdt-13b": "createCourse",
+          "cdt-12": "createCourse",
+          "cdt-12b": "createCourse",
+          "cdt-10": "createCourse",
+          "cdt-09": "createCourse",
+          "cdt-05": "createCourse",
+          "cdt-04": "createCourse"
+        }
+      }
+    },
+    {
+      "id": "rerun-after-auto",
+      "note": "Deuxième lecture après « auto-since-nov-12 » : aucun doublon",
+      "today": "2026-11-18",
+      "settings": {
+        "intervals": [
+          0,
+          1,
+          2,
+          4,
+          7,
+          14,
+          25,
+          45,
+          60,
+          90
+        ],
+        "sensitivity": 0.4,
+        "emergencyThreshold": 30,
+        "pronoteIcalUrl": "",
+        "soundEnabled": true,
+        "userName": "Élève",
+        "userGrade": "3ème",
+        "notebookAutoCreate": true,
+        "notebookAutoCreateSince": "2026-11-12"
+      },
+      "courses": [
+        {
+          "id": "course-hg-ch2",
+          "subjectId": "histoire-geo",
+          "chapter": "Chapitre 2",
+          "courseNumber": 1,
+          "title": "La monarchie absolue",
+          "date": "2026-10-06"
+        },
+        {
+          "id": "course-maths-ch3a",
+          "subjectId": "maths",
+          "chapter": "chapitre 3",
+          "courseNumber": 1,
+          "title": "Notion de fonction",
+          "date": "2026-10-13"
+        },
+        {
+          "id": "course-maths-ch3b",
+          "subjectId": "maths",
+          "chapter": "Chapitre 3",
+          "courseNumber": 4,
+          "title": "Fonctions linéaires",
+          "date": "2026-11-03"
+        },
+        {
+          "id": "course-fr-sans",
+          "subjectId": "francais",
+          "chapter": "Sans chapitre",
+          "courseNumber": 2,
+          "title": "Le conte",
+          "date": "2026-10-20"
+        },
+        {
+          "id": "course-nb-anglais",
+          "subjectId": "anglais",
+          "chapter": "Sans chapitre",
+          "courseNumber": 1,
+          "title": "Daily routine",
+          "date": "2026-11-16",
+          "source": {
+            "kind": "pronote-notebook",
+            "sessionKey": "cdt-16",
+            "subjectLabel": "ANGLAIS LV1",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "id": "course-nb-cdt-12",
+          "subjectId": "francais",
+          "chapter": "Sans chapitre",
+          "courseNumber": 3,
+          "title": "Les figures de style",
+          "date": "2026-11-12",
+          "description": "Cours\n\nRelire les exemples.\n\nExercices\n\nTrouver trois métaphores.\n• dans le poème\n• dans la chanson",
+          "source": {
+            "kind": "pronote-notebook",
+            "sessionKey": "cdt-12",
+            "subjectLabel": "FRANCAIS",
+            "date": "2026-11-12"
+          },
+          "documents": [
+            {
+              "name": "Fiche.md",
+              "mime": "text/markdown",
+              "size": 112,
+              "extractedTitle": "Les figures de style"
+            }
+          ]
+        },
+        {
+          "id": "course-nb-cdt-12b",
+          "subjectId": "techno",
+          "chapter": "Thème 2",
+          "courseNumber": 1,
+          "title": "Les objets connectés",
+          "date": "2026-11-12",
+          "description": "TP",
+          "source": {
+            "kind": "pronote-notebook",
+            "sessionKey": "cdt-12b",
+            "subjectLabel": "TECHNOLOGIE",
+            "date": "2026-11-12"
+          },
+          "documents": [
+            {
+              "name": "Fiche 1.txt",
+              "mime": "text/plain",
+              "size": 60,
+              "extractedTitle": "Les objets connectés"
+            },
+            {
+              "name": "Fiche 2.txt",
+              "mime": "text/plain",
+              "size": 60,
+              "extractedTitle": "Les objets connectés"
+            },
+            {
+              "name": "Fiche 3.txt",
+              "mime": "text/plain",
+              "size": 60,
+              "extractedTitle": "Les objets connectés"
+            },
+            {
+              "name": "Fiche 4.txt",
+              "mime": "text/plain",
+              "size": 60,
+              "extractedTitle": "Les objets connectés"
+            },
+            {
+              "name": "Fiche 5.txt",
+              "mime": "text/plain",
+              "size": 60,
+              "extractedTitle": "Les objets connectés"
+            },
+            {
+              "name": "Fiche 6.txt",
+              "mime": "text/plain",
+              "size": 60,
+              "extractedTitle": "Les objets connectés"
+            },
+            {
+              "name": "Fiche 7.txt",
+              "mime": "text/plain",
+              "size": 60,
+              "extractedTitle": "Les objets connectés"
+            },
+            {
+              "name": "Fiche 8.txt",
+              "mime": "text/plain",
+              "size": 60,
+              "extractedTitle": "Les objets connectés"
+            },
+            {
+              "name": "Fiche 9.txt",
+              "mime": "text/plain",
+              "size": 60,
+              "extractedTitle": "Les objets connectés"
+            },
+            {
+              "name": "Fiche 10.txt",
+              "mime": "text/plain",
+              "size": 60,
+              "extractedTitle": "Les objets connectés"
+            }
+          ]
+        },
+        {
+          "id": "course-nb-cdt-17",
+          "subjectId": "maths",
+          "chapter": "Chapitre 3",
+          "courseNumber": 5,
+          "title": "Les fonctions affines",
+          "date": "2026-11-17",
+          "description": "Exercices\n\nEx. 12 et 13 p. 45\n\nCorrection",
+          "source": {
+            "kind": "pronote-notebook",
+            "sessionKey": "cdt-17",
+            "subjectLabel": "MATHEMATIQUES",
+            "date": "2026-11-17"
+          },
+          "documents": [
+            {
+              "name": "Photo du tableau.png",
+              "mime": "image/png",
+              "size": 69,
+              "extractedTitle": null
+            },
+            {
+              "name": "Cours fonctions.odt",
+              "mime": "application/vnd.oasis.opendocument.text",
+              "size": 2058,
+              "extractedTitle": "Les fonctions affines"
+            }
+          ]
+        },
+        {
+          "id": "course-nb-cdt-18a",
+          "subjectId": "histoire-geo",
+          "chapter": "Chapitre 2",
+          "courseNumber": 2,
+          "title": "La Révolution",
+          "date": "2026-11-18",
+          "description": "La Révolution française\n\nLire le document 2 p. 112.",
+          "source": {
+            "kind": "pronote-notebook",
+            "sessionKey": "cdt-18a",
+            "subjectLabel": "HISTOIRE-GEOGRAPHIE",
+            "date": "2026-11-18"
+          },
+          "documents": [
+            {
+              "name": "Chapitre 2.pdf",
+              "mime": "application/pdf",
+              "size": 987,
+              "extractedTitle": "La Révolution"
+            }
+          ]
+        },
+        {
+          "id": "course-nb-cours:cours-svt@2026-11-18",
+          "subjectId": "svt",
+          "chapter": "Sans chapitre",
+          "courseNumber": 1,
+          "title": "Cours du 18 novembre",
+          "date": "2026-11-18",
+          "description": "Observer les lames au microscope.",
+          "source": {
+            "kind": "pronote-notebook",
+            "sessionKey": "cours:cours-svt@2026-11-18",
+            "subjectLabel": "SCIENCES VIE & TERRE",
+            "date": "2026-11-18"
+          },
+          "documents": []
+        }
+      ],
+      "notebookImports": {
+        "cdt-12": {
+          "status": "created",
+          "courseId": "course-nb-cdt-12",
+          "at": "2026-11-18T19:00:00Z"
+        },
+        "cdt-12b": {
+          "status": "created",
+          "courseId": "course-nb-cdt-12b",
+          "at": "2026-11-18T19:00:00Z"
+        },
+        "cdt-13": {
+          "status": "dismissed",
+          "courseId": "course-deleted-pc",
+          "at": "2026-11-18T19:00:00Z"
+        },
+        "cdt-16": {
+          "status": "created",
+          "courseId": "course-nb-anglais",
+          "at": "2026-11-18T19:00:00Z"
+        },
+        "cdt-17": {
+          "status": "created",
+          "courseId": "course-nb-cdt-17",
+          "at": "2026-11-18T19:00:00Z"
+        },
+        "cdt-18a": {
+          "status": "created",
+          "courseId": "course-nb-cdt-18a",
+          "at": "2026-11-18T19:00:00Z"
+        },
+        "cours:cours-svt@2026-11-18": {
+          "status": "created",
+          "courseId": "course-nb-cours:cours-svt@2026-11-18",
+          "at": "2026-11-18T19:00:00Z"
+        }
+      },
+      "expected": {
+        "eligibleSessionKeys": [],
+        "skipped": [
+          {
+            "sessionKey": "cdt-20",
+            "reason": "future"
+          },
+          {
+            "sessionKey": "cdt-18a",
+            "reason": "created"
+          },
+          {
+            "sessionKey": "cours:cours-svt@2026-11-18",
+            "reason": "created"
+          },
+          {
+            "sessionKey": "cdt-17",
+            "reason": "created"
+          },
+          {
+            "sessionKey": "cdt-16",
+            "reason": "created"
+          },
+          {
+            "sessionKey": "cdt-13",
+            "reason": "dismissed"
+          },
+          {
+            "sessionKey": "cdt-13b",
+            "reason": "unknownSubject"
+          },
+          {
+            "sessionKey": "cdt-12",
+            "reason": "created"
+          },
+          {
+            "sessionKey": "cdt-12b",
+            "reason": "created"
+          },
+          {
+            "sessionKey": "cdt-10",
+            "reason": "beforeSince"
+          },
+          {
+            "sessionKey": "cdt-09",
+            "reason": "beforeSince"
+          },
+          {
+            "sessionKey": "cdt-05",
+            "reason": "beforeSince"
+          },
+          {
+            "sessionKey": "cdt-04",
+            "reason": "beforeSince"
+          }
+        ],
+        "createdCourses": [],
+        "notebookImportsAfter": {
+          "cdt-12": {
+            "status": "created",
+            "courseId": "course-nb-cdt-12"
+          },
+          "cdt-12b": {
+            "status": "created",
+            "courseId": "course-nb-cdt-12b"
+          },
+          "cdt-13": {
+            "status": "dismissed",
+            "courseId": "course-deleted-pc"
+          },
+          "cdt-16": {
+            "status": "created",
+            "courseId": "course-nb-anglais"
+          },
+          "cdt-17": {
+            "status": "created",
+            "courseId": "course-nb-cdt-17"
+          },
+          "cdt-18a": {
+            "status": "created",
+            "courseId": "course-nb-cdt-18a"
+          },
+          "cours:cours-svt@2026-11-18": {
+            "status": "created",
+            "courseId": "course-nb-cours:cours-svt@2026-11-18"
+          }
+        },
+        "toast": null,
+        "buttons": {
+          "cdt-20": "createCourse",
+          "cdt-18a": "viewCourse",
+          "cours:cours-svt@2026-11-18": "viewCourse",
+          "cdt-17": "viewCourse",
+          "cdt-16": "viewCourse",
+          "cdt-13": "createCourse",
+          "cdt-13b": "createCourse",
+          "cdt-12": "viewCourse",
+          "cdt-12b": "viewCourse",
+          "cdt-10": "createCourse",
+          "cdt-09": "createCourse",
+          "cdt-05": "createCourse",
+          "cdt-04": "createCourse"
+        }
+      }
+    }
+  ]
+}

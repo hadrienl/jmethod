@@ -88,3 +88,5 @@ Fiche du cours → section « Documents » (nom, type, taille) :
 ## 7. Vecteurs
 
 `native/shared/documents/` : documents synthétiques (aucune donnée réelle) et `document-title-vectors.json` (fichier → type détecté, candidats, titre et chapitre attendus, texte de lecture attendu pour les formats ODF). `notebook-course-vectors.json` : séances synthétiques + réglages + `notebookImports` → cours attendus (éligibilité, dédoublonnage, `dismissed`, matière inconnue, dates futures, description).
+
+Les choix qui précisent cette spécification (règles 1 à 32 : détection du type, document principal, rejets, chapitres, vue Lecture, proposition des 14 jours…) sont dans `documents/README.md` et font foi au même titre. Les attendus sont calculés par l’implémentation de référence `documents/reference.py` (Python, bibliothèque standard).
