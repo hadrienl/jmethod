@@ -68,6 +68,7 @@
 		9A97B441323BD722DDA10CD9 /* AddCourseSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 656CB585A87005C6F3E4E0CA /* AddCourseSheet.swift */; };
 		9DD5AB248F5C5F5903FB0924 /* PronoteThrottle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 134F665F22AF7A74CFB50108 /* PronoteThrottle.swift */; };
 		9EFABF1781E3D4BD07A74021 /* PreviewFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A621CB8760D65432AAC2748 /* PreviewFixture.swift */; };
+		A2AAD3E1B39B0C12FC5F8C96 /* SignInHelpSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05A865449C1E084F867C9E9F /* SignInHelpSheet.swift */; };
 		A33504C4A398D023DE268BC0 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C12C502860E68BA757FAC422 /* Assets.xcassets */; };
 		A515FBEECD796F28A24CE072 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6745A7A7AF73614A545C4AF /* Theme.swift */; };
 		A6AFC2AA3D1D6C2A99663724 /* NotebookCourses.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DA378B1F9D215D2F86ACAA4 /* NotebookCourses.swift */; };
@@ -118,6 +119,7 @@
 
 /* Begin PBXFileReference section */
 		03E9CFF98792D23466A713CD /* JMethodUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = JMethodUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		05A865449C1E084F867C9E9F /* SignInHelpSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInHelpSheet.swift; sourceTree = "<group>"; };
 		09C3B8C1F98785019EE0045D /* PlanningView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanningView.swift; sourceTree = "<group>"; };
 		0D96B3348DFDB81CC36ECBAD /* Backup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Backup.swift; sourceTree = "<group>"; };
 		1306B21919EB579807046089 /* HTMLEntities.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTMLEntities.swift; sourceTree = "<group>"; };
@@ -314,6 +316,7 @@
 			isa = PBXGroup;
 			children = (
 				AD196EFBAB6801493FE185D2 /* PasswordField.swift */,
+				05A865449C1E084F867C9E9F /* SignInHelpSheet.swift */,
 				30F3FE1E243C0760E035480E /* SignInView.swift */,
 			);
 			path = SignIn;
@@ -698,6 +701,7 @@
 				220C8ACAC05135A766252B95 /* ScoreRules.swift in Sources */,
 				DB88B9557BAFCF04DC82987E /* SettingsLogic.swift in Sources */,
 				19BAA2EF67B7EC179DD9856A /* SettingsView.swift in Sources */,
+				A2AAD3E1B39B0C12FC5F8C96 /* SignInHelpSheet.swift in Sources */,
 				46087A718E018633D1E916CA /* SignInView.swift in Sources */,
 				5BF71C7D12A25CAA07755EAB /* Stats.swift in Sources */,
 				8B635AD8F612516B11AFBB0D /* StatsView.swift in Sources */,

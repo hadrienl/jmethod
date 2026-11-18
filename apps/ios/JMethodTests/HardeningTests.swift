@@ -279,7 +279,7 @@ final class ClientHardeningTests: XCTestCase {
     /// Point 6 : `LOGIN_STALLED` affiche la page ; seul `LOGIN_REJECTED` (refus visible) mène à l'effacement.
     func testStalledLoginRevealsPageWithoutRejection() {
         XCTAssertEqual(PronoteWebFlow.outcome(forErrorCode: "LOGIN_STALLED"), .watch("Pronote ne répond pas : vérifie la page ci-dessous."))
-        XCTAssertEqual(PronoteWebFlow.outcome(forErrorCode: "LOGIN_REJECTED"), .rejected("Identifiant ou mot de passe incorrect."))
+        XCTAssertEqual(PronoteWebFlow.outcome(forErrorCode: "LOGIN_REJECTED"), .rejected(PronoteWebFlow.rejectedMessage))
         XCTAssertEqual(PronoteWebFlow.outcome(forErrorCode: "LOGIN_FORM_NOT_FOUND"), .watch("Connecte-toi ci-dessous pour terminer."))
         if case .rejected = PronoteWebFlow.outcome(forErrorCode: "LOGIN_TIMEOUT") { XCTFail("un délai n'est pas un refus") }
     }

@@ -275,7 +275,7 @@ class PronoteConnectionController(
             it.copy(browserStarted = true, showBrowser = false, busy = true, isError = false, formError = null,
                 title = if (silent) "Reconnexion à Pronote" else "Connexion à Pronote", message = "Connexion en cours…")
         }
-        page.load(url)
+        page.load(PronotePolicy.directLoginPage(url))
         startWatchdog(90_000, "Pronote n’a pas répondu à temps. Vérifie l’établissement et ta connexion internet, puis réessaie.", offline = true)
         if (!webMessagesSupported) failure("Mets à jour Android System WebView depuis le Play Store, puis réessaie.")
     }
@@ -932,7 +932,7 @@ class PronoteConnectionController(
 
     private companion object {
         const val NOTEBOOK_OFFLINE = "Le cahier de textes se lit avec ta connexion Pronote. Actualise depuis les Réglages ou réessaie quand tu es en ligne."
-        const val REJECTED = "Pronote a refusé l’identifiant ou le mot de passe. Vérifie-les puis réessaie."
+        const val REJECTED = "Pronote a refusé l’identifiant ou le mot de passe. Utilise ceux de Pronote, pas ceux d’ÉduConnect, puis réessaie."
         val FOREGROUND_SYNC_AFTER: Duration = Duration.ofHours(6)
     }
 }

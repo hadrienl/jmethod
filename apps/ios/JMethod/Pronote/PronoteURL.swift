@@ -56,6 +56,15 @@ enum PronoteURL {
         return components.string ?? text
     }
 
+    /// Page de connexion directe Pronote (`?login=true`) : quand l'établissement passe par un ENT, l'adresse nue
+    /// redirige vers le CAS ; le formulaire natif utilise les identifiants Pronote et vise donc cette page.
+    static func directLogin(_ url: URL) -> URL {
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url }
+        components.queryItems = [URLQueryItem(name: "login", value: "true")]
+        components.fragment = nil
+        return components.url ?? url
+    }
+
     static func validated(_ string: String) throws -> URL {
         guard let url = URL(string: string.trimmingCharacters(in: .whitespacesAndNewlines)),
               url.scheme == "https", let host = url.host?.lowercased(),

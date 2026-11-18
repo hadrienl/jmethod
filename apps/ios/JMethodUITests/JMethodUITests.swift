@@ -149,6 +149,9 @@ final class JMethodUITests: XCTestCase {
         let app = launch(["-JMethodPreviewSignIn"])
         XCTAssertTrue(app.buttons["Se connecter"].firstMatch.waitForExistence(timeout: 10))
         captureScrolling(app, "20-sign-in")
+        app.buttons["En savoir plus"].firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["Quel identifiant et quel mot de passe ?"].firstMatch.waitForExistence(timeout: 5))
+        captureScrolling(app, "21-sign-in-help", maxPages: 3)
     }
 
     /// Fumée en très grande taille de texte, quel que soit le réglage de la série.
