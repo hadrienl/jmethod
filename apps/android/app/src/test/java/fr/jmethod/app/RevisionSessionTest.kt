@@ -45,27 +45,34 @@ class RevisionSessionTest {
     private fun doc(name: String, title: String? = null) = CourseDocument("d-$name", name, "application/pdf", 10, "documents/c/$name", title)
 
     @Test
-    fun nextSessionFollowsTheEveningProgrammeThenEnds() {
-        val courses = listOf(course("a", "maths"), course("b", "anglais"))
+    fun nextSessionFollowsTheDisplayedOrderThenEnds() {
+        val courses = listOf(course("a", "maths"), course("b", "anglais"), course("c", "maths"))
         val revisions = listOf(
             revision("late-b", "b", 1, "2026-11-17"),
             revision("due-a", "a", 2, tomorrow),
+            revision("due-c", "c", 1, today),
             revision("later-a", "a", 3, "2026-11-25"),
             revision("done-b", "b", 0, "2026-11-10", done = true),
         )
-        // Ordre du programme du soir : la séance en retard d’abord, puis celle de demain.
+        // Ordre affiché : Mathématiques (due-c, due-a, par date) puis Anglais (late-b) ; la carte « Pour demain » suit la date.
+        assertEquals(listOf("due-c", "due-a", "late-b"), RevisionSession.displayOrder(revisions, courses, subjects, today).map { it.id })
         assertEquals("late-b", RevisionSession.nextDue(revisions, courses, today)?.id)
 
-        val first = ScoreSubmission.submit(courses, revisions, AppSettings(), "late-b", 60, evening, AppClock.ZONE)
-        val next = RevisionSession.nextDue(first.revisions, courses, first.today, excluding = "late-b")
-        assertEquals("due-a", next?.id)
+        // Validation de la séance affichée en deuxième : la suivante est la première encore due de l’écran.
+        val first = ScoreSubmission.submit(courses, revisions, AppSettings(), "due-a", 60, evening, AppClock.ZONE)
+        val next = RevisionSession.nextInDisplayOrder(first.revisions, courses, subjects, first.today, "due-a")
+        assertEquals("due-c", next?.id)
         assertFalse(first.celebrate)
-        assertEquals("Séance suivante · Mathématiques — Cours a", RevisionSession.nextLabel(next!!, courses, subjects))
+        assertEquals("Séance suivante · Mathématiques — Cours c", RevisionSession.nextLabel(next!!, courses, subjects))
+
+        val second = ScoreSubmission.submit(courses, first.revisions, AppSettings(), "due-c", 70, evening, AppClock.ZONE)
+        // Jamais une séance déjà faite : due-a (faite) reste affichée mais n’est pas reproposée.
+        assertEquals("late-b", RevisionSession.nextInDisplayOrder(second.revisions, courses, subjects, second.today, "due-c")?.id)
 
         // Dernière séance due : plus de séance suivante, programme terminé.
-        val second = ScoreSubmission.submit(courses, first.revisions, AppSettings(), "due-a", 70, evening, AppClock.ZONE)
-        assertNull(RevisionSession.nextDue(second.revisions, courses, second.today, excluding = "due-a"))
-        assertTrue(second.celebrate)
+        val third = ScoreSubmission.submit(courses, second.revisions, AppSettings(), "late-b", 80, evening, AppClock.ZONE)
+        assertNull(RevisionSession.nextInDisplayOrder(third.revisions, courses, subjects, third.today, "late-b"))
+        assertTrue(third.celebrate)
     }
 
     @Test
@@ -75,7 +82,7 @@ class RevisionSessionTest {
         // Rattrapage : programmé le lendemain du jour préparé, donc hors du programme de ce soir.
         val result = ScoreSubmission.submit(courses, revisions, AppSettings(), "due-a", 10, evening, AppClock.ZONE)
         assertEquals(ScoreSubmission.ToastType.WARNING, result.toast?.type)
-        assertNull(RevisionSession.nextDue(result.revisions, courses, result.today, excluding = "due-a"))
+        assertNull(RevisionSession.nextInDisplayOrder(result.revisions, courses, subjects, result.today, "due-a"))
     }
 
     @Test

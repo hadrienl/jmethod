@@ -112,7 +112,10 @@ class TodayViewModel(
                     document.courses, document.revisions, document.settings, revisionId, score, clock.now(), AppClock.ZONE,
                 )
                 outcome = result
-                if (!result.ignored) next = RevisionSession.nextDue(result.revisions, document.courses, result.today, excluding = revisionId)?.id
+                if (!result.ignored) {
+                    // Première séance due dans l’ordre affiché d’Aujourd’hui (comme iOS).
+                    next = RevisionSession.nextInDisplayOrder(result.revisions, document.courses, document.subjects, result.today, revisionId)?.id
+                }
                 if (result.ignored) document else document.copy(revisions = result.revisions)
             }
             val done = outcome

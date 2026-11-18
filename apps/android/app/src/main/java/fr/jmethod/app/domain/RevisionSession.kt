@@ -25,12 +25,26 @@ object RevisionSession {
     /** Document principal : le premier de la liste. */
     fun principalDocument(course: Course?): CourseDocument? = course?.documents?.firstOrNull()
 
-    /**
-     * Séance suivante après une validation (section 8.2) : la première séance encore due du programme
-     * du soir, dans l’ordre du programme (celui de « Pour demain »), hors séance [excluding].
-     */
+    /** Première séance due du programme du soir par date (carte « Pour demain »), hors [excluding]. */
     fun nextDue(revisions: List<Revision>, courses: List<Course>, today: String, excluding: String? = null): Revision? =
         EveningProgramme.of(revisions, courses, today).due.firstOrNull { it.id != excluding }
+
+    /**
+     * Ordre affiché dans Aujourd’hui : groupes par matière dans l’ordre de la liste des matières, puis les
+     * séances de chaque groupe dans leur ordre d’affichage (dues puis faites aujourd’hui), comme [TodayModel].
+     */
+    fun displayOrder(revisions: List<Revision>, courses: List<Course>, subjects: List<Subject>, today: String): List<Revision> {
+        val subjectOf = courses.associate { it.id to it.subjectId }
+        val visible = EveningProgramme.of(revisions, courses, today).visible
+        return subjects.flatMap { subject -> visible.filter { subjectOf[it.courseId] == subject.id } }
+    }
+
+    /**
+     * Séance suivante après une validation (section 8.2, identique à iOS) : la première séance encore due
+     * dans l’ordre affiché par Aujourd’hui après la validation, hors [excluding].
+     */
+    fun nextInDisplayOrder(revisions: List<Revision>, courses: List<Course>, subjects: List<Subject>, today: String, excluding: String?): Revision? =
+        displayOrder(revisions, courses, subjects, today).firstOrNull { it.status != RevisionStatus.COMPLETED && it.id != excluding }
 
     /** Prochaine séance due d’un cours (section 8.4) : la première non faite dans l’ordre des J. */
     fun nextOfCourse(courseId: String, revisions: List<Revision>): Revision? =
