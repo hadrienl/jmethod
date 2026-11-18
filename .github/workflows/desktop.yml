@@ -1,5 +1,5 @@
-# App ordinateur (apps/android/desktopApp) : tests JVM, installeurs non signés Windows (MSI) et
-# macOS (DMG) en artefacts, et Release GitHub pour une étiquette desktop-vX.Y.Z.
+# App ordinateur (apps/android/desktopApp) : tests JVM et installeur Windows (MSI) non signé en artefact ;
+# pour une étiquette desktop-vX.Y.Z, aussi l’installeur macOS (DMG) et une Release GitHub.
 name: Desktop
 
 on:
@@ -8,11 +8,13 @@ on:
     tags: ["desktop-v*"]
     paths:
       - "apps/android/**"
+      - ".github/desktop-version.sh"
       - "native/shared/**"
       - ".github/workflows/desktop.yml"
   pull_request:
     paths:
       - "apps/android/**"
+      - ".github/desktop-version.sh"
       - "native/shared/**"
       - ".github/workflows/desktop.yml"
   workflow_dispatch:
@@ -43,22 +45,10 @@ jobs:
       # Logique, protocole Pronote (vecteurs de native/shared) et app ordinateur.
       - run: ./gradlew --console=plain --stacktrace :shared:desktopTest :desktopApp:test
 
-  package:
-    name: Installeur ${{ matrix.name }}
+  windows:
+    name: Installeur Windows
     needs: test
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: Windows
-            os: windows-latest
-            task: packageMsi
-            format: msi
-          - name: macOS
-            os: macos-latest
-            task: packageDmg
-            format: dmg
-    runs-on: ${{ matrix.os }}
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-java@v5
@@ -68,20 +58,46 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Version
         run: |
-          version=1.0.0
-          if [[ "$GITHUB_REF" == refs/tags/desktop-v* ]]; then version="${GITHUB_REF#refs/tags/desktop-v}"; fi
+          version=$(bash .github/desktop-version.sh)
           echo "DESKTOP_VERSION=$version" >> "$GITHUB_ENV"
-      - run: ./gradlew --console=plain :desktopApp:${{ matrix.task }} -Pjmethod.desktopVersion="$DESKTOP_VERSION"
+        working-directory: .
+      - run: ./gradlew --console=plain :desktopApp:packageMsi -Pjmethod.desktopVersion="$DESKTOP_VERSION"
       - uses: actions/upload-artifact@v4
         with:
-          name: J-Method-${{ matrix.format }}
-          path: apps/android/desktopApp/build/compose/binaries/main/${{ matrix.format }}/*.${{ matrix.format }}
+          name: J-Method-msi
+          path: apps/android/desktopApp/build/compose/binaries/main/msi/*.msi
+          if-no-files-found: error
+
+  # Les machines macOS de GitHub manquent souvent : le DMG n'est construit que pour une Release,
+  # et son absence ne bloque pas la publication du MSI.
+  macos:
+    name: Installeur macOS
+    if: startsWith(github.ref, 'refs/tags/desktop-v')
+    needs: test
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Version
+        run: |
+          version=$(bash .github/desktop-version.sh)
+          echo "DESKTOP_VERSION=$version" >> "$GITHUB_ENV"
+        working-directory: .
+      - run: ./gradlew --console=plain :desktopApp:packageDmg -Pjmethod.desktopVersion="$DESKTOP_VERSION"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: J-Method-dmg
+          path: apps/android/desktopApp/build/compose/binaries/main/dmg/*.dmg
           if-no-files-found: error
 
   release:
     name: Release
-    if: startsWith(github.ref, 'refs/tags/desktop-v')
-    needs: package
+    if: always() && startsWith(github.ref, 'refs/tags/desktop-v') && needs.windows.result == 'success'
+    needs: [windows, macos]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -100,4 +116,4 @@ jobs:
           gh release create "$GITHUB_REF_NAME" dist/* \
             --repo "$GITHUB_REPOSITORY" \
             --title "J-Method ordinateur ${GITHUB_REF_NAME#desktop-v}" \
-            --notes "Installeurs non signés : MSI pour Windows, DMG pour macOS (Apple Silicon). Voir apps/android/README.md pour l’installation."
+            --notes "Installeurs non signés : MSI pour Windows, DMG pour macOS (Apple Silicon) quand une machine macOS était disponible. Voir apps/android/README.md pour l’installation."
