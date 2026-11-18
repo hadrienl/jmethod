@@ -13,4 +13,4 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "JMethod"
-include(":shared", ":app")
+include(":shared", ":app", ":desktopApp")

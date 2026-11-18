@@ -1,5 +1,8 @@
 package fr.jmethod.app.ui.today
 
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.lazy.rememberLazyListState
+import fr.jmethod.app.ui.components.ScrollbarBox
 import fr.jmethod.app.ui.platform.LocalPlatform
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.OutlinedButton
@@ -97,43 +100,47 @@ fun TodayScreen(
     onViewCourse: (String) -> Unit = {},
 ) {
     val model = state.model
+    val listState = rememberLazyListState()
+    ScrollbarBox(listState, Modifier.fillMaxSize(), barPadding = contentPadding) {
     LazyColumn(
-        contentPadding = screenPadding(contentPadding, 24.dp),
-        verticalArrangement = Arrangement.spacedBy(JSpacing.l),
-    ) {
-        if (model.allDoneBanner) item(key = "done") { AllDoneBanner() }
-        item(key = "header") { Header(model) }
-        val hasCourses = state.document.courses.isNotEmpty()
-        item(key = "hero") { Hero(model, hasCourses, onScore, onReview) }
-        if (hasCourses) item(key = "progress") { Progress(model) }
-        item(key = "phases") { PhaseLegend() }
-        item(key = "programme") { ProgrammeHeader(model) }
-        if (model.overdueBanner != null) {
-            item(key = "overdue") {
+            state = listState,
+            contentPadding = screenPadding(contentPadding, 24.dp),
+            verticalArrangement = Arrangement.spacedBy(JSpacing.l),
+        ) {
+            if (model.allDoneBanner) item(key = "done") { AllDoneBanner() }
+            item(key = "header") { Header(model) }
+            val hasCourses = state.document.courses.isNotEmpty()
+            item(key = "hero") { Hero(model, hasCourses, onScore, onReview) }
+            if (hasCourses) item(key = "progress") { Progress(model) }
+            item(key = "phases") { PhaseLegend() }
+            item(key = "programme") { ProgrammeHeader(model) }
+            if (model.overdueBanner != null) {
+                item(key = "overdue") {
+                    Text(
+                        model.overdueBanner,
+                        color = JColors.Amber900,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.fillMaxWidth().clip(JShapes.inner).background(JColors.Amber50).padding(JSpacing.l),
+                    )
+                }
+            }
+            if (model.emptyProgramme) {
+                item(key = "empty") { EmptyProgramme(hasCourses) }
+            } else {
+                items(model.groups, key = { "group-" + it.subject.id }) { group -> SubjectGroup(group, onScore, onDetail) }
+            }
+            item(key = "tomorrow") {
+                TomorrowClasses(model, onViewCourse) { id -> state.document.pronoteEvents.firstOrNull { it.id == id }?.let(onAddCourse) }
+            }
+            item(key = "footer") {
                 Text(
-                    model.overdueBanner,
-                    color = JColors.Amber900,
+                    "Pas besoin de tout apprendre en un jour. Juste un peu, chaque jour.",
                     style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.fillMaxWidth().clip(JShapes.inner).background(JColors.Amber50).padding(JSpacing.l),
+                    color = JColors.Slate500,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
-        }
-        if (model.emptyProgramme) {
-            item(key = "empty") { EmptyProgramme(hasCourses) }
-        } else {
-            items(model.groups, key = { "group-" + it.subject.id }) { group -> SubjectGroup(group, onScore, onDetail) }
-        }
-        item(key = "tomorrow") {
-            TomorrowClasses(model, onViewCourse) { id -> state.document.pronoteEvents.firstOrNull { it.id == id }?.let(onAddCourse) }
-        }
-        item(key = "footer") {
-            Text(
-                "Pas besoin de tout apprendre en un jour. Juste un peu, chaque jour.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = JColors.Slate500,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
-            )
         }
     }
 }

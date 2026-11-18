@@ -1,5 +1,8 @@
 package fr.jmethod.app.ui.documents
 
+import fr.jmethod.app.ui.components.DesktopSelection
+import androidx.compose.foundation.lazy.rememberLazyListState
+import fr.jmethod.app.ui.components.ScrollbarBox
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.rememberTransformableState
@@ -198,30 +201,36 @@ private fun ReadingView(file: File, name: String) {
         ReadingFallback("Aperçu indisponible pour ce document. Utilise « Ouvrir avec… ».")
         return
     }
-    LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        item {
-            Text(
-                "Aperçu simplifié : mise en page, images et tableaux ne sont pas reproduits.",
-                style = MaterialTheme.typography.bodySmall,
-                color = JColors.Slate600,
-                modifier = Modifier.fillMaxWidth().background(JColors.Slate50).padding(10.dp),
-            )
-        }
-        items(current) { block ->
-            when (block.kind) {
-                ReadingBlock.Kind.HEADING -> Text(
-                    block.text,
-                    style = if ((block.level ?: 1) <= 1) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.semantics { heading() },
+    val listState = rememberLazyListState()
+    ScrollbarBox(listState, Modifier.fillMaxSize()) {
+    DesktopSelection {
+LazyColumn(
+            state = listState,contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            item {
+                Text(
+                    "Aperçu simplifié : mise en page, images et tableaux ne sont pas reproduits.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = JColors.Slate600,
+                    modifier = Modifier.fillMaxWidth().background(JColors.Slate50).padding(10.dp),
                 )
-                ReadingBlock.Kind.LIST_ITEM -> Text(
-                    "•  ${block.text}", style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.padding(start = (8 + 16 * ((block.level ?: 1) - 1)).dp),
-                )
-                ReadingBlock.Kind.PARAGRAPH -> Text(block.text, style = MaterialTheme.typography.bodyLarge)
+            }
+            items(current) { block ->
+                when (block.kind) {
+                    ReadingBlock.Kind.HEADING -> Text(
+                        block.text,
+                        style = if ((block.level ?: 1) <= 1) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.semantics { heading() },
+                    )
+                    ReadingBlock.Kind.LIST_ITEM -> Text(
+                        "•  ${block.text}", style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.padding(start = (8 + 16 * ((block.level ?: 1) - 1)).dp),
+                    )
+                    ReadingBlock.Kind.PARAGRAPH -> Text(block.text, style = MaterialTheme.typography.bodyLarge)
+                }
             }
         }
+}
     }
 }
 

@@ -1,5 +1,8 @@
 package fr.jmethod.app.ui.stats
 
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.lazy.rememberLazyListState
+import fr.jmethod.app.ui.components.ScrollbarBox
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -71,77 +74,81 @@ class StatsViewModel(repository: AppRepository, clock: AppClock) : ViewModel() {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun StatsScreen(model: StatsModel, contentPadding: PaddingValues) {
-    LazyColumn(contentPadding = screenPadding(contentPadding), verticalArrangement = Arrangement.spacedBy(JSpacing.l)) {
-        item(key = "header") {
-            ScreenHeader("Mes progrès", "Ta régularité, tes scores et ce qui reste à consolider.")
-        }
-        item(key = "metrics") {
-            // Deux rangées de deux indicateurs de même hauteur, même avec un grand texte.
-            Column(verticalArrangement = Arrangement.spacedBy(JSpacing.m)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(JSpacing.m), modifier = Modifier.height(IntrinsicSize.Min)) {
-                    Metric("Taux de réalisation", "${model.completionRate} %", model.completionLine, JColors.Slate900, Modifier.weight(1f))
-                    Metric(
-                        "Score moyen",
-                        if (model.overallAvgScore == null) "—" else "${model.overallAvgScore}/100",
-                        model.balanceLabel,
-                        JColors.Slate900,
-                        Modifier.weight(1f),
-                        spoken = if (model.overallAvgScore == null) "Score moyen : pas encore de note" else null,
-                    )
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(JSpacing.m), modifier = Modifier.height(IntrinsicSize.Min)) {
-                    Metric(
-                        "Régularité", model.streakLabel, model.streakLine, JColors.Slate900, Modifier.weight(1f),
-                        spoken = "Régularité : ${model.streakDays} ${if (model.streakDays > 1) "jours consécutifs" else "jour"}",
-                    )
-                    Metric("Cours suivis", "${model.coursesCount}", model.subjectsLine, JColors.Slate900, Modifier.weight(1f))
+    val listState = rememberLazyListState()
+    ScrollbarBox(listState, Modifier.fillMaxSize(), barPadding = contentPadding) {
+    LazyColumn(
+            state = listState,contentPadding = screenPadding(contentPadding), verticalArrangement = Arrangement.spacedBy(JSpacing.l)) {
+            item(key = "header") {
+                ScreenHeader("Mes progrès", "Ta régularité, tes scores et ce qui reste à consolider.")
+            }
+            item(key = "metrics") {
+                // Deux rangées de deux indicateurs de même hauteur, même avec un grand texte.
+                Column(verticalArrangement = Arrangement.spacedBy(JSpacing.m)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(JSpacing.m), modifier = Modifier.height(IntrinsicSize.Min)) {
+                        Metric("Taux de réalisation", "${model.completionRate} %", model.completionLine, JColors.Slate900, Modifier.weight(1f))
+                        Metric(
+                            "Score moyen",
+                            if (model.overallAvgScore == null) "—" else "${model.overallAvgScore}/100",
+                            model.balanceLabel,
+                            JColors.Slate900,
+                            Modifier.weight(1f),
+                            spoken = if (model.overallAvgScore == null) "Score moyen : pas encore de note" else null,
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(JSpacing.m), modifier = Modifier.height(IntrinsicSize.Min)) {
+                        Metric(
+                            "Régularité", model.streakLabel, model.streakLine, JColors.Slate900, Modifier.weight(1f),
+                            spoken = "Régularité : ${model.streakDays} ${if (model.streakDays > 1) "jours consécutifs" else "jour"}",
+                        )
+                        Metric("Cours suivis", "${model.coursesCount}", model.subjectsLine, JColors.Slate900, Modifier.weight(1f))
+                    }
                 }
             }
-        }
-        if (model.weakSubjects.isNotEmpty()) {
-            item(key = "weak") {
-                Column(
-                    Modifier.fillMaxWidth().clip(JShapes.inner).background(JColors.Amber50)
-                        .border(1.dp, JColors.Amber700.copy(alpha = 0.3f), JShapes.inner).padding(JSpacing.l),
-                ) {
-                    Text("Matières à retravailler", fontWeight = FontWeight.Bold, color = JColors.Amber900, modifier = Modifier.semantics { heading() })
-                    Spacer(Modifier.height(JSpacing.xs))
-                    Text(
-                        "Leur score moyen est sous l’équilibre (50/100). Les prochaines séances de ces matières sont déjà rapprochées pour t’aider.",
-                        style = MaterialTheme.typography.bodySmall, color = JColors.Amber900,
-                    )
-                    Spacer(Modifier.height(JSpacing.m))
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(JSpacing.s), verticalArrangement = Arrangement.spacedBy(JSpacing.s)) {
-                        model.weakSubjects.forEach { row ->
-                            // Comme iOS : point de matière, nom, puis la note, sans parenthèses.
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.clip(JShapes.pill).background(Color.White)
-                                    .padding(horizontal = JSpacing.m, vertical = JSpacing.s)
-                                    .semantics(mergeDescendants = true) {},
-                            ) {
-                                SubjectDot(row.subject.color, 8.dp)
-                                Spacer(Modifier.width(JSpacing.s))
-                                Text(row.subject.name, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = JColors.Amber900)
-                                Spacer(Modifier.width(JSpacing.s))
-                                Text("${row.avgScore}/100", style = MaterialTheme.typography.labelLarge.tabular(), color = JColors.Amber900)
+            if (model.weakSubjects.isNotEmpty()) {
+                item(key = "weak") {
+                    Column(
+                        Modifier.fillMaxWidth().clip(JShapes.inner).background(JColors.Amber50)
+                            .border(1.dp, JColors.Amber700.copy(alpha = 0.3f), JShapes.inner).padding(JSpacing.l),
+                    ) {
+                        Text("Matières à retravailler", fontWeight = FontWeight.Bold, color = JColors.Amber900, modifier = Modifier.semantics { heading() })
+                        Spacer(Modifier.height(JSpacing.xs))
+                        Text(
+                            "Leur score moyen est sous l’équilibre (50/100). Les prochaines séances de ces matières sont déjà rapprochées pour t’aider.",
+                            style = MaterialTheme.typography.bodySmall, color = JColors.Amber900,
+                        )
+                        Spacer(Modifier.height(JSpacing.m))
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(JSpacing.s), verticalArrangement = Arrangement.spacedBy(JSpacing.s)) {
+                            model.weakSubjects.forEach { row ->
+                                // Comme iOS : point de matière, nom, puis la note, sans parenthèses.
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.clip(JShapes.pill).background(Color.White)
+                                        .padding(horizontal = JSpacing.m, vertical = JSpacing.s)
+                                        .semantics(mergeDescendants = true) {},
+                                ) {
+                                    SubjectDot(row.subject.color, 8.dp)
+                                    Spacer(Modifier.width(JSpacing.s))
+                                    Text(row.subject.name, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = JColors.Amber900)
+                                    Spacer(Modifier.width(JSpacing.s))
+                                    Text("${row.avgScore}/100", style = MaterialTheme.typography.labelLarge.tabular(), color = JColors.Amber900)
+                                }
                             }
                         }
                     }
                 }
             }
-        }
-        item(key = "subjects-title") {
-            SectionTitle("Par matière", Modifier.padding(top = JSpacing.s))
-        }
-        if (model.subjects.isEmpty()) {
-            item(key = "empty") {
-                SurfaceCard {
-                    EmptyState(JIcons.Stats, "Pas encore de progrès à afficher", "Tes progrès par matière apparaîtront ici dès que tu auras ajouté un cours.")
+            item(key = "subjects-title") {
+                SectionTitle("Par matière", Modifier.padding(top = JSpacing.s))
+            }
+            if (model.subjects.isEmpty()) {
+                item(key = "empty") {
+                    SurfaceCard {
+                        EmptyState(JIcons.Stats, "Pas encore de progrès à afficher", "Tes progrès par matière apparaîtront ici dès que tu auras ajouté un cours.")
+                    }
                 }
             }
+            items(model.subjects, key = { it.subject.id }) { row -> SubjectBar(row) }
         }
-        items(model.subjects, key = { it.subject.id }) { row -> SubjectBar(row) }
     }
 }
 

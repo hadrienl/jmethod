@@ -30,13 +30,13 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
+import fr.jmethod.app.ui.components.AdaptiveSheet
+import fr.jmethod.app.ui.components.ScrollbarBox
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -69,7 +69,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.ModalBottomSheetProperties
 import fr.jmethod.app.domain.ScorePreview
 import fr.jmethod.app.model.AppSettings
 import fr.jmethod.app.model.Course
@@ -289,14 +288,8 @@ fun SessionSheet(
 ) {
     val page = state.page
     val inner = viewer != null || page is SessionPage.Score
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = Color.White,
-        // Document ouvert : le zoom et le défilement ne doivent pas faire glisser la feuille.
-        sheetGesturesEnabled = viewer == null,
-        properties = ModalBottomSheetProperties(shouldDismissOnBackPress = !inner),
-    ) {
+    // Document ouvert : le zoom et le défilement ne doivent pas faire glisser la feuille.
+    AdaptiveSheet(onDismissRequest = onDismiss, gesturesEnabled = viewer == null, dismissOnBack = !inner) {
         // Retour : document puis autoévaluation reviennent à la fiche.
         SystemBackHandler(enabled = inner) {
             if (viewer != null) onCloseViewer() else onPage(SessionPage.Main)
@@ -341,8 +334,9 @@ private fun MainPage(
     val course = model.course
     var historyOpen by rememberSaveable(revision.id) { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth()) {
-        Column(
-            Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = JSpacing.xl).padding(bottom = JSpacing.l),
+        val scroll = rememberScrollState()
+        ScrollbarBox(scroll, Modifier.weight(1f, fill = false)) { Column(
+            Modifier.verticalScroll(scroll).padding(horizontal = JSpacing.xl).padding(bottom = JSpacing.l),
             verticalArrangement = Arrangement.spacedBy(JSpacing.l),
         ) {
             // 1. En-tête : matière, Jn, étape, titre, chapitre · Cn, retard.
@@ -408,7 +402,7 @@ private fun MainPage(
                     }
                 }
             }
-        }
+        } }
         // 5. Action principale toujours visible.
         HorizontalDivider(color = JColors.Slate100)
         Box(Modifier.fillMaxWidth().padding(horizontal = JSpacing.xl, vertical = JSpacing.m).navigationBarsPadding()) {

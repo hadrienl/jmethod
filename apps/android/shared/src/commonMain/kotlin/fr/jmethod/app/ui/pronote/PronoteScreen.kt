@@ -1,5 +1,6 @@
 package fr.jmethod.app.ui.pronote
 
+import fr.jmethod.app.ui.components.ScrollbarBox
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -185,128 +186,131 @@ fun LoginScreen(viewModel: PronoteViewModel, state: PronoteUiState) {
     val canSubmit = !working && form.school.isNotBlank() && form.username.isNotBlank() && form.password.isNotEmpty()
     val platform = LocalPlatform.current
     Box(Modifier.fillMaxSize().background(JColors.Slate50), contentAlignment = Alignment.TopCenter) {
+        val scrollState = rememberScrollState()
+        ScrollbarBox(scrollState, Modifier.fillMaxSize()) {
         Column(
-            Modifier.widthIn(max = 560.dp).fillMaxSize().verticalScroll(rememberScrollState())
-                .windowInsetsPadding(WindowInsets.safeDrawing).imePadding().padding(JSpacing.l)
-                // Clavier : Entrée envoie le formulaire depuis n’importe quel champ (les boutons gardent la leur).
-                .onKeyEvent { event ->
-                    val enter = event.key == Key.Enter || event.key == Key.NumPadEnter
-                    if (enter && event.type == KeyEventType.KeyUp && canSubmit) {
-                        controller.submitCredentials()
-                        true
-                    } else {
-                        false
-                    }
-                },
-            verticalArrangement = Arrangement.spacedBy(JSpacing.xl),
-        ) {
-            Spacer(Modifier.height(JSpacing.xl))
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Brand() }
-            SectionCard(padding = JSpacing.xl) {
-                Text("Connexion à Pronote", style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() })
-                var showHelp by rememberSaveable { mutableStateOf(false) }
-                Column {
-                    Text(
-                        "Utilise ton identifiant et ton mot de passe Pronote, pas ceux d’ÉduConnect.",
-                        style = MaterialTheme.typography.bodyMedium, color = JColors.Slate600,
-                    )
-                    TextButton(
-                        onClick = { showHelp = true },
-                        contentPadding = PaddingValues(horizontal = 0.dp),
-                        modifier = Modifier.heightIn(min = 48.dp),
-                    ) { Text("En savoir plus", fontWeight = FontWeight.Bold) }
-                }
-                if (showHelp) SignInHelpSheet(onDismiss = { showHelp = false })
-                OutlinedTextField(
-                    value = form.school,
-                    onValueChange = controller::onSchoolChange,
-                    label = { Text("Code ou adresse de l’établissement") },
-                    placeholder = { Text("abcd1234") },
-                    singleLine = true,
-                    enabled = !working,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, autoCorrectEnabled = false, imeAction = ImeAction.Next),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                    AccountType.entries.forEachIndexed { index, type ->
-                        SegmentedButton(
-                            selected = form.accountType == type,
-                            onClick = { controller.onAccountTypeChange(type) },
-                            enabled = !working,
-                            shape = SegmentedButtonDefaults.itemShape(index, AccountType.entries.size),
-                            modifier = Modifier.heightIn(min = 48.dp),
-                        ) { Text(if (type == AccountType.STUDENT) "Élève" else "Parent") }
-                    }
-                }
-                OutlinedTextField(
-                    value = form.username,
-                    onValueChange = controller::onUsernameChange,
-                    label = { Text("Identifiant") },
-                    singleLine = true,
-                    enabled = !working,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, autoCorrectEnabled = false, imeAction = ImeAction.Next),
-                    modifier = Modifier.fillMaxWidth().semantics { contentType = ContentType.Username },
-                )
-                var passwordVisible by rememberSaveable { mutableStateOf(false) }
-                OutlinedTextField(
-                    value = form.password,
-                    onValueChange = controller::onPasswordChange,
-                    label = { Text("Mot de passe") },
-                    singleLine = true,
-                    enabled = !working,
-                    visualTransformation = if (passwordVisible && !form.passwordFromStore) VisualTransformation.None else PasswordVisualTransformation(),
-                    // Un mot de passe enregistré n’est jamais révélable : l’œil n’existe que pour une saisie.
-                    trailingIcon = if (form.passwordFromStore) null else {
-                        {
-                            IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                                Icon(
-                                    if (passwordVisible) EyeOffIcon else EyeIcon,
-                                    contentDescription = if (passwordVisible) "Masquer le mot de passe" else "Afficher le mot de passe",
-                                )
-                            }
+                Modifier.align(Alignment.TopCenter).widthIn(max = 560.dp).fillMaxSize().verticalScroll(scrollState)
+                    .windowInsetsPadding(WindowInsets.safeDrawing).imePadding().padding(JSpacing.l)
+                    // Clavier : Entrée envoie le formulaire depuis n’importe quel champ (les boutons gardent la leur).
+                    .onKeyEvent { event ->
+                        val enter = event.key == Key.Enter || event.key == Key.NumPadEnter
+                        if (enter && event.type == KeyEventType.KeyUp && canSubmit) {
+                            controller.submitCredentials()
+                            true
+                        } else {
+                            false
                         }
                     },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false, imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = { if (canSubmit) controller.submitCredentials() }),
-                    modifier = Modifier.fillMaxWidth().semantics { contentType = ContentType.Password },
-                )
-                Row(
-                    Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                        .toggleable(value = form.stayConnected, enabled = !working, role = Role.Switch, onValueChange = controller::onStayConnectedChange),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text("Rester connecté", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                    Switch(checked = form.stayConnected, onCheckedChange = null, enabled = !working)
-                }
-                if (form.stayConnected) {
-                    Text(
-                        "Ton identifiant et ton mot de passe sont enregistrés de façon chiffrée, uniquement sur ${platform.device}, pour te reconnecter sans les ressaisir.",
-                        style = MaterialTheme.typography.bodySmall, color = JColors.Slate600,
-                    )
-                }
-                Button(
-                    onClick = controller::submitCredentials,
-                    enabled = canSubmit,
-                    shape = JShapes.control,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
-                ) {
-                    if (working) {
-                        CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = JColors.Violet700)
-                        Spacer(Modifier.size(JSpacing.m))
-                        Text("Connexion…")
-                    } else {
-                        Text("Se connecter", fontWeight = FontWeight.Bold)
+                verticalArrangement = Arrangement.spacedBy(JSpacing.xl),
+            ) {
+                Spacer(Modifier.height(JSpacing.xl))
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Brand() }
+                SectionCard(padding = JSpacing.xl) {
+                    Text("Connexion à Pronote", style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() })
+                    var showHelp by rememberSaveable { mutableStateOf(false) }
+                    Column {
+                        Text(
+                            "Utilise ton identifiant et ton mot de passe Pronote, pas ceux d’ÉduConnect.",
+                            style = MaterialTheme.typography.bodyMedium, color = JColors.Slate600,
+                        )
+                        TextButton(
+                            onClick = { showHelp = true },
+                            contentPadding = PaddingValues(horizontal = 0.dp),
+                            modifier = Modifier.heightIn(min = 48.dp),
+                        ) { Text("En savoir plus", fontWeight = FontWeight.Bold) }
                     }
-                }
-                val feedback = if (working) state.message else state.formError
-                if (feedback != null) {
-                    Text(
-                        feedback,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (working) JColors.Slate600 else JColors.Rose700,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
+                    if (showHelp) SignInHelpSheet(onDismiss = { showHelp = false })
+                    OutlinedTextField(
+                        value = form.school,
+                        onValueChange = controller::onSchoolChange,
+                        label = { Text("Code ou adresse de l’établissement") },
+                        placeholder = { Text("abcd1234") },
+                        singleLine = true,
+                        enabled = !working,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, autoCorrectEnabled = false, imeAction = ImeAction.Next),
+                        modifier = Modifier.fillMaxWidth(),
                     )
+                    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                        AccountType.entries.forEachIndexed { index, type ->
+                            SegmentedButton(
+                                selected = form.accountType == type,
+                                onClick = { controller.onAccountTypeChange(type) },
+                                enabled = !working,
+                                shape = SegmentedButtonDefaults.itemShape(index, AccountType.entries.size),
+                                modifier = Modifier.heightIn(min = 48.dp),
+                            ) { Text(if (type == AccountType.STUDENT) "Élève" else "Parent") }
+                        }
+                    }
+                    OutlinedTextField(
+                        value = form.username,
+                        onValueChange = controller::onUsernameChange,
+                        label = { Text("Identifiant") },
+                        singleLine = true,
+                        enabled = !working,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, autoCorrectEnabled = false, imeAction = ImeAction.Next),
+                        modifier = Modifier.fillMaxWidth().semantics { contentType = ContentType.Username },
+                    )
+                    var passwordVisible by rememberSaveable { mutableStateOf(false) }
+                    OutlinedTextField(
+                        value = form.password,
+                        onValueChange = controller::onPasswordChange,
+                        label = { Text("Mot de passe") },
+                        singleLine = true,
+                        enabled = !working,
+                        visualTransformation = if (passwordVisible && !form.passwordFromStore) VisualTransformation.None else PasswordVisualTransformation(),
+                        // Un mot de passe enregistré n’est jamais révélable : l’œil n’existe que pour une saisie.
+                        trailingIcon = if (form.passwordFromStore) null else {
+                            {
+                                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                    Icon(
+                                        if (passwordVisible) EyeOffIcon else EyeIcon,
+                                        contentDescription = if (passwordVisible) "Masquer le mot de passe" else "Afficher le mot de passe",
+                                    )
+                                }
+                            }
+                        },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false, imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { if (canSubmit) controller.submitCredentials() }),
+                        modifier = Modifier.fillMaxWidth().semantics { contentType = ContentType.Password },
+                    )
+                    Row(
+                        Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                            .toggleable(value = form.stayConnected, enabled = !working, role = Role.Switch, onValueChange = controller::onStayConnectedChange),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("Rester connecté", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                        Switch(checked = form.stayConnected, onCheckedChange = null, enabled = !working)
+                    }
+                    if (form.stayConnected) {
+                        Text(
+                            "Ton identifiant et ton mot de passe sont enregistrés de façon chiffrée, uniquement sur ${platform.device}, pour te reconnecter sans les ressaisir.",
+                            style = MaterialTheme.typography.bodySmall, color = JColors.Slate600,
+                        )
+                    }
+                    Button(
+                        onClick = controller::submitCredentials,
+                        enabled = canSubmit,
+                        shape = JShapes.control,
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+                    ) {
+                        if (working) {
+                            CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = JColors.Violet700)
+                            Spacer(Modifier.size(JSpacing.m))
+                            Text("Connexion…")
+                        } else {
+                            Text("Se connecter", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    val feedback = if (working) state.message else state.formError
+                    if (feedback != null) {
+                        Text(
+                            feedback,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (working) JColors.Slate600 else JColors.Rose700,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
+                        )
+                    }
                 }
             }
         }

@@ -45,3 +45,11 @@ actual fun openPdf(file: File): PdfPages? = runCatching {
         }
     }
 }.getOrNull()
+
+@Composable
+actual fun VerticalScrollbar(state: androidx.compose.foundation.ScrollState, modifier: androidx.compose.ui.Modifier) = Unit
+
+@Composable
+actual fun VerticalScrollbar(state: androidx.compose.foundation.lazy.LazyListState, modifier: androidx.compose.ui.Modifier) = Unit
+
+actual fun androidx.compose.ui.Modifier.escapeToBack(): androidx.compose.ui.Modifier = this

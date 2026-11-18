@@ -15,6 +15,9 @@ import java.awt.RenderingHints
 import java.awt.image.BufferedImage
 import java.io.File
 import javax.imageio.ImageIO
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 
 /**
  * Pile des gestionnaires « Retour » de la fenêtre : la touche Échap appelle le plus récent qui est
@@ -86,3 +89,18 @@ actual fun openPdf(file: File): PdfPages? = runCatching {
         }
     }
 }.getOrNull()
+
+@Composable
+actual fun VerticalScrollbar(state: androidx.compose.foundation.ScrollState, modifier: androidx.compose.ui.Modifier) =
+    androidx.compose.foundation.VerticalScrollbar(androidx.compose.foundation.rememberScrollbarAdapter(state), modifier)
+
+@Composable
+actual fun VerticalScrollbar(state: androidx.compose.foundation.lazy.LazyListState, modifier: androidx.compose.ui.Modifier) =
+    androidx.compose.foundation.VerticalScrollbar(androidx.compose.foundation.rememberScrollbarAdapter(state), modifier)
+
+actual fun androidx.compose.ui.Modifier.escapeToBack(): androidx.compose.ui.Modifier = this.then(
+    androidx.compose.ui.Modifier.onKeyEvent { event ->
+        event.key == androidx.compose.ui.input.key.Key.Escape &&
+            event.type == androidx.compose.ui.input.key.KeyEventType.KeyDown && DesktopBack.dispatch()
+    },
+)

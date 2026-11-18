@@ -1,0 +1,84 @@
+import org.jetbrains.compose.desktop.application.dsl.TargetFormat
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
+/**
+ * App ordinateur (Windows, macOS) : fenêtre Compose Desktop, connexion directe à Pronote, coffre du
+ * système pour « Rester connecté ». Lancement : `./gradlew :desktopApp:run` ; installeurs :
+ * `packageMsi` (sur Windows) et `packageDmg` (sur macOS).
+ */
+plugins {
+    alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.compose.multiplatform)
+    alias(libs.plugins.kotlin.compose)
+}
+
+/** Version de l’app ordinateur (MAJEUR.MINEUR.CORRECTIF, majeur ≥ 1 exigé par MSI et DMG). */
+val desktopVersion = "1.0.0"
+
+kotlin {
+    compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+dependencies {
+    implementation(project(":shared"))
+    implementation(compose.desktop.currentOs)
+    implementation(libs.mp.compose.material3)
+    implementation(libs.mp.compose.icons.core)
+    implementation(libs.mp.lifecycle.viewmodel.compose)
+    implementation(libs.kotlinx.coroutines.swing)
+    implementation(libs.org.json)
+    implementation(libs.jna)
+    implementation(libs.jna.platform)
+    testImplementation(libs.junit)
+    testImplementation(compose.desktop.uiTestJUnit4)
+    testImplementation(libs.pdfbox)
+}
+
+// Visite guidée optionnelle (captures et connexion réelle à la démonstration publique), jamais en CI :
+// ./gradlew :desktopApp:test --tests '*DesktopTour*' -Pjmethod.tour=<dossier> [-Pjmethod.demoLogin=true]
+tasks.withType<Test>().configureEach {
+    listOf("jmethod.tour", "jmethod.demoLogin").forEach { name ->
+        providers.gradleProperty(name).orNull?.let { systemProperty(name, it) }
+    }
+}
+
+compose.desktop {
+    application {
+        mainClass = "fr.jmethod.desktop.MainKt"
+        jvmArgs += listOf("-Dfile.encoding=UTF-8", "-Djmethod.version=$desktopVersion")
+        // Essais locaux seulement : dossier de données et service du coffre séparés (`-Pjmethod.dataDir=…`).
+        providers.gradleProperty("jmethod.dataDir").orNull?.let { jvmArgs += "-Djmethod.dataDir=$it" }
+        providers.gradleProperty("jmethod.secretService").orNull?.let { jvmArgs += "-Djmethod.secretService=$it" }
+        nativeDistributions {
+            targetFormats(TargetFormat.Msi, TargetFormat.Dmg)
+            packageName = "J-Method"
+            packageVersion = desktopVersion
+            description = "Révisions espacées à partir de Pronote"
+            vendor = "J-Method"
+            copyright = "J-Method"
+            // Modules du JDK embarqué : HTTPS (courbes elliptiques TLS), Swing/AWT, préférences, JNA.
+            modules("java.naming", "jdk.crypto.ec", "jdk.unsupported", "java.net.http")
+            windows {
+                menuGroup = "J-Method"
+                perUserInstall = true
+                dirChooser = true
+                shortcut = true
+                // Identifiant de mise à niveau stable : une nouvelle version remplace l’ancienne.
+                upgradeUuid = "6f1d3c52-9a7e-4f0b-8b3e-2f9a51c7d4e1"
+                iconFile.set(project.file("icons/j-method.ico"))
+            }
+            macOS {
+                bundleID = "fr.jmethod.desktop"
+                iconFile.set(project.file("icons/j-method.icns"))
+            }
+            linux {
+                iconFile.set(project.file("icons/j-method.png"))
+            }
+        }
+    }
+}

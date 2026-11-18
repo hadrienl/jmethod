@@ -1,5 +1,8 @@
 package fr.jmethod.app.ui.planning
 
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.lazy.rememberLazyListState
+import fr.jmethod.app.ui.components.ScrollbarBox
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -105,49 +108,53 @@ fun PlanningScreen(
     val mode = selection.mode
     val days = state.model.days
     val wide = fr.jmethod.app.ui.components.LocalWindowLayout.current.wide
+    val listState = rememberLazyListState()
+    ScrollbarBox(listState, Modifier.fillMaxSize(), barPadding = contentPadding) {
     LazyColumn(
-        contentPadding = screenPadding(contentPadding, 24.dp),
-        verticalArrangement = Arrangement.spacedBy(JSpacing.m),
-    ) {
-        if (wide) {
-            // Paysage ou grand écran : en-tête compact sur deux lignes, qui défile avec le contenu.
-            item(key = "header") {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(JSpacing.m)) {
-                    Text("Planning", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold, modifier = Modifier.semantics { heading() })
-                    ModeSelector(mode, viewModel::setMode, Modifier.weight(1f))
-                    TodayButton(viewModel)
-                }
-            }
-            item(key = "navigation") {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(JSpacing.m)) {
-                    PeriodNavigation(state.model.period, viewModel, Modifier.weight(1f))
-                    Filters(state, viewModel, Modifier.weight(1f))
-                }
-            }
-        } else {
-            item(key = "header") {
-                ScreenHeader("Planning", "Les matières, les étapes et les séances à revoir.") { TodayButton(viewModel) }
-            }
-            item(key = "mode") { ModeSelector(mode, viewModel::setMode) }
-            item(key = "navigation") { PeriodNavigation(state.model.period, viewModel) }
-            item(key = "filters") { Filters(state, viewModel) }
-        }
-        if (!state.hasCourses) {
-            item(key = "no-course") { NoCourseCard(onCreateCourse) }
-        }
-        when (mode) {
-            PlanningMode.MONTH -> {
-                item(key = "grid") { MonthGrid(days, state.today) { viewModel.openDay(LocalDate.parse(it)) } }
-                val withContent = days.filter { it.tiles.isNotEmpty() || it.events.isNotEmpty() }
-                if (withContent.isEmpty()) {
-                    item(key = "month-empty") {
-                        Text("Aucune séance prévue ce mois-ci.", style = MaterialTheme.typography.bodyMedium, color = JColors.Slate600,
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), textAlign = TextAlign.Center)
+            state = listState,
+            contentPadding = screenPadding(contentPadding, 24.dp),
+            verticalArrangement = Arrangement.spacedBy(JSpacing.m),
+        ) {
+            if (wide) {
+                // Paysage ou grand écran : en-tête compact sur deux lignes, qui défile avec le contenu.
+                item(key = "header") {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(JSpacing.m)) {
+                        Text("Planning", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold, modifier = Modifier.semantics { heading() })
+                        ModeSelector(mode, viewModel::setMode, Modifier.weight(1f))
+                        TodayButton(viewModel)
                     }
                 }
-                items(withContent, key = { it.date }) { day -> DaySection(day, mode, onOpenRevision, onAddCourseFrom) }
+                item(key = "navigation") {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(JSpacing.m)) {
+                        PeriodNavigation(state.model.period, viewModel, Modifier.weight(1f))
+                        Filters(state, viewModel, Modifier.weight(1f))
+                    }
+                }
+            } else {
+                item(key = "header") {
+                    ScreenHeader("Planning", "Les matières, les étapes et les séances à revoir.") { TodayButton(viewModel) }
+                }
+                item(key = "mode") { ModeSelector(mode, viewModel::setMode) }
+                item(key = "navigation") { PeriodNavigation(state.model.period, viewModel) }
+                item(key = "filters") { Filters(state, viewModel) }
             }
-            else -> items(days, key = { it.date }) { day -> DaySection(day, mode, onOpenRevision, onAddCourseFrom) }
+            if (!state.hasCourses) {
+                item(key = "no-course") { NoCourseCard(onCreateCourse) }
+            }
+            when (mode) {
+                PlanningMode.MONTH -> {
+                    item(key = "grid") { MonthGrid(days, state.today) { viewModel.openDay(LocalDate.parse(it)) } }
+                    val withContent = days.filter { it.tiles.isNotEmpty() || it.events.isNotEmpty() }
+                    if (withContent.isEmpty()) {
+                        item(key = "month-empty") {
+                            Text("Aucune séance prévue ce mois-ci.", style = MaterialTheme.typography.bodyMedium, color = JColors.Slate600,
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), textAlign = TextAlign.Center)
+                        }
+                    }
+                    items(withContent, key = { it.date }) { day -> DaySection(day, mode, onOpenRevision, onAddCourseFrom) }
+                }
+                else -> items(days, key = { it.date }) { day -> DaySection(day, mode, onOpenRevision, onAddCourseFrom) }
+            }
         }
     }
 }

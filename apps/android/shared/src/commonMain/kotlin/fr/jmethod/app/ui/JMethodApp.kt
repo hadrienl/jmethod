@@ -41,6 +41,12 @@ import fr.jmethod.app.domain.StatsModel
 import fr.jmethod.app.pronote.PronoteUiState
 import fr.jmethod.app.ui.components.LocalScreenGutter
 import fr.jmethod.app.ui.components.ReadingWidth
+import fr.jmethod.app.ui.components.DetailPaneWidth
+import fr.jmethod.app.ui.components.LocalSheetMode
+import fr.jmethod.app.ui.components.SheetMode
+import fr.jmethod.app.ui.components.BrandMark
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
 import fr.jmethod.app.ui.components.motion
 import fr.jmethod.app.ui.courses.CoursesUiState
 import fr.jmethod.app.ui.planning.PlanningUiState
@@ -221,7 +227,7 @@ private fun AppNavigationBar(current: Tab, badge: Int, onSelect: (Tab) -> Unit) 
 }
 
 @Composable
-private fun AppNavigationRail(current: Tab, badge: Int, onSelect: (Tab) -> Unit) {
+private fun AppNavigationRail(current: Tab, badge: Int, showBrand: Boolean = false, onSelect: (Tab) -> Unit) {
     val colors = NavigationRailItemDefaults.colors(
         selectedIconColor = JColors.Violet800,
         selectedTextColor = JColors.Violet800,
@@ -230,8 +236,16 @@ private fun AppNavigationRail(current: Tab, badge: Int, onSelect: (Tab) -> Unit)
         unselectedTextColor = JColors.Slate600,
     )
     Row {
-        // Pas d’en-tête : les cinq destinations doivent tenir dans la hauteur d’un téléphone en paysage.
-        NavigationRail(containerColor = Color.White) {
+        // En-tête seulement sur une fenêtre assez haute : les cinq destinations doivent tenir dans la
+        // hauteur d’un téléphone en paysage.
+        NavigationRail(
+            containerColor = Color.White,
+            header = if (showBrand) {
+                { BrandMark(40.dp, Modifier.padding(top = JSpacing.m)) }
+            } else {
+                null
+            },
+        ) {
             Spacer(Modifier.weight(1f))
             Destinations.forEach { destination ->
                 NavigationRailItem(
@@ -384,6 +398,94 @@ private fun AppContent(container: AppContainer, createConnection: (CoroutineScop
 
     // Retour au premier plan : reconnexion ou synchronisation si la dernière date de plus de 6 h.
     LifecycleEventEffect(Lifecycle.Event.ON_START) { pronoteViewModel.controller.onForeground() }
+    // Ordinateur : l’app reste souvent ouverte ; même règle qu’au retour au premier plan, vérifiée
+    // toutes les 15 minutes (synchronisation si la dernière date de plus de 6 h). Aucun service système.
+    if (platform.isDesktop) {
+        LaunchedEffect(pronoteViewModel) {
+            while (true) {
+                kotlinx.coroutines.delay(15 * 60_000L)
+                pronoteViewModel.controller.onForeground()
+            }
+        }
+    }
+
+    // Document de fiche ouvert dans la feuille, le panneau ou le volet de détail.
+    val openDocument: (CourseDocument) -> Unit = { document ->
+        container.courseFiles.fileOf(document)?.takeIf { it.isFile }?.let { sheetViewer = SheetDocument(document, it) }
+    }
+
+    /** Fiche de séance (section 8), ouverte depuis Aujourd’hui, le Planning ou la fiche d’un cours. */
+    val sessionSheet: @Composable () -> Unit = {
+        today?.let { state ->
+            state.session?.let { session ->
+                SessionSheetHost(
+                    session, state, notebook, pronote, container.courseFiles, sheetViewer,
+                    todayViewModel, notebookViewModel, coursesViewModel,
+                    onOpenDocument = openDocument,
+                    onCloseViewer = { sheetViewer = null },
+                    onBackToToday = {
+                        sheetViewer = null
+                        todayViewModel.closeSheets()
+                        tab = Tab.TODAY
+                    },
+                    onDismiss = {
+                        sheetViewer = null
+                        todayViewModel.closeSheets()
+                    },
+                )
+            }
+        }
+    }
+
+    /** Fiche d’un cours (historique des J, documents, cahier de textes). */
+    val courseSheet: @Composable () -> Unit = {
+        courses?.detail?.let { detail ->
+            val course = detail.course
+            LaunchedEffect(course.id, course.source != null) {
+                if (pronote.access == AccessPhase.CONNECTED) notebookViewModel.ensureRead() // cahier (8.1) et documents proches (8.5)
+            }
+            val documents = remember(course.documents) { course.documents.orEmpty().map { it to container.courseFiles.exists(it) } }
+            CourseDetailSheet(
+                detail,
+                onDismiss = {
+                    sheetViewer = null
+                    coursesViewModel.closeDetail()
+                },
+                // « Valider » ouvre la fiche de la séance (section 8.4).
+                onValidate = { revisionId ->
+                    sheetViewer = null
+                    coursesViewModel.closeDetail()
+                    todayViewModel.openSession(revisionId)
+                },
+                onDelete = { coursesViewModel.delete(course.id) },
+                onOpenNotebook = detail.subject?.let { subject ->
+                    {
+                        coursesViewModel.closeDetail()
+                        notebookViewModel.open(subject.id)
+                    }
+                },
+                documents = documents,
+                onOpenDocument = openDocument,
+                onRedownload = if (course.source != null) {
+                    { document -> notebookViewModel.redownload(course, document) }
+                } else {
+                    null
+                },
+                notebookPart = RevisionSession.notebookPart(course, notebook?.state?.snapshot),
+                notebookLoading = notebook?.state?.loading == true,
+                downloadingId = notebook?.state?.downloadingId,
+                onDownloadAttachment = { notebookViewModel.download(it, inApp = true) },
+                onLink = { platform.openLink(it) },
+                viewer = sheetViewer,
+                onCloseViewer = { sheetViewer = null },
+                nearby = today?.document?.let { doc ->
+                    RevisionSession.nearbyDocuments(course, doc.courses, notebook?.state?.snapshot, doc.subjects, container.courseFiles::exists)
+                }.orEmpty(),
+                onOpenNearby = { item -> openNearby(item, openDocument, notebookViewModel) },
+                onAttachNearby = { item -> attachNearby(course.id, item, coursesViewModel, notebookViewModel) },
+            )
+        }
+    }
 
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         // La page officielle reste montée pendant toute la tentative (écran de connexion compris),
@@ -395,13 +497,33 @@ private fun AppContent(container: AppContainer, createConnection: (CoroutineScop
             AccessPhase.CHECKING -> LoadingScreen(onSkip = pronoteViewModel.controller::skipResume)
             AccessPhase.SIGNED_OUT -> LoginScreen(pronoteViewModel, pronote)
             AccessPhase.CONNECTED, AccessPhase.OFFLINE -> BoxWithConstraints(Modifier.fillMaxSize()) {
-                // Paysage ou grand écran : rail latéral et colonne de lecture centrée.
-                val rail = maxWidth >= 600.dp && maxWidth > maxHeight
-                val available = maxWidth - if (rail) 81.dp else 0.dp
+                // Fenêtre moyenne ou étendue (paysage, tablette, ordinateur) : rail latéral et colonne de
+                // lecture centrée. Fenêtre étendue : la fiche ouverte se place à côté de la liste (deux volets).
+                val rail = maxWidth >= 600.dp
+                val twoPane = maxWidth >= 840.dp
+                val dockCourse = twoPane && tab == Tab.COURSES && courses?.detail != null
+                val dockSession = twoPane && !dockCourse && (tab == Tab.TODAY || tab == Tab.PLANNING) && today?.session != null
+                val pane = if (dockCourse || dockSession) DetailPaneWidth + 1.dp else 0.dp
+                val available = maxWidth - (if (rail) 81.dp else 0.dp) - pane
                 val gutter = ((available - ReadingWidth) / 2).coerceAtLeast(0.dp)
                 val badge = today?.model?.badgeCount ?: 0
+                val tall = maxHeight >= 560.dp
+                // Changer d’onglet ferme la fiche ancrée qui n’y a plus sa place (comme une feuille sur téléphone,
+                // qui masque la barre d’onglets tant qu’elle est ouverte).
+                val selectTab: (Tab) -> Unit = { next ->
+                    if (dockCourse && next != Tab.COURSES) {
+                        sheetViewer = null
+                        coursesViewModel.closeDetail()
+                    }
+                    if (dockSession && next != Tab.TODAY && next != Tab.PLANNING) {
+                        sheetViewer = null
+                        todayViewModel.closeSheets()
+                    }
+                    tab = next
+                }
                 Row(Modifier.fillMaxSize()) {
-                    if (rail) AppNavigationRail(tab, badge) { tab = it }
+                    // Marque en tête du rail seulement si la hauteur le permet (téléphone en paysage : non).
+                    if (rail) AppNavigationRail(tab, badge, showBrand = tall, onSelect = selectTab)
                     CompositionLocalProvider(LocalScreenGutter provides gutter) {
                         Scaffold(
                             modifier = Modifier.weight(1f),
@@ -415,7 +537,7 @@ private fun AppContent(container: AppContainer, createConnection: (CoroutineScop
                                 if (pronote.access == AccessPhase.OFFLINE || pronote.reconnecting) OfflineBanner(pronote, pronoteViewModel.controller::retry)
                             },
                             snackbarHost = { SnackbarHost(snackbar) { data -> ToastSnackbar(data) } },
-                            bottomBar = { if (!rail) AppNavigationBar(tab, badge) { tab = it } },
+                            bottomBar = { if (!rail) AppNavigationBar(tab, badge, onSelect = selectTab) },
                             floatingActionButton = {
                                 AnimatedVisibility(
                                     visible = tab == Tab.COURSES && courses?.hasCourses == true,
@@ -430,16 +552,19 @@ private fun AppContent(container: AppContainer, createConnection: (CoroutineScop
                                         containerColor = JColors.Violet700,
                                         contentColor = Color.White,
                                         // Le libellé animé du bouton étendu n’est pas exposé à TalkBack : nom explicite.
-                                        modifier = Modifier.semantics { contentDescription = "Nouveau cours" },
+                                        // Deux volets : le bouton reste sur la liste, à gauche de la fiche.
+                                        modifier = Modifier.padding(end = pane).semantics { contentDescription = "Nouveau cours" },
                                     )
                                 }
                             },
                         ) { padding ->
                             // Changement d’onglet : fondu court (coupé si les animations du système sont désactivées).
+                            Row(Modifier.fillMaxSize()) {
                             AnimatedContent(
                                 targetState = tab,
                                 transitionSpec = { fadeIn(motion(200)) togetherWith fadeOut(motion(90)) },
                                 label = "onglet",
+                                modifier = Modifier.weight(1f),
                             ) { current ->
                                 TabContent(
                                     current, padding, today, planning, courses, stats, settings, pronote, syncInfo,
@@ -456,6 +581,16 @@ private fun AppContent(container: AppContainer, createConnection: (CoroutineScop
                                     },
                                 )
                             }
+                            if (pane > 0.dp) {
+                                VerticalDivider(color = JColors.Slate200)
+                                // Volet de détail : la fiche ouverte, à côté de la liste qui reste utilisable.
+                                Box(Modifier.width(DetailPaneWidth).fillMaxHeight().padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())) {
+                                    CompositionLocalProvider(LocalSheetMode provides SheetMode.PANE) {
+                                        if (dockCourse) courseSheet() else sessionSheet()
+                                    }
+                                }
+                            }
+                            }
 
                             // Fond opaque de la barre d’état : le contenu qui défile ne transparaît pas sous l’heure.
                             Box(
@@ -463,75 +598,10 @@ private fun AppContent(container: AppContainer, createConnection: (CoroutineScop
                                     .background(MaterialTheme.colorScheme.background),
                             )
 
-                            // Fiches ouvertes depuis n’importe quel onglet, sans changer d’onglet (section 8).
-                            val openDocument: (CourseDocument) -> Unit = { document ->
-                                container.courseFiles.fileOf(document)?.takeIf { it.isFile }?.let { sheetViewer = SheetDocument(document, it) }
-                            }
-                            today?.let { state ->
-                                state.session?.let { session ->
-                                    SessionSheetHost(
-                                        session, state, notebook, pronote, container.courseFiles, sheetViewer,
-                                        todayViewModel, notebookViewModel, coursesViewModel,
-                                        onOpenDocument = openDocument,
-                                        onCloseViewer = { sheetViewer = null },
-                                        onBackToToday = {
-                                            sheetViewer = null
-                                            todayViewModel.closeSheets()
-                                            tab = Tab.TODAY
-                                        },
-                                        onDismiss = {
-                                            sheetViewer = null
-                                            todayViewModel.closeSheets()
-                                        },
-                                    )
-                                }
-                            }
-                            courses?.detail?.let { detail ->
-                                val course = detail.course
-                                LaunchedEffect(course.id, course.source != null) {
-                                    if (pronote.access == AccessPhase.CONNECTED) notebookViewModel.ensureRead() // cahier (8.1) et documents proches (8.5)
-                                }
-                                val documents = remember(course.documents) { course.documents.orEmpty().map { it to container.courseFiles.exists(it) } }
-                                CourseDetailSheet(
-                                    detail,
-                                    onDismiss = {
-                                        sheetViewer = null
-                                        coursesViewModel.closeDetail()
-                                    },
-                                    // « Valider » ouvre la fiche de la séance (section 8.4).
-                                    onValidate = { revisionId ->
-                                        sheetViewer = null
-                                        coursesViewModel.closeDetail()
-                                        todayViewModel.openSession(revisionId)
-                                    },
-                                    onDelete = { coursesViewModel.delete(course.id) },
-                                    onOpenNotebook = detail.subject?.let { subject ->
-                                        {
-                                            coursesViewModel.closeDetail()
-                                            notebookViewModel.open(subject.id)
-                                        }
-                                    },
-                                    documents = documents,
-                                    onOpenDocument = openDocument,
-                                    onRedownload = if (course.source != null) {
-                                        { document -> notebookViewModel.redownload(course, document) }
-                                    } else {
-                                        null
-                                    },
-                                    notebookPart = RevisionSession.notebookPart(course, notebook?.state?.snapshot),
-                                    notebookLoading = notebook?.state?.loading == true,
-                                    downloadingId = notebook?.state?.downloadingId,
-                                    onDownloadAttachment = { notebookViewModel.download(it, inApp = true) },
-                                    onLink = { platform.openLink(it) },
-                                    viewer = sheetViewer,
-                                    onCloseViewer = { sheetViewer = null },
-                                    nearby = today?.document?.let { doc ->
-                                        RevisionSession.nearbyDocuments(course, doc.courses, notebook?.state?.snapshot, doc.subjects, container.courseFiles::exists)
-                                    }.orEmpty(),
-                                    onOpenNearby = { item -> openNearby(item, openDocument, notebookViewModel) },
-                                    onAttachNearby = { item -> attachNearby(course.id, item, coursesViewModel, notebookViewModel) },
-                                )
-                            }
+                            // Fiches ouvertes depuis n’importe quel onglet, sans changer d’onglet (section 8) ;
+                            // feuilles sur téléphone, panneau latéral ou volet de détail sur grande fenêtre.
+                            if (!dockSession) sessionSheet()
+                            if (!dockCourse) courseSheet()
                         }
                     }
                 }

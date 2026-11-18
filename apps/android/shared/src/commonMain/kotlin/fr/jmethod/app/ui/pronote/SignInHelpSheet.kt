@@ -16,9 +16,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
+import fr.jmethod.app.ui.components.AdaptiveSheet
+import fr.jmethod.app.ui.components.ScrollbarBox
+import fr.jmethod.app.ui.components.SheetMode
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,13 +37,10 @@ import fr.jmethod.app.ui.theme.JSpacing
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SignInHelpSheet(onDismiss: () -> Unit) {
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = Color.White,
-    ) {
-        Column(
-            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).navigationBarsPadding()
+    AdaptiveSheet(onDismissRequest = onDismiss, wideMode = SheetMode.DIALOG) {
+        val scroll = rememberScrollState()
+        ScrollbarBox(scroll) { Column(
+            Modifier.fillMaxWidth().verticalScroll(scroll).navigationBarsPadding()
                 .padding(start = JSpacing.xl, end = JSpacing.xl, bottom = JSpacing.xl),
             verticalArrangement = Arrangement.spacedBy(JSpacing.l),
         ) {
@@ -75,7 +73,7 @@ fun SignInHelpSheet(onDismiss: () -> Unit) {
             Button(onClick = onDismiss, shape = JShapes.control, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
                 Text("J’ai compris", fontWeight = FontWeight.Bold)
             }
-        }
+        } }
     }
 }
 

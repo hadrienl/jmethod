@@ -28,3 +28,13 @@ interface PdfPages : Closeable {
 
 /** Ouvre un PDF local ; `null` s’il ne peut pas être lu. */
 expect fun openPdf(file: File): PdfPages?
+
+/** Barre de défilement visible sur ordinateur (souris) ; rien sur Android, où le geste suffit. */
+@Composable
+expect fun VerticalScrollbar(state: androidx.compose.foundation.ScrollState, modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier)
+
+@Composable
+expect fun VerticalScrollbar(state: androidx.compose.foundation.lazy.LazyListState, modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier)
+
+/** Ordinateur : Échap non consommée par le contenu déclenche le retour ([SystemBackHandler]) ; rien sur Android. */
+expect fun androidx.compose.ui.Modifier.escapeToBack(): androidx.compose.ui.Modifier

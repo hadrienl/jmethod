@@ -1,5 +1,8 @@
 package fr.jmethod.app.ui.notebook
 
+import fr.jmethod.app.ui.components.DesktopSelection
+import androidx.compose.foundation.lazy.rememberLazyListState
+import fr.jmethod.app.ui.components.ScrollbarBox
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -109,104 +112,110 @@ fun NotebookScreen(ui: NotebookUiState, viewModel: NotebookViewModel, snackbar: 
         val homework = snapshot?.homework.orEmpty().filter { subjectId == null || NotebookViewModel.matches(it.subject, subjectId, ui.subjects) }
         val attachmentCount = if (subjectId == null) snapshot?.attachmentCount ?: 0
         else sessions.sumOf { s -> s.contents.sumOf { it.attachments.size } } + homework.sumOf { it.attachments.size }
-        LazyColumn(
-            Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding),
-            contentPadding = PaddingValues(horizontal = JSpacing.l + fullScreenGutter(), vertical = JSpacing.l),
-            verticalArrangement = Arrangement.spacedBy(JSpacing.m),
-        ) {
-            item(key = "intro") {
-                // Mention courte, alignée sur iOS.
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.semantics(mergeDescendants = true) {}) {
-                    Icon(Icons.Filled.Lock, contentDescription = null, tint = JColors.Slate500, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(JSpacing.s))
-                    Text(
-                        if (ui.autoCreate) "Lecture seule : rien n’est modifié dans Pronote. Les séances deviennent des cours automatiquement (Réglages)." else "Lecture seule : rien n’est modifié dans Pronote. « Créer un cours » transforme une séance en cours J-Method.",
-                        style = MaterialTheme.typography.bodySmall, color = JColors.Slate600,
-                    )
-                }
-            }
-            if (ui.subjectName != null) {
-                item(key = "subject") {
-                    FilterChip(
-                        selected = true,
-                        onClick = { viewModel.setSubject(null) },
-                        label = { Text(ui.subjectName) },
-                        trailingIcon = { Icon(Icons.Filled.Close, contentDescription = "Afficher toutes les matières", modifier = Modifier.size(18.dp)) },
-                        colors = FilterChipDefaults.filterChipColors(selectedContainerColor = JColors.Violet100, selectedLabelColor = JColors.Violet900),
-                    )
-                }
-            }
-            if (state.error != null) {
-                item(key = "error") {
-                    Column(
-                        Modifier.fillMaxWidth().clip(JShapes.inner).background(JColors.Rose50).padding(JSpacing.l)
-                            .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
-                    ) {
-                        Text(state.error, color = JColors.Rose800, style = MaterialTheme.typography.bodyMedium)
-                        Spacer(Modifier.height(JSpacing.s))
-                        OutlinedButton(onClick = viewModel::refresh, shape = JShapes.control, modifier = Modifier.heightIn(min = 48.dp)) { Text("Réessayer") }
-                    }
-                }
-            }
-            if (state.loading) {
-                item(key = "loading") {
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite }) {
-                        CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 3.dp, color = JColors.Violet700, trackColor = JColors.Violet100)
-                        Spacer(Modifier.width(JSpacing.m))
-                        Text("Lecture du cahier de textes…", style = MaterialTheme.typography.bodyMedium)
-                    }
-                }
-            }
-            if (snapshot != null) {
-                item(key = "summary") {
-                    Column(
-                        Modifier.fillMaxWidth().clip(JShapes.inner).background(JColors.Violet50)
-                            .border(1.dp, JColors.Violet200, JShapes.inner).padding(JSpacing.l)
-                            .semantics(mergeDescendants = true) {},
-                    ) {
+        val listState = rememberLazyListState()
+        ScrollbarBox(listState, Modifier.fillMaxSize().padding(padding)) {
+        DesktopSelection {
+LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize().consumeWindowInsets(padding),
+                contentPadding = PaddingValues(horizontal = JSpacing.l + fullScreenGutter(), vertical = JSpacing.l),
+                verticalArrangement = Arrangement.spacedBy(JSpacing.m),
+            ) {
+                item(key = "intro") {
+                    // Mention courte, alignée sur iOS.
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.semantics(mergeDescendants = true) {}) {
+                        Icon(Icons.Filled.Lock, contentDescription = null, tint = JColors.Slate500, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(JSpacing.s))
                         Text(
-                            "${sessions.size} ${if (sessions.size > 1) "séances publiées" else "séance publiée"} · " +
-                                "${homework.size} ${if (homework.size > 1) "devoirs" else "devoir"} · " +
-                                "$attachmentCount ${if (attachmentCount > 1) "pièces jointes et liens" else "pièce jointe ou lien"}",
-                            style = MaterialTheme.typography.titleSmall, color = JColors.Violet900,
-                        )
-                        Text(
-                            "Du ${FrenchDates.numeric(snapshot.from)} au ${FrenchDates.numeric(snapshot.to)}",
+                            if (ui.autoCreate) "Lecture seule : rien n’est modifié dans Pronote. Les séances deviennent des cours automatiquement (Réglages)." else "Lecture seule : rien n’est modifié dans Pronote. « Créer un cours » transforme une séance en cours J-Method.",
                             style = MaterialTheme.typography.bodySmall, color = JColors.Slate600,
                         )
-                        if (snapshot.skippedEntries > 0) {
-                            Spacer(Modifier.height(JSpacing.xs))
+                    }
+                }
+                if (ui.subjectName != null) {
+                    item(key = "subject") {
+                        FilterChip(
+                            selected = true,
+                            onClick = { viewModel.setSubject(null) },
+                            label = { Text(ui.subjectName) },
+                            trailingIcon = { Icon(Icons.Filled.Close, contentDescription = "Afficher toutes les matières", modifier = Modifier.size(18.dp)) },
+                            colors = FilterChipDefaults.filterChipColors(selectedContainerColor = JColors.Violet100, selectedLabelColor = JColors.Violet900),
+                        )
+                    }
+                }
+                if (state.error != null) {
+                    item(key = "error") {
+                        Column(
+                            Modifier.fillMaxWidth().clip(JShapes.inner).background(JColors.Rose50).padding(JSpacing.l)
+                                .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
+                        ) {
+                            Text(state.error, color = JColors.Rose800, style = MaterialTheme.typography.bodyMedium)
+                            Spacer(Modifier.height(JSpacing.s))
+                            OutlinedButton(onClick = viewModel::refresh, shape = JShapes.control, modifier = Modifier.heightIn(min = 48.dp)) { Text("Réessayer") }
+                        }
+                    }
+                }
+                if (state.loading) {
+                    item(key = "loading") {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite }) {
+                            CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 3.dp, color = JColors.Violet700, trackColor = JColors.Violet100)
+                            Spacer(Modifier.width(JSpacing.m))
+                            Text("Lecture du cahier de textes…", style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                }
+                if (snapshot != null) {
+                    item(key = "summary") {
+                        Column(
+                            Modifier.fillMaxWidth().clip(JShapes.inner).background(JColors.Violet50)
+                                .border(1.dp, JColors.Violet200, JShapes.inner).padding(JSpacing.l)
+                                .semantics(mergeDescendants = true) {},
+                        ) {
                             Text(
-                                "${snapshot.skippedEntries} ${if (snapshot.skippedEntries > 1) "entrées sans date exploitable n’ont pas été affichées" else "entrée sans date exploitable n’a pas été affichée"}.",
-                                style = MaterialTheme.typography.bodySmall, color = JColors.Amber900,
+                                "${sessions.size} ${if (sessions.size > 1) "séances publiées" else "séance publiée"} · " +
+                                    "${homework.size} ${if (homework.size > 1) "devoirs" else "devoir"} · " +
+                                    "$attachmentCount ${if (attachmentCount > 1) "pièces jointes et liens" else "pièce jointe ou lien"}",
+                                style = MaterialTheme.typography.titleSmall, color = JColors.Violet900,
                             )
-                        }
-                        if (!snapshot.homeworkAvailable) {
-                            Text("Le travail à faire n’est pas disponible pour ce compte.", style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
-                        }
-                    }
-                }
-                item(key = "tabs") {
-                    SecondaryTabRow(selectedTabIndex = state.tab.ordinal, containerColor = Color.Transparent) {
-                        Tab(selected = state.tab == NotebookTab.CONTENTS, onClick = { viewModel.setTab(NotebookTab.CONTENTS) },
-                            text = { Text("Cours publiés (${sessions.size})") })
-                        Tab(selected = state.tab == NotebookTab.HOMEWORK, onClick = { viewModel.setTab(NotebookTab.HOMEWORK) },
-                            text = { Text("Devoirs (${homework.size})") })
-                    }
-                }
-                if (state.tab == NotebookTab.CONTENTS) {
-                    if (sessions.isEmpty()) item(key = "no-session") { Empty("Aucun contenu de cours publié sur cette période.") }
-                    items(sessions, key = { "s-" + it.id }) { session ->
-                        SessionCard(session, state.downloadingId, viewModel::download, { url -> platform.openLink(url) }) {
-                            CourseAction(ui.importStates[session.key], state.preparingSessionId == session.id, state.preparingSessionId != null,
-                                onCreate = { viewModel.prepareCourse(session) }, onView = viewModel::viewCourse)
+                            Text(
+                                "Du ${FrenchDates.numeric(snapshot.from)} au ${FrenchDates.numeric(snapshot.to)}",
+                                style = MaterialTheme.typography.bodySmall, color = JColors.Slate600,
+                            )
+                            if (snapshot.skippedEntries > 0) {
+                                Spacer(Modifier.height(JSpacing.xs))
+                                Text(
+                                    "${snapshot.skippedEntries} ${if (snapshot.skippedEntries > 1) "entrées sans date exploitable n’ont pas été affichées" else "entrée sans date exploitable n’a pas été affichée"}.",
+                                    style = MaterialTheme.typography.bodySmall, color = JColors.Amber900,
+                                )
+                            }
+                            if (!snapshot.homeworkAvailable) {
+                                Text("Le travail à faire n’est pas disponible pour ce compte.", style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
+                            }
                         }
                     }
-                } else {
-                    if (homework.isEmpty()) item(key = "no-homework") { Empty("Aucun devoir publié sur cette période.") }
-                    items(homework, key = { "h-" + it.id }) { HomeworkCard(it, state.downloadingId, viewModel::download) { url -> platform.openLink(url) } }
+                    item(key = "tabs") {
+                        SecondaryTabRow(selectedTabIndex = state.tab.ordinal, containerColor = Color.Transparent) {
+                            Tab(selected = state.tab == NotebookTab.CONTENTS, onClick = { viewModel.setTab(NotebookTab.CONTENTS) },
+                                text = { Text("Cours publiés (${sessions.size})") })
+                            Tab(selected = state.tab == NotebookTab.HOMEWORK, onClick = { viewModel.setTab(NotebookTab.HOMEWORK) },
+                                text = { Text("Devoirs (${homework.size})") })
+                        }
+                    }
+                    if (state.tab == NotebookTab.CONTENTS) {
+                        if (sessions.isEmpty()) item(key = "no-session") { Empty("Aucun contenu de cours publié sur cette période.") }
+                        items(sessions, key = { "s-" + it.id }) { session ->
+                            SessionCard(session, state.downloadingId, viewModel::download, { url -> platform.openLink(url) }) {
+                                CourseAction(ui.importStates[session.key], state.preparingSessionId == session.id, state.preparingSessionId != null,
+                                    onCreate = { viewModel.prepareCourse(session) }, onView = viewModel::viewCourse)
+                            }
+                        }
+                    } else {
+                        if (homework.isEmpty()) item(key = "no-homework") { Empty("Aucun devoir publié sur cette période.") }
+                        items(homework, key = { "h-" + it.id }) { HomeworkCard(it, state.downloadingId, viewModel::download) { url -> platform.openLink(url) } }
+                    }
                 }
             }
+}
         }
     }
 }

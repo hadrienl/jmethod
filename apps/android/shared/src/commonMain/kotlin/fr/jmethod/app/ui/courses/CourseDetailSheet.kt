@@ -32,11 +32,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
+import fr.jmethod.app.ui.components.AdaptiveSheet
+import fr.jmethod.app.ui.components.ScrollbarBox
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -69,7 +69,6 @@ import fr.jmethod.app.ui.today.NotebookPartSection
 import fr.jmethod.app.ui.today.SheetSectionTitle
 import fr.jmethod.app.ui.platform.SystemBackHandler
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.ModalBottomSheetProperties
 import androidx.compose.foundation.clickable
 import fr.jmethod.app.model.CourseDocument
 import fr.jmethod.app.ui.theme.JColors
@@ -112,20 +111,15 @@ fun CourseDetailSheet(
     onAttachNearby: (RevisionSession.Nearby) -> Unit = {},
 ) {
     var confirmDelete by rememberSaveable(model.course.id) { mutableStateOf(false) }
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = Color.White,
-        sheetGesturesEnabled = viewer == null,
-        properties = ModalBottomSheetProperties(shouldDismissOnBackPress = viewer == null),
-    ) {
+    AdaptiveSheet(onDismissRequest = onDismiss, gesturesEnabled = viewer == null, dismissOnBack = viewer == null) {
         SystemBackHandler(enabled = viewer != null, onBack = onCloseViewer)
         if (viewer != null) {
             Box(Modifier.fillMaxSize()) { DocumentViewerScreen(viewer.document, viewer.file, onClose = onCloseViewer, embedded = true) }
-            return@ModalBottomSheet
+            return@AdaptiveSheet
         }
-        Column(
-            Modifier.verticalScroll(rememberScrollState()).padding(horizontal = JSpacing.xl).padding(bottom = JSpacing.xl).navigationBarsPadding(),
+        val scroll = rememberScrollState()
+        ScrollbarBox(scroll) { Column(
+            Modifier.verticalScroll(scroll).padding(horizontal = JSpacing.xl).padding(bottom = JSpacing.xl).navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(JSpacing.l),
         ) {
             Header(model, onDismiss)
@@ -186,7 +180,7 @@ fun CourseDetailSheet(
                 Spacer(Modifier.weight(1f))
                 OutlinedButton(onClick = onDismiss, shape = JShapes.control, modifier = Modifier.heightIn(min = 48.dp)) { Text("Fermer") }
             }
-        }
+        } }
     }
     if (confirmDelete) {
         AlertDialog(

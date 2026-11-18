@@ -1,5 +1,8 @@
 package fr.jmethod.app.ui.courses
 
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.lazy.rememberLazyListState
+import fr.jmethod.app.ui.components.ScrollbarBox
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -80,28 +83,32 @@ fun CoursesScreen(
     onShowPlanning: () -> Unit,
     onOpenNotebook: () -> Unit,
 ) {
+    val listState = rememberLazyListState()
+    ScrollbarBox(listState, Modifier.fillMaxSize(), barPadding = contentPadding) {
     LazyColumn(
-        contentPadding = screenPadding(contentPadding, 96.dp),
-        verticalArrangement = Arrangement.spacedBy(JSpacing.l),
-    ) {
-        item(key = "header") {
-            ScreenHeader(state.list.header, "Tous tes cours classés par matière et par chapitre, avec le suivi de leurs révisions.")
-        }
-        item(key = "notebook") { NotebookEntry(onOpenNotebook) }
-        if (!state.hasCourses) {
-            item(key = "first") { FirstCourse(onCreate = { viewModel.openCreate() }, onShowPlanning = onShowPlanning) }
-            return@LazyColumn
-        }
-        item(key = "search") { SearchField(state.search, viewModel::setSearch) }
-        item(key = "chips") { SubjectChips(state, viewModel::setSubjectFilter) }
-        if (state.list.empty) {
-            item(key = "empty") {
-                SurfaceCard {
-                    EmptyState(Icons.Filled.Search, "Aucun cours trouvé", "Essaie de modifier ta recherche ou tes filtres.")
+            state = listState,
+            contentPadding = screenPadding(contentPadding, 96.dp),
+            verticalArrangement = Arrangement.spacedBy(JSpacing.l),
+        ) {
+            item(key = "header") {
+                ScreenHeader(state.list.header, "Tous tes cours classés par matière et par chapitre, avec le suivi de leurs révisions.")
+            }
+            item(key = "notebook") { NotebookEntry(onOpenNotebook) }
+            if (!state.hasCourses) {
+                item(key = "first") { FirstCourse(onCreate = { viewModel.openCreate() }, onShowPlanning = onShowPlanning) }
+                return@LazyColumn
+            }
+            item(key = "search") { SearchField(state.search, viewModel::setSearch) }
+            item(key = "chips") { SubjectChips(state, viewModel::setSubjectFilter) }
+            if (state.list.empty) {
+                item(key = "empty") {
+                    SurfaceCard {
+                        EmptyState(Icons.Filled.Search, "Aucun cours trouvé", "Essaie de modifier ta recherche ou tes filtres.")
+                    }
                 }
             }
+            items(state.list.groups, key = { "subject-" + it.subject.id }) { group -> SubjectGroup(group, viewModel::openDetail) }
         }
-        items(state.list.groups, key = { "subject-" + it.subject.id }) { group -> SubjectGroup(group, viewModel::openDetail) }
     }
 }
 

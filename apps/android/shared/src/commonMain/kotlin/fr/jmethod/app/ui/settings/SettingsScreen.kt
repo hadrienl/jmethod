@@ -1,5 +1,6 @@
 package fr.jmethod.app.ui.settings
 
+import fr.jmethod.app.ui.components.ScrollbarBox
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.selection.toggleable
@@ -168,19 +169,22 @@ fun SettingsScreen(
     val draft = ui.draft
     val gutter = LocalScreenGutter.current
     Box(Modifier.fillMaxSize()) {
+        val scrollState = rememberScrollState()
+        ScrollbarBox(scrollState, Modifier.fillMaxSize(), barPadding = contentPadding) {
         Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-                .padding(screenPadding(contentPadding, if (draft.dirty) 120.dp else JSpacing.xl)),
-            verticalArrangement = Arrangement.spacedBy(JSpacing.l),
-        ) {
-            ScreenHeader("Réglages")
-            PronoteAccountSection(pronoteViewModel, pronote, syncInfo)
-            NotebookSection(autoCreate, onAutoCreateChange)
-            Algorithm(draft, viewModel)
-            Intervals(draft, viewModel)
-            Colors(ui.subjects) { colorFor = it }
-            Backup(ui, onExport = viewModel::requestExport, onImport = { importer() })
-            About()
+                Modifier.fillMaxSize().verticalScroll(scrollState)
+                    .padding(screenPadding(contentPadding, if (draft.dirty) 120.dp else JSpacing.xl)),
+                verticalArrangement = Arrangement.spacedBy(JSpacing.l),
+            ) {
+                ScreenHeader("Réglages")
+                PronoteAccountSection(pronoteViewModel, pronote, syncInfo)
+                NotebookSection(autoCreate, onAutoCreateChange)
+                Algorithm(draft, viewModel)
+                Intervals(draft, viewModel)
+                Colors(ui.subjects) { colorFor = it }
+                Backup(ui, onExport = viewModel::requestExport, onImport = { importer() })
+                About()
+            }
         }
         if (draft.dirty) {
             val direction = LocalLayoutDirection.current
