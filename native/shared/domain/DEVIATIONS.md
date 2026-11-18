@@ -17,5 +17,6 @@ Règle : les apps natives reproduisent le web à l’identique pour les calculs,
 | D11 | Planning | Titres en minuscules capitalisés mot à mot par CSS (« Lundi 30 Mars ») | Typographie française : « lundi 30 mars » en minuscules, majuscule initiale seulement en début de titre |
 | D12 | Fiche de cours | Score absent affiché « 50/100 » | « —/100 » comme le Planning |
 | D13 | Import | Aucune validation de forme | Refuser un fichier dont `courses`, `revisions` ou `subjects` ne sont pas des tableaux d’objets du bon type, avec un message clair ; les autres règles d’import (remplacement des réglages, conservation des créneaux Pronote) restent identiques |
+| D14 | Messages de validation (toast de l’algorithme) | Date ISO brute (« 2026-11-27 ») | Date en français relative quand c’est plus clair : « demain », « après-demain », sinon « vendredi 27 novembre » (année seulement si différente) |
 
 Tout le reste des particularités listées dans `README.md` est reproduit tel quel.
