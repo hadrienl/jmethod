@@ -68,7 +68,37 @@ data class PendingDocument(
  * le dossier du cours, `source` et `notebookImports` enregistrés avec le cours, en une seule écriture.
  */
 class CourseCreator(private val repository: AppRepository, private val clock: AppClock, private val files: CourseFiles) {
-    suspend fun create(form: CourseEditing.Form, source: CourseSource?, documents: List<PendingDocument>): CourseEditing.Created? {
+    /**
+     * Condition vérifiée **au moment d’écrire**, dans la transformation du document courant : une
+     * création préparée sur un état périmé (cours créé, supprimé ou réglage changé entre-temps) n’écrit rien.
+     */
+    sealed interface Expectation {
+        /** Création automatique : réglage toujours actif et séance jamais traitée (ni `created` ni `dismissed`). */
+        data object Automatic : Expectation
+        /** Bouton « Créer un cours » : l’entrée `notebookImports` doit être restée celle vue au début (`null` = jamais importée). */
+        data class Manual(val seen: NotebookImport?) : Expectation
+    }
+
+    /** Écriture refusée parce que l’état a changé depuis la préparation (aucun cours créé). */
+    @Volatile
+    var lastRefusal: String? = null
+        private set
+
+    private fun allowed(document: fr.jmethod.app.model.AppDocument, source: CourseSource, expectation: Expectation): Boolean {
+        val entry = document.notebookImports[source.sessionKey]
+        return when (expectation) {
+            Expectation.Automatic -> document.settings.notebookAutoCreate == true && entry == null
+            is Expectation.Manual -> entry == expectation.seen &&
+                !(entry?.status == NotebookImport.CREATED && document.courses.any { it.id == entry.courseId })
+        }
+    }
+
+    suspend fun create(
+        form: CourseEditing.Form,
+        source: CourseSource?,
+        documents: List<PendingDocument>,
+        expectation: Expectation = Expectation.Manual(null),
+    ): CourseEditing.Created? {
         if (!CourseEditing.isValid(form)) return null
         val now = clock.now()
         val courseId = "course-${now.toEpochMilli()}"
@@ -76,11 +106,12 @@ class CourseCreator(private val repository: AppRepository, private val clock: Ap
             runCatching { files.store(courseId, it.file, it.name, it.type, it.extractedTitle) }.getOrNull()
         }
         var created: CourseEditing.Created? = null
+        var refused = false
         repository.update { document ->
-            // Création automatique concurrente : une séance déjà importée ne l’est jamais deux fois.
-            if (source != null && document.notebookImports[source.sessionKey]?.status == NotebookImport.CREATED &&
-                document.courses.any { it.id == document.notebookImports[source.sessionKey]?.courseId }
-            ) {
+            // Idempotence : une séance déjà créée, supprimée entre-temps ou traitée par un autre chemin
+            // (double soumission, création automatique concurrente) n’est jamais recréée.
+            if (source != null && !allowed(document, source, expectation)) {
+                refused = true
                 return@update document
             }
             val result = CourseEditing.create(document.courses, document.revisions, document.settings.intervals, form, now, AppClock.ZONE)
@@ -95,6 +126,7 @@ class CourseCreator(private val repository: AppRepository, private val clock: Ap
             )
         }
         if (created == null) files.deleteCourse(courseId)
+        lastRefusal = if (refused) "Cette séance a été traitée entre-temps : aucun cours n’a été créé." else null
         return created
     }
 
@@ -131,6 +163,8 @@ data class NotebookCourseDraft(
     val documents: List<PendingDocument>,
     /** Message affiché dans le formulaire (document non téléchargé, matière à choisir). */
     val notice: String?,
+    /** Entrée `notebookImports` de la séance au moment du clic (`null` = jamais importée). */
+    val seenImport: NotebookImport? = null,
 ) {
     val source get() = CourseSource(fr.jmethod.app.domain.NotebookCourses.SOURCE_KIND, sessionKey, subjectLabel, date)
 }

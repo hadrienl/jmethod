@@ -313,10 +313,12 @@ class NotebookViewModel(
         state.update { it.copy(preparingSessionId = session.id) }
         viewModelScope.launch {
             try {
+                // État vu au clic : si la séance est créée ou supprimée pendant la préparation, rien ne sera écrit.
+                val seen = repository.current().notebookImports[session.id]
                 val subjects = repository.current().subjects
                 val (documents, failed) = prepareDocuments(session, subjects)
                 if (generation != resetCount) return@launch
-                events.send(NotebookEvent.CreateCourse(draftFor(session, documents, failed, subjects)))
+                events.send(NotebookEvent.CreateCourse(draftFor(session, documents, failed, subjects).copy(seenImport = seen)))
             } catch (_: CancellationException) {
             } catch (error: Exception) {
                 events.send(NotebookEvent.Message(message(error, "Préparation du cours impossible. Réessaie plus tard.")))
@@ -352,7 +354,7 @@ class NotebookViewModel(
                 val draft = draftFor(session, documents, failed, repository.current().subjects)
                 val subjectId = draft.subjectId ?: continue
                 val form = CourseEditing.Form(subjectId, draft.chapter, draft.title, draft.date, draft.description)
-                val result = withContext(Dispatchers.IO) { creator.create(form, draft.source, documents) }
+                val result = withContext(Dispatchers.IO) { creator.create(form, draft.source, documents, CourseCreator.Expectation.Automatic) }
                 withContext(Dispatchers.IO) { documents.forEach { it.file.parentFile?.deleteRecursively() } }
                 if (result != null) created++
             }

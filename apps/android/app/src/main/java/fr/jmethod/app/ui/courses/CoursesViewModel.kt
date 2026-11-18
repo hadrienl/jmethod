@@ -163,6 +163,8 @@ class CoursesViewModel(
 
     fun submitCreate() {
         val current = form.value
+        // Double tap : le formulaire est déjà fermé par la première soumission, rien n’est renvoyé.
+        if (!current.open) return
         // Titre et chapitre obligatoires (`required` du formulaire web), après `trim`.
         if (current.title.isBlank() || current.chapter.isBlank()) {
             form.update { it.copy(showErrors = true) }
@@ -172,8 +174,14 @@ class CoursesViewModel(
         viewModelScope.launch {
             val subjectId = current.subjectId ?: repository.current().subjects.firstOrNull()?.id ?: "maths"
             val input = CourseEditing.Form(subjectId, current.chapter, current.title, current.date, current.description)
-            val created = withContext(Dispatchers.IO) { creator.create(input, current.notebook?.source, current.documents) }
+            val notebook = current.notebook
+            val created = withContext(Dispatchers.IO) {
+                creator.create(input, notebook?.source, current.documents, CourseCreator.Expectation.Manual(notebook?.seenImport))
+            }
             created?.toast?.let { events.send(CoursesEvent.Toast(it.title, it.message, it.type == CourseEditing.ToastType.INFO)) }
+            if (created == null && notebook != null) {
+                creator.lastRefusal?.let { events.send(CoursesEvent.Toast("Cours non créé", it, true)) }
+            }
         }
     }
 
