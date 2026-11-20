@@ -67,6 +67,37 @@ jobs:
           name: J-Method-msi
           path: apps/android/desktopApp/build/compose/binaries/main/msi/*.msi
           if-no-files-found: error
+      # Paquet pour le Microsoft Store, qui le signe. Identité réservée dans l'Espace partenaires, en
+      # variables du dépôt (MSIX_IDENTITY_NAME, MSIX_PUBLISHER, MSIX_PUBLISHER_DISPLAY_NAME) ; sans elles,
+      # valeurs de test.
+      - name: Paquet MSIX
+        shell: pwsh
+        env:
+          MSIX_IDENTITY_NAME: ${{ vars.MSIX_IDENTITY_NAME }}
+          MSIX_PUBLISHER: ${{ vars.MSIX_PUBLISHER }}
+          MSIX_PUBLISHER_DISPLAY_NAME: ${{ vars.MSIX_PUBLISHER_DISPLAY_NAME }}
+        run: >-
+          ./desktopApp/msix/pack.ps1
+          -AppDir desktopApp/build/compose/binaries/main/app/J-Method
+          -Version $env:DESKTOP_VERSION
+          -Out "desktopApp/build/msix/J-Method-$env:DESKTOP_VERSION.msix"
+          -IdentityName "$env:MSIX_IDENTITY_NAME"
+          -Publisher "$env:MSIX_PUBLISHER"
+          -PublisherDisplayName "$env:MSIX_PUBLISHER_DISPLAY_NAME"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: J-Method-msix
+          path: apps/android/desktopApp/build/msix/*.msix
+          if-no-files-found: error
+      # Installe le MSIX (signé par un certificat de test) et vérifie que l'app démarre.
+      - name: Essai du MSIX
+        shell: pwsh
+        continue-on-error: true
+        env:
+          MSIX_PUBLISHER: ${{ vars.MSIX_PUBLISHER }}
+        run: |
+          $publisher = if ($env:MSIX_PUBLISHER) { $env:MSIX_PUBLISHER } else { "CN=J-Method Test" }
+          ./desktopApp/msix/smoke-test.ps1 -Msix "desktopApp/build/msix/J-Method-$env:DESKTOP_VERSION.msix" -Publisher $publisher
 
   # Les machines macOS de GitHub manquent souvent : le DMG n'est construit que pour une Release,
   # et son absence ne bloque pas la publication du MSI.
