@@ -42,3 +42,7 @@ The JS asset watches the DOM on 500 ms intervals and stops within 35 seconds aft
 ## Verification
 
 Use synthetic shared protocol vectors for byte-level interoperability. Public Index Education demo can validate native transport and QR automation, but its reusable tokens may not work after restart (demo server behavior). Actual school login requires the user to sign in on each native device and is not implied by successful local Python/web tests. Do not commit real account-derived diagnostics, QR images, tokens, exported timetable, private host defaults, signing profiles, local Gradle properties or device identifiers.
+
+## Desktop (Compose Desktop)
+
+No WebView and no QR flow: the desktop app signs in directly with the Pronote identifier and password (see `protocol-reference.md`, "Direct login by identifier and password"). Same read-only allowlist, same error 25 / error 8 / idle rules. « Rester connecté » stores school, account type, identifier and password in the macOS Keychain or in DPAPI-encrypted files under `%APPDATA%\J-Method\secrets`; a stored password is never revealable. Without « Rester connecté », the password stays in memory until the app closes.

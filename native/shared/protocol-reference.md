@@ -110,3 +110,14 @@ When a school enables its ENT, the web pages `pronote/`, `eleve.html`, `mobile.e
 - `<page>?login=true` still serves the Pronote login form, so Pronote accounts keep working as long as the school leaves them active. The native form loads this page.
 - The mobile token login already uses `mobile.<page>?fd=1&bydlg=…&login=true`. It does not go through the CAS, so existing connections are not affected.
 - If a school disables Pronote accounts, `?login=true` refuses the credentials (`LOGIN_REJECTED`). The only way in is then the official ENT page shown in the WebView (CAS and ÉduConnect, typed by the user), followed by the usual QR flow on the trusted Pronote origin.
+
+## Direct login by identifier and password (desktop, observed 2026-11-18)
+
+The desktop app has no WebView. It signs in directly on `<page>?login=true`:
+
+1. Read `Start({...})` in the page: `h` (session number), `a` (space), `d`. The current web page returns `{"h":…,"d":true,"a":3}`, and its exchanges are **plain JSON**: encrypting or compressing them makes Pronote answer `Erreur` 10, "La page a expiré ! (3)".
+2. `FonctionParametres`, then `Identification` with the identifier, then `Authentification` with the challenge solved using the key derived from SHA-256(alea + password).
+3. `modeCompLog` and `modeCompMdp` come back as numbers 0/1, not booleans. A value of 1 lowercases the identifier or the password.
+4. Then the same read-only calls as mobile. Error 25 blocks automatic logins for one hour. Error 8 or a lost session triggers one password re-login and one replay. More than 10 minutes idle triggers a re-login before reading.
+
+Double authentication (personal code or trusted device) is detected and explained to the user. It is not supported yet.

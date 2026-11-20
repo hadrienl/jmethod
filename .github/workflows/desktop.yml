@@ -1,0 +1,150 @@
+# App ordinateur (apps/android/desktopApp) : tests JVM et installeur Windows (MSI) non signé en artefact ;
+# pour une étiquette desktop-vX.Y.Z, aussi l’installeur macOS (DMG) et une Release GitHub.
+name: Desktop
+
+on:
+  push:
+    branches: [main]
+    tags: ["desktop-v*"]
+    paths:
+      - "apps/android/**"
+      - ".github/desktop-version.sh"
+      - "native/shared/**"
+      - ".github/workflows/desktop.yml"
+  pull_request:
+    paths:
+      - "apps/android/**"
+      - ".github/desktop-version.sh"
+      - "native/shared/**"
+      - ".github/workflows/desktop.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+    working-directory: apps/android
+
+jobs:
+  test:
+    name: Tests JVM
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v4
+      # Logique, protocole Pronote (vecteurs de native/shared) et app ordinateur.
+      - run: ./gradlew --console=plain --stacktrace :shared:desktopTest :desktopApp:test
+
+  windows:
+    name: Installeur Windows
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Version
+        run: |
+          version=$(bash .github/desktop-version.sh)
+          echo "DESKTOP_VERSION=$version" >> "$GITHUB_ENV"
+        working-directory: .
+      - run: ./gradlew --console=plain :desktopApp:packageMsi :desktopApp:createDistributable -Pjmethod.desktopVersion="$DESKTOP_VERSION"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: J-Method-msi
+          path: apps/android/desktopApp/build/compose/binaries/main/msi/*.msi
+          if-no-files-found: error
+      # Paquet pour le Microsoft Store, qui le signe. Identité réservée dans l'Espace partenaires, en
+      # variables du dépôt (MSIX_IDENTITY_NAME, MSIX_PUBLISHER, MSIX_PUBLISHER_DISPLAY_NAME) ; sans elles,
+      # valeurs de test.
+      - name: Paquet MSIX
+        shell: pwsh
+        env:
+          MSIX_IDENTITY_NAME: ${{ vars.MSIX_IDENTITY_NAME }}
+          MSIX_PUBLISHER: ${{ vars.MSIX_PUBLISHER }}
+          MSIX_PUBLISHER_DISPLAY_NAME: ${{ vars.MSIX_PUBLISHER_DISPLAY_NAME }}
+        run: >-
+          ./desktopApp/msix/pack.ps1
+          -AppDir desktopApp/build/compose/binaries/main/app/J-Method
+          -Version $env:DESKTOP_VERSION
+          -Out "desktopApp/build/msix/J-Method-$env:DESKTOP_VERSION.msix"
+          -IdentityName "$env:MSIX_IDENTITY_NAME"
+          -Publisher "$env:MSIX_PUBLISHER"
+          -PublisherDisplayName "$env:MSIX_PUBLISHER_DISPLAY_NAME"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: J-Method-msix
+          path: apps/android/desktopApp/build/msix/*.msix
+          if-no-files-found: error
+      # Installe le MSIX (signé par un certificat de test) et vérifie que l'app démarre.
+      - name: Essai du MSIX
+        shell: pwsh
+        continue-on-error: true
+        env:
+          MSIX_PUBLISHER: ${{ vars.MSIX_PUBLISHER }}
+        run: |
+          $publisher = if ($env:MSIX_PUBLISHER) { $env:MSIX_PUBLISHER } else { "CN=J-Method Test" }
+          ./desktopApp/msix/smoke-test.ps1 -Msix "desktopApp/build/msix/J-Method-$env:DESKTOP_VERSION.msix" -Publisher $publisher
+
+  # Les machines macOS de GitHub manquent souvent : le DMG n'est construit que pour une Release,
+  # et son absence ne bloque pas la publication du MSI.
+  macos:
+    name: Installeur macOS
+    if: startsWith(github.ref, 'refs/tags/desktop-v')
+    needs: test
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Version
+        run: |
+          version=$(bash .github/desktop-version.sh)
+          echo "DESKTOP_VERSION=$version" >> "$GITHUB_ENV"
+        working-directory: .
+      - run: ./gradlew --console=plain :desktopApp:packageDmg -Pjmethod.desktopVersion="$DESKTOP_VERSION"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: J-Method-dmg
+          path: apps/android/desktopApp/build/compose/binaries/main/dmg/*.dmg
+          if-no-files-found: error
+
+  release:
+    name: Release
+    if: always() && startsWith(github.ref, 'refs/tags/desktop-v') && needs.windows.result == 'success'
+    needs: [windows, macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publier les installeurs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "J-Method ordinateur ${GITHUB_REF_NAME#desktop-v}" \
+            --notes "Installeurs non signés : MSI pour Windows, DMG pour macOS (Apple Silicon) quand une machine macOS était disponible. Voir apps/android/README.md pour l’installation."

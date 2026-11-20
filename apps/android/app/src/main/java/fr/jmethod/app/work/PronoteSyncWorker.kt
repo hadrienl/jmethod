@@ -17,8 +17,7 @@ import java.util.concurrent.TimeUnit
 /** Synchronisation périodique de l’emploi du temps, réseau connecté requis. */
 class PronoteSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
-        val container = (applicationContext as JMethodApplication).container
-        return when (container.backgroundSync.run()) {
+        return when ((applicationContext as JMethodApplication).backgroundSync.run()) {
             // Erreur 25, jeton refusé ou autre échec : pas de nouvel essai avant la prochaine période.
             BackgroundSync.Result.RETRY -> Result.retry()
             else -> Result.success()
