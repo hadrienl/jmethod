@@ -184,6 +184,31 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(saved?.revisions.first { $0.id == target.id }?.status, .completed)
     }
 
+    /// Fiche de séance (§8.2, comme Android) : résultat dans la fiche sans message ni confettis par-dessus, séances
+    /// restantes, avertissement pour un rattrapage ; la dernière séance laisse la fiche se fermer et célèbre.
+    func testSheetValidationShowsResultWithoutToastOrConfetti() async throws {
+        let (model, _, _) = try await loadedModel(at: "2026-11-17T19:00:00Z", today: "2026-11-17")
+        XCTAssertGreaterThan(model.programme.due.count, 2)
+        let first = try XCTUnwrap(model.programme.due.first)
+        let result = try XCTUnwrap(model.submitScore(revisionId: first.id, score: 90, showsResult: true))
+        var problems: [String] = []
+        if result.next == nil { problems.append("séance suivante absente") }
+        if model.toast != nil || model.confetti != 0 || model.celebration != 0 { problems.append("retour visuel par-dessus le résultat") }
+        if result.remaining != model.programme.due.count { problems.append("restantes \(result.remaining)") }
+        if result.warning || result.title != "Révision validée (90/100)" { problems.append("titre \(result.title)") }
+        let low = try XCTUnwrap(model.submitScore(revisionId: try XCTUnwrap(result.next).id, score: 5, showsResult: true))
+        if !low.warning || low.title != "Rattrapage programmé" { problems.append("rattrapage \(low.title)") }
+        if AppModel.remainingLabel(2) != "Encore 2 séances au programme ce soir." || AppModel.remainingLabel(1) != "Encore 1 séance au programme ce soir."
+            || AppModel.remainingLabel(0) != nil { problems.append("libellé des séances restantes") }
+        var guardCount = 0
+        while let next = model.programme.due.first, guardCount < 50 {
+            _ = model.submitScore(revisionId: next.id, score: 60, showsResult: true)
+            guardCount += 1
+        }
+        if model.celebration != 1 || model.toast?.title != "Programme terminé" { problems.append("fin du programme : \(model.toast?.title ?? "aucun message")") }
+        if !problems.isEmpty { XCTFail(problems.joined(separator: "\n")) }
+    }
+
     func testCompletingTheEveningCelebrates() async throws {
         let (model, _, _) = try await loadedModel(at: "2026-11-17T19:00:00Z", today: "2026-11-17")
         XCTAssertFalse(model.programme.due.isEmpty)

@@ -25,6 +25,44 @@ struct Course: Codable, Identifiable, Hashable, Sendable {
     var date: String
     var description: String?
     var createdAt: String
+    /// Cours créé depuis une séance du cahier de textes (`notebook-to-course.md`) ; absent pour un cours saisi.
+    var source: CourseSource? = nil
+    /// Documents joints, copiés dans le stockage privé de l'app (métadonnées seulement dans le JSON).
+    var documents: [CourseDocument]? = nil
+}
+
+/// Origine d'un cours créé depuis le cahier de textes.
+struct CourseSource: Codable, Hashable, Sendable {
+    static let notebookKind = "pronote-notebook"
+    var kind: String
+    /// Clé de dédoublonnage stable entre sessions Pronote : `pn1:<date>|<matière normalisée>|<rang>`.
+    var sessionKey: String
+    /// Matière telle que Pronote l'écrit.
+    var subjectLabel: String
+    /// `yyyy-MM-dd`, date de la séance.
+    var date: String
+    /// Rang de la séance parmi celles de même date et même matière (absent des données créées avant la clé `pn1:`).
+    var ordinal: Int? = nil
+}
+
+/// Document d'un cours : fichier local `file` (relatif au dossier Application Support), jamais d'URL Pronote.
+struct CourseDocument: Codable, Hashable, Sendable, Identifiable {
+    var id: String
+    var name: String
+    var mime: String
+    var size: Int
+    /// `documents/<courseId>/<docId>.<ext>`
+    var file: String
+    var extractedTitle: String?
+}
+
+/// Suivi des séances du cahier de textes déjà transformées en cours (ou refusées) : jamais recréées automatiquement.
+struct NotebookImport: Codable, Hashable, Sendable {
+    enum Status: String, Codable, Sendable { case created, dismissed }
+    var status: Status
+    var courseId: String?
+    /// Instant ISO 8601.
+    var at: String
 }
 
 enum RevisionStatus: String, Codable, Sendable {
@@ -67,9 +105,16 @@ struct AppSettings: Codable, Hashable, Sendable {
     var soundEnabled: Bool
     var userName: String
     var userGrade: String
+    /// « Créer les cours automatiquement » depuis le cahier de textes (absent = désactivé).
+    var notebookAutoCreate: Bool?
+    /// `yyyy-MM-dd` : jour d'activation de la création automatique (séances éligibles à partir de ce jour).
+    var notebookAutoCreateSince: String?
+
+    var autoCreatesCourses: Bool { notebookAutoCreate == true }
 
     init(intervals: [Int], sensitivity: Double, emergencyThreshold: Double, pronoteIcalUrl: String,
-         lastPronoteSync: String? = nil, soundEnabled: Bool, userName: String, userGrade: String) {
+         lastPronoteSync: String? = nil, soundEnabled: Bool, userName: String, userGrade: String,
+         notebookAutoCreate: Bool? = nil, notebookAutoCreateSince: String? = nil) {
         self.intervals = intervals
         self.sensitivity = sensitivity
         self.emergencyThreshold = emergencyThreshold
@@ -78,6 +123,8 @@ struct AppSettings: Codable, Hashable, Sendable {
         self.soundEnabled = soundEnabled
         self.userName = userName
         self.userGrade = userGrade
+        self.notebookAutoCreate = notebookAutoCreate
+        self.notebookAutoCreateSince = notebookAutoCreateSince
     }
 
     /// Comme `loadSettings` du web (`{ ...DEFAULT_SETTINGS, ...saved }`) : chaque clé absente reprend la valeur par défaut.
@@ -92,6 +139,8 @@ struct AppSettings: Codable, Hashable, Sendable {
         soundEnabled = try container.decodeIfPresent(Bool.self, forKey: .soundEnabled) ?? defaults.soundEnabled
         userName = try container.decodeIfPresent(String.self, forKey: .userName) ?? defaults.userName
         userGrade = try container.decodeIfPresent(String.self, forKey: .userGrade) ?? defaults.userGrade
+        notebookAutoCreate = try container.decodeIfPresent(Bool.self, forKey: .notebookAutoCreate)
+        notebookAutoCreateSince = try container.decodeIfPresent(String.self, forKey: .notebookAutoCreateSince)
     }
 }
 
@@ -104,14 +153,22 @@ struct AppDocument: Codable, Equatable, Sendable {
     var revisions: [Revision]
     var pronoteEvents: [PronoteEvent]
     var initialized: Bool
+    /// Séances du cahier de textes déjà importées ou refusées, par `sessionKey`.
+    var notebookImports: [String: NotebookImport] = [:]
 
-    init(settings: AppSettings, subjects: [Subject], courses: [Course], revisions: [Revision], pronoteEvents: [PronoteEvent], initialized: Bool) {
+    private enum CodingKeys: String, CodingKey {
+        case settings, subjects, courses, revisions, pronoteEvents, initialized, notebookImports
+    }
+
+    init(settings: AppSettings, subjects: [Subject], courses: [Course], revisions: [Revision], pronoteEvents: [PronoteEvent], initialized: Bool,
+         notebookImports: [String: NotebookImport] = [:]) {
         self.settings = settings
         self.subjects = subjects
         self.courses = courses
         self.revisions = revisions
         self.pronoteEvents = pronoteEvents
         self.initialized = initialized
+        self.notebookImports = notebookImports
     }
 
     init(from decoder: Decoder) throws {
@@ -123,5 +180,18 @@ struct AppDocument: Codable, Equatable, Sendable {
         pronoteEvents = try container.decodeIfPresent([PronoteEvent].self, forKey: .pronoteEvents) ?? []
         // Un fichier existant contient des données : il est considéré comme initialisé.
         initialized = try container.decodeIfPresent(Bool.self, forKey: .initialized) ?? true
+        notebookImports = (try? container.decodeIfPresent([String: NotebookImport].self, forKey: .notebookImports)) ?? [:]
+    }
+
+    /// `notebookImports` n'est écrit que s'il contient des séances (fichier identique à celui du web sinon).
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(settings, forKey: .settings)
+        try container.encode(subjects, forKey: .subjects)
+        try container.encode(courses, forKey: .courses)
+        try container.encode(revisions, forKey: .revisions)
+        try container.encode(pronoteEvents, forKey: .pronoteEvents)
+        try container.encode(initialized, forKey: .initialized)
+        if !notebookImports.isEmpty { try container.encode(notebookImports, forKey: .notebookImports) }
     }
 }

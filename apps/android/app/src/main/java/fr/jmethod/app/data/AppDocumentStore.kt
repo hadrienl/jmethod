@@ -39,7 +39,9 @@ object AppDocumentCodec {
         val exported = kotlinx.serialization.json.buildJsonObject {
             put("version", kotlinx.serialization.json.JsonPrimitive("1.0"))
             put("exportDate", kotlinx.serialization.json.JsonPrimitive(isoMillis(now)))
-            for (key in listOf("courses", "revisions", "subjects", "settings")) {
+            // `notebookImports` (cahier de textes → cours) seulement s’il existe : ignoré par le web.
+            val keys = listOf("courses", "revisions", "subjects", "settings") + if (document.notebookImports.isEmpty()) emptyList() else listOf("notebookImports")
+            for (key in keys) {
                 val value = full.getValue(key)
                 put(key, when (key) {
                     "revisions" -> reorderRevisions(value)
@@ -60,6 +62,7 @@ object AppDocumentCodec {
     /** Ordre des réglages du web (`DEFAULT_SETTINGS`, puis `lastPronoteSync` ajouté à la synchronisation). */
     private val settingsKeyOrder = listOf(
         "intervals", "sensitivity", "emergencyThreshold", "pronoteIcalUrl", "soundEnabled", "userName", "userGrade", "lastPronoteSync",
+        "notebookAutoCreate", "notebookAutoCreateSince",
     )
 
     private fun reorder(item: JsonObject, order: List<String>): JsonObject {

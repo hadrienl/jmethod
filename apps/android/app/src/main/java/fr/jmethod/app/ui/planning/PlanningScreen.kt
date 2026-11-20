@@ -98,6 +98,8 @@ fun PlanningScreen(
     contentPadding: PaddingValues,
     onAddCourseFrom: (PronoteEvent) -> Unit,
     onCreateCourse: () -> Unit,
+    /** Fiche de la séance (section 8.1), commune à Aujourd’hui. */
+    onOpenRevision: (String) -> Unit,
 ) {
     val selection = state.selection
     val mode = selection.mode
@@ -143,9 +145,9 @@ fun PlanningScreen(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), textAlign = TextAlign.Center)
                     }
                 }
-                items(withContent, key = { it.date }) { day -> DaySection(day, mode, viewModel::openDetail, onAddCourseFrom) }
+                items(withContent, key = { it.date }) { day -> DaySection(day, mode, onOpenRevision, onAddCourseFrom) }
             }
-            else -> items(days, key = { it.date }) { day -> DaySection(day, mode, viewModel::openDetail, onAddCourseFrom) }
+            else -> items(days, key = { it.date }) { day -> DaySection(day, mode, onOpenRevision, onAddCourseFrom) }
         }
     }
 }

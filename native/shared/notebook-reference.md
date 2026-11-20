@@ -152,7 +152,8 @@ Après suppression des blancs ASCII aux extrémités : commence par `http://` ou
 Construction (`dataClasses.Attachment`, type 1) :
 
 ```text
-racine     = URL de la page PRONOTE privée de son dernier segment   (https://school.index-education.net/pronote)
+racine     = URL de la page PRONOTE privée de sa requête, de son fragment, puis de son dernier segment
+             (https://school.index-education.net/pronote, aussi pour mobile.eleve.html?fd=1&bydlg=…&login=true)
 plaintext  = UTF8('{"N":' + chaîneJSON(N) + ',"Actif":true}')       sans espace, N puis Actif
 idChiffré  = hexMinuscule(AES-128-CBC(cléSession, ivSession, PKCS7(PKCS7(plaintext))))
 url        = racine + "/FichiersExternes/" + idChiffré + "/" + encodeURIComponent(L) + "?Session=" + h
@@ -163,6 +164,8 @@ url        = racine + "/FichiersExternes/" + idChiffré + "/" + encodeURICompone
 - `encodeURIComponent` : UTF-8, `%XX` en majuscules, caractères non encodés `A–Z a–z 0–9 - _ . ! ~ * ' ( )` (identique à `quote(name, safe="~()*!.'")`). On utilise `L` brut, même vide (URL finissant par `/?Session=`).
 - Identifiant refusé, sans requête, s’il ne correspond pas à `^[!#-\[\]-~]+$` (ASCII imprimable sans espace, `"` ni `\`) : `rejectedIds`.
 - Requête : `GET` avec le même client HTTP et le même stockage de cookies que la session (`communication.session.get` côté pronotepy), même `User-Agent`. HTTPS, même hôte que la session. Les redirections hors de cet hôte, ou vers un autre schéma, interrompent le téléchargement. Pas de nouvel essai automatique. À sérialiser avec les appels `appelfonction` pour ne pas croiser une reconnexion.
+- La requête de l’adresse enregistrée (`?fd=1&bydlg=…&login=true`) n’entre jamais dans la racine : iOS l’y a laissée jusqu’au 18/11/2026 (`URL.deletingLastPathComponent()` garde la requête), l’URL visait alors `/pronote/?fd=1…/FichiersExternes/…` et Pronote répondait 200 avec sa page d’accueil HTML (environ 2,7 Ko) au lieu du fichier. Vecteur : `download.storedPageURL`.
+- Réponse 200 qui commence par `<!doctype html` ou `<html` (après BOM et blancs), ou `Content-Type: text/html`, pour un nom qui ne finit pas par `.html`/`.htm` : ce n’est pas le document. Fichier effacé, jamais conservé, une reconnexion par jeton puis un seul nouvel essai ; sinon « Pronote n’a pas renvoyé le document. Réessaie depuis le cahier de textes. » (iOS) ou le message « Document indisponible » (Android). iOS efface au chargement les fichiers de cours déjà enregistrés dans cet état et propose « Retélécharger ».
 - Limite : 20 Mo = 20 971 520 octets. Refuser si `Content-Length` dépasse cette taille, sinon interrompre la lecture en flux dès que le total la dépasse (20 971 520 accepté, 20 971 521 refusé). Statut autre que 200 : « Document indisponible. Actualise le cahier de textes puis réessaie. » Statut 413 local : « Ce document dépasse la limite de 20 Mo. »
 - Enregistrement : dossier privé temporaire de l’app (exclu des sauvegardes), sous `saveAsName` : dernier segment après `/` ou `\`, `<>:"|?*` et caractères retirés en section 7 remplacés par `_`, espaces et points rognés aux extrémités, `document` si vide (`saveAsNames`). Ouverture par QuickLook ou `ACTION_VIEW` avec URI `content://` en lecture seule. Jamais dans une WebView avec JavaScript, même pour un `.html` ou un `.svg`. Les fichiers sont effacés à la déconnexion et au changement d’enfant.
 

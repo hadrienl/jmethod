@@ -1948,6 +1948,7 @@
     "ivHex": "1ac1ef01e96caf1be0d329331a4fc2a8",
     "pronoteRoot": "https://school.index-education.net/pronote",
     "pageURL": "https://school.index-education.net/pronote/mobile.eleve.html",
+    "storedPageURL": "https://school.index-education.net/pronote/mobile.eleve.html?fd=1&bydlg=A6ABB224-12DD-4E31-AD3E-8A39A1C2C335&login=true",
     "sessionH": 424242,
     "note": "pronotepy pads the JSON with PKCS#7 itself, then aes_encrypt pads again: ciphertext = AES-CBC(sessionKey, sessionIV, PKCS7(PKCS7(plaintext))). Lowercase hex. The URL embeds the session: keep it inside the transport layer, never log, display, persist or share it.",
     "cases": [

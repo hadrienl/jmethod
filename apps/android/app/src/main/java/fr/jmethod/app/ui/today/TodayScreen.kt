@@ -1,6 +1,9 @@
 package fr.jmethod.app.ui.today
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.material3.OutlinedButton
+import fr.jmethod.app.domain.RevisionSession
+import fr.jmethod.app.ui.theme.JIcons
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -19,6 +22,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -87,45 +97,47 @@ fun TodayScreen(
     onScore: (String) -> Unit,
     onDetail: (String) -> Unit,
     onAddCourse: (PronoteEvent) -> Unit,
+    /** « Revoir le cours » : fiche de la séance ouverte sur le document principal. */
+    onReview: (String) -> Unit = {},
+    /** « Voir le cours » d’un créneau de demain déjà importé. */
+    onViewCourse: (String) -> Unit = {},
 ) {
     val model = state.model
+    var programmeOpen by rememberSaveable { mutableStateOf(false) }
     LazyColumn(
         contentPadding = screenPadding(contentPadding, 24.dp),
         verticalArrangement = Arrangement.spacedBy(JSpacing.l),
     ) {
-        if (model.allDoneBanner) item(key = "done") { AllDoneBanner() }
         item(key = "header") { Header(model) }
         val hasCourses = state.document.courses.isNotEmpty()
-        item(key = "hero") { Hero(model, hasCourses, onScore) }
-        if (hasCourses) item(key = "progress") { Progress(model) }
-        item(key = "phases") { PhaseLegend() }
-        item(key = "programme") { ProgrammeHeader(model) }
-        if (model.overdueBanner != null) {
-            item(key = "overdue") {
-                Text(
-                    model.overdueBanner,
-                    color = JColors.Amber900,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.fillMaxWidth().clip(JShapes.inner).background(JColors.Amber50).padding(JSpacing.l),
-                )
-            }
-        }
-        if (model.emptyProgramme) {
-            item(key = "empty") { EmptyProgramme(hasCourses) }
-        } else {
-            items(model.groups, key = { "group-" + it.subject.id }) { group -> SubjectGroup(group, onScore, onDetail) }
-        }
+        item(key = "hero") { Hero(model, hasCourses, onScore, onReview) }
+        // Aujourd’hui montre seulement la carte pour démarrer et enchaîner, puis l’emploi du temps de demain ;
+        // le détail du programme est replié par défaut.
         item(key = "tomorrow") {
-            TomorrowClasses(model) { id -> state.document.pronoteEvents.firstOrNull { it.id == id }?.let(onAddCourse) }
+            TomorrowClasses(model, onViewCourse) { id -> state.document.pronoteEvents.firstOrNull { it.id == id }?.let(onAddCourse) }
         }
-        item(key = "footer") {
-            Text(
-                "Pas besoin de tout apprendre en un jour. Juste un peu, chaque jour.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = JColors.Slate500,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
-            )
+        item(key = "programme") {
+            ProgrammeHeader(model, expanded = programmeOpen, onToggle = { programmeOpen = !programmeOpen })
+        }
+        if (programmeOpen) {
+            if (model.allDoneBanner) item(key = "done") { AllDoneBanner() }
+            if (hasCourses) item(key = "progress") { Progress(model) }
+            item(key = "phases") { PhaseLegend() }
+            if (model.overdueBanner != null) {
+                item(key = "overdue") {
+                    Text(
+                        model.overdueBanner,
+                        color = JColors.Amber900,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.fillMaxWidth().clip(JShapes.inner).background(JColors.Amber50).padding(JSpacing.l),
+                    )
+                }
+            }
+            if (model.emptyProgramme) {
+                item(key = "empty") { EmptyProgramme(hasCourses) }
+            } else {
+                items(model.groups, key = { "group-" + it.subject.id }) { group -> SubjectGroup(group, onScore, onDetail) }
+            }
         }
     }
 }
@@ -170,7 +182,7 @@ private fun Header(model: TodayModel) {
 }
 
 @Composable
-private fun Hero(model: TodayModel, hasCourses: Boolean, onScore: (String) -> Unit) {
+private fun Hero(model: TodayModel, hasCourses: Boolean, onScore: (String) -> Unit, onReview: (String) -> Unit) {
     val hero = model.hero
     Column(
         Modifier.fillMaxWidth().clip(CardShape).background(JColors.Violet700).padding(24.dp),
@@ -224,6 +236,21 @@ private fun Hero(model: TodayModel, hasCourses: Boolean, onScore: (String) -> Un
                 Text("Faire le point sur ce cours", fontWeight = FontWeight.Bold)
                 Spacer(Modifier.width(8.dp))
                 Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp))
+            }
+            if (RevisionSession.hasDocuments(hero.course)) {
+                Spacer(Modifier.height(JSpacing.s))
+                OutlinedButton(
+                    onClick = { onReview(revision.id) },
+                    shape = JShapes.control,
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.6f)),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                    contentPadding = PaddingValues(horizontal = JSpacing.l, vertical = JSpacing.m),
+                    modifier = Modifier.heightIn(min = 48.dp),
+                ) {
+                    Icon(JIcons.Book, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Revoir le cours", fontWeight = FontWeight.SemiBold)
+                }
             }
         }
     }
@@ -283,11 +310,26 @@ private fun PhaseLegend() {
 }
 
 @Composable
-private fun ProgrammeHeader(model: TodayModel) {
-    Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.semantics(mergeDescendants = true) { heading() }) {
-        Text("Dans ton programme", style = MaterialTheme.typography.titleLarge)
+private fun ProgrammeHeader(model: TodayModel, expanded: Boolean, onToggle: () -> Unit) {
+    val summary = if (model.emptyProgramme) "Tout est fait" else model.dueLabel
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(JShapes.inner)
+            .clickable(role = Role.Button, onClickLabel = if (expanded) "Masquer le détail du programme" else "Afficher le détail du programme", onClick = onToggle)
+            .semantics(mergeDescendants = true) {
+                heading()
+                stateDescription = if (expanded) "déplié" else "replié"
+            }
+            .padding(vertical = JSpacing.s),
+    ) {
+        Text("Dans ton programme", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f, fill = false))
         Spacer(Modifier.width(8.dp))
-        Text(model.dueLabel, style = MaterialTheme.typography.bodyMedium, color = JColors.Slate500, modifier = Modifier.padding(bottom = 2.dp))
+        Text(summary, style = MaterialTheme.typography.bodyMedium, color = JColors.Slate500, modifier = Modifier.weight(1f))
+        Icon(
+            if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+            contentDescription = null,
+            tint = JColors.Slate600,
+        )
     }
 }
 
@@ -299,9 +341,9 @@ private fun EmptyProgramme(hasCourses: Boolean) {
             tint = JColors.Emerald700,
             title = if (hasCourses) "Tout est à jour" else "Ton programme est vide",
             message = if (hasCourses) {
-                "Aucune séance à faire pour l’instant. Tu peux ajouter un cours depuis ton emploi du temps ci-dessous."
+                "Aucune séance à faire pour l’instant. Tu peux ajouter un cours depuis ton emploi du temps ci-dessus."
             } else {
-                "Ajoute un cours depuis ton emploi du temps ci-dessous : ses séances apparaîtront ici."
+                "Ajoute un cours depuis ton emploi du temps ci-dessus : ses séances apparaîtront ici."
             },
         )
     }
@@ -349,10 +391,19 @@ private fun RevisionRow(row: TodayModel.Row, onScore: (String) -> Unit, onDetail
         Spacer(Modifier.height(8.dp))
         Column(
             Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(JShapes.badge)
-                .clickable(onClickLabel = "Voir le détail de la séance", role = Role.Button) { onDetail(row.revision.id) }
+                .clickable(onClickLabel = "Ouvrir la fiche de la séance", role = Role.Button) { onDetail(row.revision.id) }
                 .padding(vertical = 4.dp),
         ) {
-            Text(row.courseLine, style = MaterialTheme.typography.bodySmall, color = JColors.Slate500)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(row.courseLine, style = MaterialTheme.typography.bodySmall, color = JColors.Slate500, modifier = Modifier.weight(1f, fill = false))
+                if (row.hasDocuments) {
+                    Spacer(Modifier.width(JSpacing.s))
+                    Icon(
+                        JIcons.Attachment, contentDescription = "Documents du cours", tint = JColors.Violet700,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+            }
             Text(row.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
         }
         if (row.canValidate) {
@@ -374,7 +425,7 @@ private fun RevisionRow(row: TodayModel.Row, onScore: (String) -> Unit, onDetail
 }
 
 @Composable
-private fun TomorrowClasses(model: TodayModel, onAddCourse: (String) -> Unit) {
+private fun TomorrowClasses(model: TodayModel, onViewCourse: (String) -> Unit, onAddCourse: (String) -> Unit) {
     SurfaceCard {
         Column(Modifier.padding(vertical = JSpacing.l)) {
             Row(
@@ -400,7 +451,7 @@ private fun TomorrowClasses(model: TodayModel, onAddCourse: (String) -> Unit) {
             } else {
                 model.tomorrowEvents.forEachIndexed { index, event ->
                     if (index > 0) HorizontalDivider(color = JColors.Slate100, modifier = Modifier.padding(start = 76.dp))
-                    TomorrowEventRow(event, onAddCourse)
+                    TomorrowEventRow(event, onViewCourse, onAddCourse)
                 }
             }
         }
@@ -409,11 +460,11 @@ private fun TomorrowClasses(model: TodayModel, onAddCourse: (String) -> Unit) {
 
 /** Un créneau de demain : heures en colonne, matière, professeur et salle ; « Ajouter ce cours » si possible. */
 @Composable
-private fun TomorrowEventRow(event: TodayModel.TomorrowEvent, onAddCourse: (String) -> Unit) {
+private fun TomorrowEventRow(event: TodayModel.TomorrowEvent, onViewCourse: (String) -> Unit, onAddCourse: (String) -> Unit) {
     val start = event.timeRange.substringBefore(" – ")
     val end = event.timeRange.substringAfter(" – ", "")
     val muted = event.cancelled
-    Row(Modifier.fillMaxWidth().padding(start = JSpacing.l, end = JSpacing.s, top = JSpacing.m, bottom = if (event.canAddCourse) 0.dp else JSpacing.m)) {
+    Row(Modifier.fillMaxWidth().padding(start = JSpacing.l, end = JSpacing.s, top = JSpacing.m, bottom = if (event.canAddCourse || event.courseId != null) 0.dp else JSpacing.m)) {
         Column(Modifier.widthIn(min = 48.dp).clearAndSetSemantics {}) {
             Text(start, style = MaterialTheme.typography.labelLarge.tabular(), color = if (muted) JColors.Slate500 else JColors.Slate900, softWrap = false)
             if (end.isNotEmpty()) Text(end, style = MaterialTheme.typography.labelMedium.tabular(), color = JColors.Slate500, softWrap = false)
@@ -445,8 +496,28 @@ private fun TomorrowEventRow(event: TodayModel.TomorrowEvent, onAddCourse: (Stri
             if (event.teacher != null) {
                 Text(event.teacher, style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
             }
-            if (event.canAddCourse) AddCourseButton(event.subjectName) { onAddCourse(event.id) }
+            val courseId = event.courseId
+            if (courseId != null) {
+                ViewCourseButton(event.subjectName) { onViewCourse(courseId) }
+            } else if (event.canAddCourse) {
+                AddCourseButton(event.subjectName) { onAddCourse(event.id) }
+            }
         }
+    }
+}
+
+/** « Voir le cours » : créneau dont le cours existe déjà (séance du cahier importée). */
+@Composable
+private fun ViewCourseButton(subjectName: String, onClick: () -> Unit) {
+    androidx.compose.material3.TextButton(
+        onClick = onClick,
+        shape = JShapes.control,
+        contentPadding = PaddingValues(horizontal = JSpacing.s, vertical = JSpacing.s),
+        modifier = Modifier.offset(x = (-8).dp).heightIn(min = 48.dp).semantics { contentDescription = "Voir le cours : $subjectName" },
+    ) {
+        Icon(JIcons.Book, contentDescription = null, tint = JColors.Violet800, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(JSpacing.s))
+        Text("Voir le cours", color = JColors.Violet800, fontWeight = FontWeight.Bold)
     }
 }
 

@@ -7,7 +7,6 @@ import fr.jmethod.app.data.AppRepository
 import fr.jmethod.app.data.todayTicks
 import fr.jmethod.app.domain.PlanningMode
 import fr.jmethod.app.domain.PlanningModel
-import fr.jmethod.app.domain.RevisionDetailModel
 import fr.jmethod.app.model.Phase
 import fr.jmethod.app.model.PronoteEvent
 import fr.jmethod.app.model.Subject
@@ -27,7 +26,6 @@ data class PlanningSelection(
     val date: LocalDate,
     val subjectId: String? = null,
     val phase: Phase? = null,
-    val detailRevisionId: String? = null,
 )
 
 data class PlanningUiState(
@@ -37,8 +35,6 @@ data class PlanningUiState(
     val subjects: List<Subject>,
     val hasCourses: Boolean,
     val pronoteEvents: List<PronoteEvent>,
-    /** Séance ouverte ; `null` si elle n’existe plus ou si sa matière a disparu (comme le web). */
-    val detail: RevisionDetailModel?,
 )
 
 class PlanningViewModel(
@@ -60,7 +56,6 @@ class PlanningViewModel(
             subjects = document.subjects,
             hasCourses = document.courses.isNotEmpty(),
             pronoteEvents = document.pronoteEvents,
-            detail = current.detailRevisionId?.let { RevisionDetailModel.build(it, document.courses, document.revisions, document.subjects) },
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
@@ -71,6 +66,4 @@ class PlanningViewModel(
     fun openDay(date: LocalDate) = selection.update { it.copy(mode = PlanningMode.DAY, date = date) }
     fun setSubject(subjectId: String?) = selection.update { it.copy(subjectId = subjectId) }
     fun setPhase(phase: Phase?) = selection.update { it.copy(phase = phase) }
-    fun openDetail(revisionId: String) = selection.update { it.copy(detailRevisionId = revisionId) }
-    fun closeDetail() = selection.update { it.copy(detailRevisionId = null) }
 }

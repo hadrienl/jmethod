@@ -18,6 +18,14 @@ final class PronoteTests: XCTestCase {
         XCTAssertEqual(PronoteURL.normalized(""), "")
     }
 
+    /// L'ENT redirige l'adresse nue vers son CAS : le formulaire natif charge la connexion directe Pronote.
+    func testDirectLoginPageSkipsENT() {
+        let page = URL(string: "https://abcd1234.index-education.net/pronote/parent.html")!
+        XCTAssertEqual(PronoteURL.directLogin(page).absoluteString, "https://abcd1234.index-education.net/pronote/parent.html?login=true")
+        let noisy = URL(string: "https://abcd1234.index-education.net/pronote/eleve.html?p=daCas#x")!
+        XCTAssertEqual(PronoteURL.directLogin(noisy).absoluteString, "https://abcd1234.index-education.net/pronote/eleve.html?login=true")
+    }
+
     func testSchoolCodeAndAccountTypeResolution() {
         XCTAssertEqual(PronoteURL.resolve("abcd1234", account: .student).address, "https://abcd1234.index-education.net/pronote/eleve.html")
         XCTAssertEqual(PronoteURL.resolve(" ABCD 1234 ", account: .parent).address, "https://abcd1234.index-education.net/pronote/parent.html")

@@ -125,6 +125,12 @@ object PronotePolicy {
         return normalizedAddress(input, accountType.page)
     }
 
+    /**
+     * Page de connexion directe Pronote (`?login=true`) : quand l’établissement passe par un ENT, l’adresse
+     * nue redirige vers le CAS ; le formulaire natif utilise les identifiants Pronote et vise donc cette page.
+     */
+    fun directLoginPage(address: String): String = address.substringBefore('#').substringBefore('?') + "?login=true"
+
     /** Accepte une saisie approximative (sans https, sans page, avec ?/#, page mobile) et la ramène à l’espace web officiel. */
     fun normalizedAddress(input: String, defaultPage: String = "eleve.html"): String {
         var text = input.trim()

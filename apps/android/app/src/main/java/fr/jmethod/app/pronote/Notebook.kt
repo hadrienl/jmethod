@@ -22,7 +22,21 @@ data class NotebookSnapshot(
     val homeworkAvailable: Boolean = true,
 )
 
-data class SessionEntry(val id: String, val lessonId: String, val date: LocalDate, val subject: String, val contents: List<NotebookContent>)
+/**
+ * Séance du cahier de textes. [id] est le `N` Pronote, valable pour la seule session Pronote en cours ;
+ * [ordinal] est le rang de la séance parmi celles de même date et même matière, dans l’ordre de la réponse.
+ */
+data class SessionEntry(
+    val id: String,
+    val lessonId: String,
+    val date: LocalDate,
+    val subject: String,
+    val contents: List<NotebookContent>,
+    val ordinal: Int = 1,
+) {
+    /** Clé stable entre sessions Pronote (`notebook-to-course.md`, section 1). */
+    val key: String get() = NotebookRules.sessionKey(date.toString(), subject, ordinal)
+}
 
 data class NotebookContent(
     val title: String,
@@ -53,6 +67,32 @@ data class NotebookAttachment(val kind: Kind, val id: String, val name: String, 
 data class NotebookLink(val label: String, val url: String)
 
 object NotebookRules {
+    /** Préfixe des clés de séance stables (`pn1:<date>|<matière normalisée>|<rang>`). */
+    const val KEY_PREFIX = "pn1:"
+
+    /**
+     * Règle 33 : minuscules, NFD, retrait de U+0300–U+036F (sans recomposition), toute suite de caractères
+     * ni lettre ni chiffre remplacée par une espace, rognage.
+     */
+    fun normalizeSubject(subject: String): String {
+        val folded = java.text.Normalizer.normalize(subject.lowercase(), java.text.Normalizer.Form.NFD).replace(Regex("[\u0300-\u036F]"), "")
+        val spaced = buildString { folded.forEach { append(if (it.isLetterOrDigit()) it else ' ') } }
+        return spaced.replace(Regex(" +"), " ").trim()
+    }
+
+    fun sessionKey(date: String, subject: String, ordinal: Int): String = "$KEY_PREFIX$date|${normalizeSubject(subject)}|$ordinal"
+
+    /** Rangs des séances de même date et même matière normalisée, dans l’ordre de [sessions]. */
+    fun withOrdinals(sessions: List<SessionEntry>): List<SessionEntry> {
+        val seen = HashMap<Pair<LocalDate, String>, Int>()
+        return sessions.map { session ->
+            val group = session.date to normalizeSubject(session.subject)
+            val rank = (seen[group] ?: 0) + 1
+            seen[group] = rank
+            session.copy(ordinal = rank)
+        }
+    }
+
     const val CONTENTS_TAB = 89
     const val HOMEWORK_TAB = 88
     const val MAX_WEEK_SPAN = 5
@@ -419,7 +459,7 @@ object NotebookRules {
                 attachments = attachments(item),
             )
         }
-        val sortedSessions = sessions.sortedByDescending { it.date }
+        val sortedSessions = withOrdinals(sessions).sortedByDescending { it.date }
         val sortedTasks = tasks.sortedBy { it.dueDate }
         val count = sortedSessions.sumOf { s -> s.contents.sumOf { it.attachments.size } } + sortedTasks.sumOf { it.attachments.size }
         return NotebookSnapshot(window.from, window.to, sortedSessions, sortedTasks, skipped, count, homeworkAvailable = homework != null)

@@ -274,6 +274,16 @@ class NotebookVectorsTest {
         assertEquals("Ce document dépasse la limite de 20 Mo.", failing(413))
         assertEquals("Document indisponible. Actualise le cahier de textes puis réessaie.", failing(404))
         assertEquals("Document indisponible. Actualise le cahier de textes puis réessaie.", failing(302))
+        // Page d’accueil Pronote renvoyée en 200 à la place du fichier : refusée et supprimée.
+        val homePage = FileTransport { _, _, _, file -> file.writeText("\uFEFF\r\n <!DOCTYPE html>\n<html lang=\"fr\"><head><title>PRONOTE</title>"); 200 }
+        assertEquals(
+            "Document indisponible. Actualise le cahier de textes puis réessaie.",
+            try { client.download("pj-file-01", "a.pdf", homePage, target); "ok" } catch (error: PronoteException) { error.message },
+        )
+        assertFalse(target.exists())
+        // Une vraie pièce jointe HTML reste acceptée.
+        client.download("pj-file-01", "page.html", homePage, target)
+        assertTrue(target.exists())
         // Identifiant refusé : aucune requête.
         var called = false
         try {

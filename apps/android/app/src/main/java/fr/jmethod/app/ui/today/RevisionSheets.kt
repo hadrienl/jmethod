@@ -58,6 +58,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import fr.jmethod.app.domain.RevisionDetailModel
+import fr.jmethod.app.domain.RevisionSession
+import fr.jmethod.app.model.CourseDocument
+import fr.jmethod.app.pronote.NotebookAttachment
+import fr.jmethod.app.ui.documents.DocumentViewerScreen
+import fr.jmethod.app.ui.documents.SheetDocument
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.ModalBottomSheetProperties
 import fr.jmethod.app.domain.ScorePreview
 import fr.jmethod.app.model.AppSettings
 import fr.jmethod.app.model.Course
@@ -147,143 +159,231 @@ private fun SheetHeader(subject: Subject?, phase: Phase?, badge: String?, title:
     }
 }
 
-/** Autoévaluation rapide (« Faire le point »), port de `ScoreModal`. */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+/** Autoévaluation (« Faire le point »), port de `ScoreModal`, affichée dans la fiche de séance. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun ScoreSheet(
+private fun ScorePage(
     revision: Revision,
     course: Course,
     subject: Subject?,
     settings: AppSettings,
-    onDismiss: () -> Unit,
+    submitting: Boolean,
+    onBack: () -> Unit,
+    onClose: () -> Unit,
     onSubmit: (Int) -> Unit,
 ) {
     var score by rememberSaveable(revision.id) { mutableIntStateOf(SCORE_INITIAL) }
     val preview = ScorePreview.of(score, settings.sensitivity, settings.emergencyThreshold)
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = Color.White) {
+    Column(
+        Modifier.verticalScroll(rememberScrollState()).padding(horizontal = JSpacing.xl).padding(bottom = JSpacing.xl).navigationBarsPadding(),
+    ) {
+        SheetHeader(
+            subject, revision.phase, "${revision.phase.info.label} · ${revision.stepLabel}", "C${course.courseNumber} · ${course.title}",
+            course.chapter, "Fermer la fiche", onClose,
+        )
+        Spacer(Modifier.height(JSpacing.xl))
+        Text("De quoi te souviens-tu sans regarder ton cours ?", style = MaterialTheme.typography.titleMedium)
+        Text("Avec 50/100 on garde ton rythme actuel.", style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
+        Spacer(Modifier.height(16.dp))
         Column(
-            Modifier.verticalScroll(rememberScrollState()).padding(horizontal = JSpacing.xl).padding(bottom = JSpacing.xl).navigationBarsPadding(),
+            Modifier.fillMaxWidth().clip(JShapes.inner).background(JColors.Slate50)
+                .border(1.dp, JColors.Slate200, JShapes.inner).padding(JSpacing.l),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            SheetHeader(
-                subject, revision.phase, "${revision.phase.info.label} · ${revision.stepLabel}", "C${course.courseNumber} · ${course.title}",
-                course.chapter, "Fermer l’autoévaluation", onDismiss,
-            )
-            Spacer(Modifier.height(JSpacing.xl))
-            Text("De quoi te souviens-tu sans regarder ton cours ?", style = MaterialTheme.typography.titleMedium)
-            Text("Avec 50/100 on garde ton rythme actuel.", style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
-            Spacer(Modifier.height(16.dp))
-            Column(
-                Modifier.fillMaxWidth().clip(JShapes.inner).background(JColors.Slate50)
-                    .border(1.dp, JColors.Slate200, JShapes.inner).padding(JSpacing.l),
-                horizontalAlignment = Alignment.CenterHorizontally,
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text("$score", style = MaterialTheme.typography.displayMedium.tabular(), fontWeight = FontWeight.Black, color = bandColor(preview.scoreBand))
+                Text(" / 100", style = MaterialTheme.typography.titleMedium, color = JColors.Slate500, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
+            }
+            ScoreSlider(score, { score = it }, "Ton niveau de mémorisation sur 100")
+            // Cinq repères sur une ligne ; avec un grand texte, trois puis deux pour ne jamais couper un mot.
+            val perRow = if (LocalDensity.current.fontScale > 1.15f) 3 else SCORE_PRESETS.size
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(JSpacing.xs),
+                verticalArrangement = Arrangement.spacedBy(JSpacing.xs),
+                maxItemsInEachRow = perRow,
+                modifier = Modifier.fillMaxWidth(),
             ) {
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Text("$score", style = MaterialTheme.typography.displayMedium.tabular(), fontWeight = FontWeight.Black, color = bandColor(preview.scoreBand))
-                    Text(" / 100", style = MaterialTheme.typography.titleMedium, color = JColors.Slate500, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
-                }
-                ScoreSlider(score, { score = it }, "Ton niveau de mémorisation sur 100")
-                // Cinq repères sur une ligne ; avec un grand texte, trois puis deux pour ne jamais couper un mot.
-                val perRow = if (LocalDensity.current.fontScale > 1.15f) 3 else SCORE_PRESETS.size
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(JSpacing.xs),
-                    verticalArrangement = Arrangement.spacedBy(JSpacing.xs),
-                    maxItemsInEachRow = perRow,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    SCORE_PRESETS.forEach { preset ->
-                        val selected = score == preset.value
-                        Column(
-                            Modifier.weight(1f).heightIn(min = 56.dp).clip(JShapes.badge)
-                                .background(if (selected) JColors.Violet100 else Color.White)
-                                .border(if (selected) 2.dp else 1.dp, if (selected) JColors.Violet700 else JColors.Slate200, JShapes.badge)
-                                .clickable(role = Role.RadioButton) { score = preset.value }
-                                .semantics { this.selected = selected }
-                                .padding(horizontal = JSpacing.xs, vertical = JSpacing.s),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center,
-                        ) {
-                            Text(preset.label, style = MaterialTheme.typography.labelLarge.tabular(), fontWeight = FontWeight.Bold,
-                                color = if (selected) JColors.Violet900 else JColors.Slate900)
-                            Text(
-                                preset.sub, style = MaterialTheme.typography.labelSmall, color = if (selected) JColors.Violet800 else JColors.Slate600,
-                                textAlign = TextAlign.Center, maxLines = 1, softWrap = false,
-                                autoSize = TextAutoSize.StepBased(minFontSize = 8.sp, maxFontSize = MaterialTheme.typography.labelSmall.fontSize, stepSize = 0.5.sp),
-                            )
-                        }
+                SCORE_PRESETS.forEach { preset ->
+                    val selected = score == preset.value
+                    Column(
+                        Modifier.weight(1f).heightIn(min = 56.dp).clip(JShapes.badge)
+                            .background(if (selected) JColors.Violet100 else Color.White)
+                            .border(if (selected) 2.dp else 1.dp, if (selected) JColors.Violet700 else JColors.Slate200, JShapes.badge)
+                            .clickable(role = Role.RadioButton) { score = preset.value }
+                            .semantics { this.selected = selected }
+                            .padding(horizontal = JSpacing.xs, vertical = JSpacing.s),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        Text(preset.label, style = MaterialTheme.typography.labelLarge.tabular(), fontWeight = FontWeight.Bold,
+                            color = if (selected) JColors.Violet900 else JColors.Slate900)
+                        Text(
+                            preset.sub, style = MaterialTheme.typography.labelSmall, color = if (selected) JColors.Violet800 else JColors.Slate600,
+                            textAlign = TextAlign.Center, maxLines = 1, softWrap = false,
+                            autoSize = TextAutoSize.StepBased(minFontSize = 8.sp, maxFontSize = MaterialTheme.typography.labelSmall.fontSize, stepSize = 0.5.sp),
+                        )
                     }
                 }
             }
-            Spacer(Modifier.height(JSpacing.l))
-            val (background, foreground) = toneColors(preview.tone)
-            Column(
-                Modifier.fillMaxWidth().clip(JShapes.inner).background(background).padding(JSpacing.l)
-                    .semantics(mergeDescendants = true) {},
+        }
+        Spacer(Modifier.height(JSpacing.l))
+        val (background, foreground) = toneColors(preview.tone)
+        Column(
+            Modifier.fillMaxWidth().clip(JShapes.inner).background(background).padding(JSpacing.l)
+                .semantics(mergeDescendants = true) {},
+        ) {
+            Text(preview.title, color = foreground, style = MaterialTheme.typography.titleSmall)
+            Spacer(Modifier.height(4.dp))
+            Text(preview.description, color = foreground, style = MaterialTheme.typography.bodySmall)
+        }
+        Spacer(Modifier.height(JSpacing.xl))
+        Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onBack, enabled = !submitting, modifier = Modifier.heightIn(min = 48.dp)) { Text("Voir le cours") }
+            Spacer(Modifier.width(JSpacing.m))
+            Button(
+                onClick = { onSubmit(score) },
+                enabled = !submitting,
+                shape = JShapes.control,
+                modifier = Modifier.heightIn(min = 48.dp),
             ) {
-                Text(preview.title, color = foreground, style = MaterialTheme.typography.titleSmall)
-                Spacer(Modifier.height(4.dp))
-                Text(preview.description, color = foreground, style = MaterialTheme.typography.bodySmall)
-            }
-            Spacer(Modifier.height(JSpacing.xl))
-            Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text("Annuler") }
-                Spacer(Modifier.width(JSpacing.m))
-                Button(
-                    onClick = { onSubmit(score) },
-                    shape = JShapes.control,
-                    modifier = Modifier.heightIn(min = 48.dp),
-                ) {
-                    Icon(Icons.Filled.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Valider la révision", fontWeight = FontWeight.SemiBold)
-                }
+                Icon(Icons.Filled.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Valider la révision", fontWeight = FontWeight.SemiBold)
             }
         }
     }
 }
 
 /**
- * Détail d’une séance (Jn, étape, séances précédentes, validation), port de `RevisionDetailModal`
- * à partir de [RevisionDetailModel] (suite `revisionDetail`). Utilisé par Aujourd’hui et le Planning.
+ * Fiche de séance (« Réviser », section 8 de `notebook-to-course.md`) : une feuille avec sa propre
+ * navigation (fiche, document, autoévaluation, résultat et séance suivante). Ouverte depuis
+ * Aujourd’hui, le Planning et la fiche d’un cours ; détail porté de `RevisionDetailModal`.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RevisionDetailSheet(
+fun SessionSheet(
+    state: SessionSheetState,
     model: RevisionDetailModel,
+    settings: AppSettings,
+    today: String,
+    documents: List<Pair<CourseDocument, Boolean>>,
+    notebookPart: RevisionSession.NotebookPart?,
+    notebookLoading: Boolean,
+    downloadingId: String?,
+    nextLabel: String?,
+    remainingLabel: String?,
+    viewer: SheetDocument?,
+    nearby: List<RevisionSession.Nearby>,
+    onOpenNearby: (RevisionSession.Nearby) -> Unit,
+    onAttachNearby: (RevisionSession.Nearby) -> Unit,
+    onOpenDocument: (CourseDocument) -> Unit,
+    onCloseViewer: () -> Unit,
+    onRedownload: ((CourseDocument) -> Unit)?,
+    onDownloadAttachment: (NotebookAttachment) -> Unit,
+    onLink: (String) -> Unit,
+    onPage: (SessionPage) -> Unit,
+    onSubmit: (Int) -> Unit,
+    onNext: (String) -> Unit,
+    onBackToToday: () -> Unit,
     onDismiss: () -> Unit,
-    onValidate: (Int) -> Unit,
+) {
+    val page = state.page
+    val inner = viewer != null || page is SessionPage.Score
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = Color.White,
+        // Document ouvert : le zoom et le défilement ne doivent pas faire glisser la feuille.
+        sheetGesturesEnabled = viewer == null,
+        properties = ModalBottomSheetProperties(shouldDismissOnBackPress = !inner),
+    ) {
+        // Retour : document puis autoévaluation reviennent à la fiche.
+        BackHandler(enabled = inner) {
+            if (viewer != null) onCloseViewer() else onPage(SessionPage.Main)
+        }
+        when {
+            viewer != null -> Box(Modifier.fillMaxSize()) {
+                DocumentViewerScreen(viewer.document, viewer.file, onClose = onCloseViewer, embedded = true)
+            }
+            page is SessionPage.Score -> ScorePage(
+                model.revision, model.course, model.subject, settings, state.submitting,
+                onBack = { onPage(SessionPage.Main) }, onClose = onDismiss, onSubmit = onSubmit,
+            )
+            page is SessionPage.Result -> ResultPage(page, nextLabel, remainingLabel, onNext = { onNext(page.nextRevisionId) }, onBackToToday = onBackToToday, onClose = onDismiss)
+            else -> MainPage(
+                model, today, documents, notebookPart, notebookLoading, downloadingId,
+                onOpenDocument, onRedownload, onDownloadAttachment, onLink, nearby, onOpenNearby, onAttachNearby,
+                onScore = { onPage(SessionPage.Score) }, onClose = onDismiss,
+            )
+        }
+    }
+}
+
+@Composable
+private fun MainPage(
+    model: RevisionDetailModel,
+    today: String,
+    documents: List<Pair<CourseDocument, Boolean>>,
+    notebookPart: RevisionSession.NotebookPart?,
+    notebookLoading: Boolean,
+    downloadingId: String?,
+    onOpenDocument: (CourseDocument) -> Unit,
+    onRedownload: ((CourseDocument) -> Unit)?,
+    onDownloadAttachment: (NotebookAttachment) -> Unit,
+    onLink: (String) -> Unit,
+    nearby: List<RevisionSession.Nearby>,
+    onOpenNearby: (RevisionSession.Nearby) -> Unit,
+    onAttachNearby: (RevisionSession.Nearby) -> Unit,
+    onScore: () -> Unit,
+    onClose: () -> Unit,
 ) {
     val revision = model.revision
-    var score by rememberSaveable(revision.id) { mutableIntStateOf(SCORE_INITIAL) }
-    var confirming by rememberSaveable(revision.id) { mutableStateOf(false) }
+    val course = model.course
     var historyOpen by rememberSaveable(revision.id) { mutableStateOf(false) }
-
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = Color.White) {
+    Column(Modifier.fillMaxWidth()) {
         Column(
-            Modifier.verticalScroll(rememberScrollState()).padding(horizontal = JSpacing.xl).padding(bottom = JSpacing.xl).navigationBarsPadding(),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = JSpacing.xl).padding(bottom = JSpacing.l),
+            verticalArrangement = Arrangement.spacedBy(JSpacing.l),
         ) {
-            SheetHeader(model.subject, null, null, model.title, model.course.chapter, "Fermer le détail de la séance", onDismiss)
-            val (phaseBackground, phaseForeground) = phaseColors(revision.phase)
-            Column(
-                Modifier.fillMaxWidth().clip(JShapes.inner).background(JColors.Slate50)
-                    .border(1.dp, JColors.Slate200, JShapes.inner).padding(JSpacing.l)
-                    .semantics(mergeDescendants = true) {},
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(model.stepLabel, style = MaterialTheme.typography.titleLarge.tabular(), fontWeight = FontWeight.ExtraBold)
-                    Spacer(Modifier.width(JSpacing.m))
-                    Pill(model.phaseLabel, phaseBackground, phaseForeground)
-                }
-                Spacer(Modifier.height(JSpacing.xs))
-                Text(model.plannedLine, style = MaterialTheme.typography.bodyMedium, color = JColors.Slate600)
-            }
-            model.description?.let { description ->
-                Column {
-                    Text("À revoir", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() })
+            // 1. En-tête : matière, Jn, étape, titre, chapitre · Cn, retard.
+            Row(verticalAlignment = Alignment.Top) {
+                Column(Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        SubjectDot(model.subject.color)
+                        Spacer(Modifier.width(JSpacing.s))
+                        Text(model.subjectName, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = JColors.Slate700)
+                    }
+                    Spacer(Modifier.height(JSpacing.s))
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(JSpacing.s), verticalArrangement = Arrangement.spacedBy(JSpacing.xs)) {
+                        val (phaseBackground, phaseForeground) = phaseColors(revision.phase)
+                        Pill("${model.stepLabel} · ${model.phaseLabel}", phaseBackground, phaseForeground)
+                        RevisionSession.lateLabel(revision, today)?.let { Pill(it, JColors.Rose50, JColors.Rose700) }
+                    }
+                    Spacer(Modifier.height(JSpacing.s))
+                    Text(course.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, modifier = Modifier.semantics { heading() })
                     Spacer(Modifier.height(JSpacing.xs))
-                    Text(description, style = MaterialTheme.typography.bodyMedium, color = JColors.Slate700)
+                    Text("${course.chapter} · C${course.courseNumber}", style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
+                    Text(model.plannedLine, style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
+                }
+                IconButton(onClick = onClose, modifier = Modifier.size(48.dp)) {
+                    Icon(Icons.Filled.Close, contentDescription = "Fermer la fiche de la séance")
                 }
             }
+            // 2. Le cours : description puis documents.
+            Column(verticalArrangement = Arrangement.spacedBy(JSpacing.s)) {
+                SheetSectionTitle("Le cours")
+                model.description?.let { CollapsibleDescription(it) }
+                if (documents.isNotEmpty()) {
+                    CourseDocumentsList(documents, onOpenDocument, onRedownload)
+                } else {
+                    NoDocumentLine(fromNotebook = course.source != null)
+                }
+            }
+            // Documents proches de la même matière (section 8.5).
+            NearbyDocumentsSection(model.subjectName, nearby, downloadingId, onOpenNearby, onAttachNearby)
+            // 3. Dans le cahier de textes.
+            notebookPart?.let { NotebookPartSection(it, notebookLoading, downloadingId, onDownloadAttachment, onLink) }
+            // 4. Séances précédentes (repliable).
             Column(Modifier.fillMaxWidth().clip(JShapes.inner).border(1.dp, JColors.Slate200, JShapes.inner)) {
                 Row(
                     Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(role = Role.Button) { historyOpen = !historyOpen }
@@ -295,22 +395,23 @@ fun RevisionDetailSheet(
                     Icon(if (historyOpen) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown, contentDescription = null)
                 }
                 if (historyOpen) {
-                    Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 12.dp)) {
+                    Column(Modifier.padding(horizontal = JSpacing.l).padding(bottom = JSpacing.m)) {
                         if (model.historyEmpty != null) {
                             Text(model.historyEmpty, style = MaterialTheme.typography.bodyMedium, color = JColors.Slate600)
                         }
                         model.history.forEach { past ->
-                            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp).semantics(mergeDescendants = true) {}) {
+                            Row(Modifier.fillMaxWidth().padding(vertical = JSpacing.s).semantics(mergeDescendants = true) {}) {
                                 Text(past.label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                                Text(
-                                    past.detail,
-                                    style = MaterialTheme.typography.bodyMedium, color = JColors.Slate600,
-                                )
+                                Text(past.detail, style = MaterialTheme.typography.bodyMedium, color = JColors.Slate600)
                             }
                         }
                     }
                 }
             }
+        }
+        // 5. Action principale toujours visible.
+        HorizontalDivider(color = JColors.Slate100)
+        Box(Modifier.fillMaxWidth().padding(horizontal = JSpacing.xl, vertical = JSpacing.m).navigationBarsPadding()) {
             if (model.completedLine != null) {
                 Row(
                     Modifier.fillMaxWidth().clip(JShapes.inner).background(JColors.Emerald50).padding(JSpacing.l),
@@ -321,41 +422,67 @@ fun RevisionDetailSheet(
                     Text(model.completedLine, color = JColors.Emerald950)
                 }
             } else {
-                Column(Modifier.fillMaxWidth().clip(JShapes.inner).background(JColors.Slate50).padding(JSpacing.l)) {
-                    Text("Ta mémorisation : $score/100", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                    ScoreSlider(score, { score = it; confirming = false }, "Ta mémorisation")
-                    Text("50 conserve le rythme prévu. Ta note ajuste les prochaines révisions.", style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
+                Button(
+                    onClick = onScore,
+                    shape = JShapes.control,
+                    colors = ButtonDefaults.buttonColors(containerColor = JColors.Violet700, contentColor = Color.White),
+                    contentPadding = PaddingValues(horizontal = JSpacing.l, vertical = JSpacing.m),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                ) {
+                    Text("Faire le point", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp))
                 }
-                if (confirming) {
-                    Column(
-                        Modifier.fillMaxWidth().clip(JShapes.inner).background(JColors.Violet50)
-                            .border(1.dp, JColors.Violet200, JShapes.inner).padding(JSpacing.l),
-                    ) {
-                        Text("Terminer cette séance avec $score/100 ?", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall, modifier = Modifier.semantics { heading() })
-                        Spacer(Modifier.height(JSpacing.xs))
-                        Text("Elle sera enregistrée comme faite aujourd’hui et les prochaines dates seront ajustées.", style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
-                        Spacer(Modifier.height(12.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Button(onClick = { onValidate(score) }, shape = JShapes.control, modifier = Modifier.heightIn(min = 48.dp)) {
-                                Text("Confirmer la validation")
-                            }
-                            OutlinedButton(onClick = { confirming = false }, shape = JShapes.control, modifier = Modifier.heightIn(min = 48.dp)) {
-                                Text("Revenir")
-                            }
-                        }
-                    }
-                } else {
-                    Button(
-                        onClick = { confirming = true },
-                        shape = JShapes.control,
-                        colors = ButtonDefaults.buttonColors(),
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                    ) {
-                        Icon(Icons.Filled.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Valider la séance")
-                    }
+            }
+        }
+    }
+}
+
+/** Résultat de la validation et enchaînement (section 8.2). */
+@Composable
+private fun ResultPage(
+    result: SessionPage.Result,
+    nextLabel: String?,
+    remainingLabel: String?,
+    onNext: () -> Unit,
+    onBackToToday: () -> Unit,
+    onClose: () -> Unit,
+) {
+    val (background, foreground) = if (result.warning) JColors.Amber50 to JColors.Amber900 else JColors.Emerald50 to JColors.Emerald800
+    Column(
+        Modifier.verticalScroll(rememberScrollState()).padding(horizontal = JSpacing.xl).padding(bottom = JSpacing.xl).navigationBarsPadding(),
+        verticalArrangement = Arrangement.spacedBy(JSpacing.l),
+    ) {
+        Row(verticalAlignment = Alignment.Top) {
+            Column(Modifier.weight(1f).semantics(mergeDescendants = true) {}) {
+                Box(Modifier.size(48.dp).clip(CircleShape).background(background), contentAlignment = Alignment.Center) {
+                    Icon(if (result.warning) Icons.Filled.Warning else Icons.Filled.CheckCircle, contentDescription = null, tint = foreground)
                 }
+                Spacer(Modifier.height(JSpacing.m))
+                Text(result.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, modifier = Modifier.semantics { heading() })
+                Spacer(Modifier.height(JSpacing.xs))
+                Text(result.message, style = MaterialTheme.typography.bodyMedium, color = JColors.Slate700)
+            }
+            IconButton(onClick = onClose, modifier = Modifier.size(48.dp)) {
+                Icon(Icons.Filled.Close, contentDescription = "Fermer la fiche")
+            }
+        }
+        remainingLabel?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = JColors.Slate600) }
+        Column(verticalArrangement = Arrangement.spacedBy(JSpacing.s)) {
+            if (nextLabel != null) {
+                Button(
+                    onClick = onNext,
+                    shape = JShapes.control,
+                    colors = ButtonDefaults.buttonColors(containerColor = JColors.Violet700, contentColor = Color.White),
+                    contentPadding = PaddingValues(horizontal = JSpacing.l, vertical = JSpacing.m),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                ) {
+                    Text(nextLabel, fontWeight = FontWeight.Bold, maxLines = 3, modifier = Modifier.weight(1f))
+                    Spacer(Modifier.width(JSpacing.s))
+                    Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp))
+                }
+            }
+            OutlinedButton(onClick = onBackToToday, shape = JShapes.control, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                Text("Revenir à Aujourd’hui")
             }
         }
     }

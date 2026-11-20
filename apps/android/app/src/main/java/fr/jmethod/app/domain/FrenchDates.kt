@@ -26,6 +26,7 @@ object FrenchDates {
 
     private fun two(value: Int) = value.toString().padStart(2, '0')
     private fun month(date: LocalDate) = MONTHS[date.monthValue - 1]
+    fun monthName(date: LocalDate) = month(date)
     private fun monthShort(date: LocalDate) = MONTHS_SHORT[date.monthValue - 1]
     private fun day(date: LocalDate) = DAYS[date.dayOfWeek.value - 1]
     private fun dayShort(date: LocalDate) = DAYS_SHORT[date.dayOfWeek.value - 1]

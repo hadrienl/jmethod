@@ -30,12 +30,16 @@ struct NotebookContent: Equatable, Sendable {
 }
 
 struct NotebookSession: Equatable, Sendable, Identifiable {
+    /// `N` Pronote : change à chaque session Pronote, jamais utilisé comme clé persistante.
     var id: String
     var lessonId: String
     /// `yyyy-MM-dd`
     var date: String
     var subject: String
     var contents: [NotebookContent]
+    /// Rang (à partir de 1) parmi les séances du même instantané de même date et même matière normalisée,
+    /// dans l'ordre de la réponse (`NotebookCourses.assigningOrdinals`).
+    var ordinal: Int = 1
 }
 
 struct NotebookHomework: Equatable, Sendable, Identifiable {
@@ -68,6 +72,9 @@ enum NotebookRules {
     static let maxDownloadBytes = 20_971_520
     static let downloadUnavailable = "Document indisponible. Actualise le cahier de textes puis réessaie."
     static let downloadTooLarge = "Ce document dépasse la limite de 20 Mo."
+    /// Réponse 200 qui est une page HTML (page d'accueil Pronote) à la place du fichier attendu.
+    static let downloadNotDocument = "Pronote n’a pas renvoyé le document. Réessaie depuis le cahier de textes."
+    static let notDocumentCode = "http-html"
     static let unavailable = "Le cahier de textes n’est pas disponible pour ce compte."
 
     struct Window: Equatable, Sendable {
@@ -508,7 +515,9 @@ enum NotebookRules {
             ))
         }
         // Tris stables : séances par date décroissante, devoirs par échéance croissante.
-        let sortedSessions = sessions.enumerated().sorted { $0.element.date != $1.element.date ? $0.element.date > $1.element.date : $0.offset < $1.offset }.map(\.element)
+        let sortedSessions = NotebookCourses.assigningOrdinals(
+            sessions.enumerated().sorted { $0.element.date != $1.element.date ? $0.element.date > $1.element.date : $0.offset < $1.offset }.map(\.element)
+        )
         let sortedTasks = tasks.enumerated().sorted { $0.element.dueDate != $1.element.dueDate ? $0.element.dueDate < $1.element.dueDate : $0.offset < $1.offset }.map(\.element)
         let count = sortedSessions.reduce(0) { $0 + $1.contents.reduce(0) { $0 + $1.attachments.count } } + sortedTasks.reduce(0) { $0 + $1.attachments.count }
         return NotebookSnapshot(from: window.from, to: window.to, sessions: sortedSessions, homework: sortedTasks,
@@ -541,6 +550,29 @@ enum NotebookRules {
     static func encodeURIComponent(_ text: String) -> String {
         let unreserved = Set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.!~*'()".utf8)
         return text.utf8.map { unreserved.contains($0) ? String(UnicodeScalar($0)) : String(format: "%%%02X", $0) }.joined()
+    }
+
+    /// Pièce jointe réellement HTML (`.html`, `.htm`) : seule autorisée à commencer par une balise HTML.
+    static func isHTMLName(_ name: String) -> Bool {
+        let lowered = name.trimmingCharacters(in: .whitespaces).lowercased()
+        return lowered.hasSuffix(".html") || lowered.hasSuffix(".htm")
+    }
+
+    /// Début de fichier qui est une page HTML (`<!doctype html`, `<html`), après BOM UTF-8 et blancs éventuels,
+    /// comme Android `PronoteClient.looksLikeHtml`.
+    static func looksLikeHTML(_ head: Data) -> Bool {
+        var bytes = head.prefix(512)[...]
+        if bytes.starts(with: [0xEF, 0xBB, 0xBF]) { bytes = bytes.dropFirst(3) }
+        bytes = bytes.drop { [0x20, 0x09, 0x0A, 0x0D, 0x0C].contains($0) }
+        let start = String(decoding: bytes.prefix(16), as: UTF8.self).lowercased()
+        return start.hasPrefix("<!doctype html") || start.hasPrefix("<html")
+    }
+
+    /// Premiers octets d'un fichier enregistré (512 au plus), sans le lire en entier.
+    static func head(of file: URL) -> Data {
+        guard let handle = try? FileHandle(forReadingFrom: file) else { return Data() }
+        defer { try? handle.close() }
+        return (try? handle.read(upToCount: 512)) ?? Data()
     }
 
     /// Construite dans la couche transport au moment du `GET`, jamais exposée ni conservée.

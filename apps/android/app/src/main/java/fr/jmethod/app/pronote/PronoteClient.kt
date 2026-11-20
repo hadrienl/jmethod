@@ -393,13 +393,25 @@ class PronoteClient(
         val headers = linkedMapOf("User-Agent" to USER_AGENT)
         if (cookies.isNotEmpty()) headers["Cookie"] = cookieHeader()
         when (files.download(url, headers, NotebookRules.MAX_DOWNLOAD_BYTES, target)) {
-            200 -> {}
+            200 -> if (!name.lowercase().let { it.endsWith(".html") || it.endsWith(".htm") } && looksLikeHtml(target)) {
+                // Pronote répond 200 avec sa page d’accueil quand le lien n’est plus valable : ce n’est pas le document.
+                target.delete()
+                throw PronoteException("download", DOWNLOAD_UNAVAILABLE)
+            }
             413 -> throw PronoteException("download-size", "Ce document dépasse la limite de 20 Mo.")
             else -> throw PronoteException("download", DOWNLOAD_UNAVAILABLE)
         }
     }
 
     companion object {
+        /** Page HTML à la place d’un fichier : début du contenu, après BOM et espaces éventuels. */
+        fun looksLikeHtml(file: java.io.File): Boolean {
+            if (!file.exists()) return false
+            val head = file.inputStream().use { input -> ByteArray(512).let { buffer -> buffer.copyOf(maxOf(0, input.read(buffer))) } }
+            val text = String(head, Charsets.UTF_8).removePrefix("\uFEFF").trimStart().lowercase()
+            return text.startsWith("<!doctype html") || text.startsWith("<html")
+        }
+
         const val USER_AGENT = "iPhone"
         const val DOWNLOAD_UNAVAILABLE = "Document indisponible. Actualise le cahier de textes puis réessaie."
     }

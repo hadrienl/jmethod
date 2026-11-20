@@ -1,0 +1,1997 @@
+{
+  "schemaVersion": 1,
+  "generator": "native/shared/documents/reference.py (documents: make_documents.py)",
+  "regenerate": "python3 native/shared/documents/make_documents.py && python3 native/shared/documents/reference.py",
+  "spec": "native/shared/notebook-to-course.md §5 et §6, README.md de ce dossier",
+  "containsPersonalData": false,
+  "rules": {
+    "extractibleTypes": [
+      "pdf",
+      "odt",
+      "odp",
+      "docx",
+      "pptx",
+      "txt",
+      "md"
+    ],
+    "mime": {
+      "pdf": "application/pdf",
+      "odt": "application/vnd.oasis.opendocument.text",
+      "odp": "application/vnd.oasis.opendocument.presentation",
+      "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "txt": "text/plain",
+      "md": "text/markdown",
+      "png": "image/png",
+      "jpg": "image/jpeg",
+      "jpeg": "image/jpeg",
+      "gif": "image/gif",
+      "heic": "image/heic",
+      "webp": "image/webp"
+    },
+    "whitespace": [
+      "U+0009",
+      "U+000A",
+      "U+000B",
+      "U+000C",
+      "U+000D",
+      "U+0020",
+      "U+00A0",
+      "U+2009",
+      "U+202F"
+    ],
+    "removedCharacters": "U+0000–U+0008, U+000E–U+001F, U+007F–U+009F, U+200E, U+200F, U+202A–U+202E, U+2066–U+2069, U+FEFF",
+    "prefixes": [
+      "Microsoft Word - ",
+      "Microsoft PowerPoint - "
+    ],
+    "suffixes": [
+      ".docx",
+      ".odt",
+      ".pdf",
+      ".pptx"
+    ],
+    "quotes": "\"'«»“”„‘’‹›",
+    "trailingPunctuation": ".:;-–—",
+    "maxTitleLength": 120,
+    "maxDescriptionLength": 2000,
+    "fold": "lowercase, NFD, remove U+0300–U+036F (as matchSubject)",
+    "rejectionOrder": [
+      "empty",
+      "numberOrDate",
+      "tooFewLetters",
+      "adminHeader",
+      "generic",
+      "subjectName",
+      "fileName"
+    ],
+    "numberPattern": "^[+-]?\\d+([.,]\\d+)?$",
+    "datePatterns": [
+      "^\\d{1,4}[/.-]\\d{1,2}([/.-]\\d{1,4})?$",
+      "^((lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)\\s+)?(\\d{1,2}|1er)\\s+(janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)(\\s+\\d{4})?$"
+    ],
+    "adminHeaderPattern": "^(nom|prenom|classe|date)\\s*:",
+    "genericPattern": "^(sans titre|untitled|document\\s*\\d*|presentation\\s*\\d*|diapositive\\s*\\d+|cours|seance|exercices?|devoirs?)$",
+    "chapterPattern": "^(?i:(chapitre|chap\\.?|ch\\.?|s[eéEÉ]quence|s[eéEÉ]q\\.?|th[eèéEÈÉ]me|partie|unit[eéEÉ]))\\s*([0-9]+|[IVXLC]+)(?![0-9A-Za-zÀ-ÖØ-öø-ÿ])\\s*[:\\-–—.)]?\\s*(.*)$",
+    "chapterLabels": {
+      "chapitre": "Chapitre",
+      "chap": "Chapitre",
+      "ch": "Chapitre",
+      "sequence": "Séquence",
+      "seq": "Séquence",
+      "theme": "Thème",
+      "partie": "Partie",
+      "unite": "Unité"
+    },
+    "noChapter": "Sans chapitre",
+    "dateFallback": "Cours du <jour> <mois> (jour 1 → « 1er »)",
+    "months": [
+      "janvier",
+      "février",
+      "mars",
+      "avril",
+      "mai",
+      "juin",
+      "juillet",
+      "août",
+      "septembre",
+      "octobre",
+      "novembre",
+      "décembre"
+    ]
+  },
+  "cases": [
+    {
+      "id": "pdf-info-title",
+      "note": "PDF /Info /Title (PDFDocEncoding)",
+      "file": "files/pdf-info-title.pdf",
+      "size": 812,
+      "sha256": "dd0e4680ca915b7200d57c153cf8a43903a0b3db24bd7eca2d46a4f286e4f951",
+      "input": {
+        "fileName": "pdf-info-title.pdf",
+        "sessionDate": "2026-11-18",
+        "contentTitle": null,
+        "subjectLabel": "MATHEMATIQUES",
+        "subjectName": "Mathématiques"
+      },
+      "detectedType": "pdf",
+      "detectedBy": "extension",
+      "mime": "application/pdf",
+      "extraction": {
+        "error": null,
+        "metadata": "Le calcul littéral",
+        "metadataDetail": "pdfInfoTitle",
+        "pdfLines": [
+          {
+            "text": "Calcul littéral",
+            "size": 22.0
+          },
+          {
+            "text": "Développer, factoriser, réduire.",
+            "size": 11.0
+          }
+        ]
+      },
+      "candidates": [
+        {
+          "source": "metadata",
+          "detail": "pdfInfoTitle",
+          "raw": "Le calcul littéral",
+          "value": "Le calcul littéral",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "firstHeading",
+          "raw": "Calcul littéral",
+          "value": "Calcul littéral",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "fileName",
+          "raw": "pdf-info-title",
+          "value": "pdf-info-title",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "dateFallback",
+          "raw": "Cours du 18 novembre",
+          "value": "Cours du 18 novembre",
+          "accepted": true,
+          "reason": null
+        }
+      ],
+      "expected": {
+        "title": "Le calcul littéral",
+        "chapter": "Sans chapitre",
+        "titleSource": "metadata",
+        "chapterSource": null,
+        "extractedTitle": "Le calcul littéral"
+      },
+      "readingView": null
+    },
+    {
+      "id": "pdf-word-title",
+      "note": "PDF /Title UTF-16BE « Microsoft Word - … .docx » : préfixe et suffixe retirés, chapitre",
+      "file": "files/pdf-word-title.pdf",
+      "size": 987,
+      "sha256": "38c56a37cf0d1176044edc1fa50b37b8f8ac4a299275828036b7e09fa6be7cbc",
+      "input": {
+        "fileName": "pdf-word-title.pdf",
+        "sessionDate": "2026-11-18",
+        "contentTitle": null,
+        "subjectLabel": "HISTOIRE-GEOGRAPHIE",
+        "subjectName": "Histoire-géographie"
+      },
+      "detectedType": "pdf",
+      "detectedBy": "extension",
+      "mime": "application/pdf",
+      "extraction": {
+        "error": null,
+        "metadata": "Microsoft Word - Chapitre 2 - La Révolution.docx",
+        "metadataDetail": "pdfInfoTitle",
+        "pdfLines": [
+          {
+            "text": "La Révolution française",
+            "size": 20.0
+          },
+          {
+            "text": "1789 : la prise de la Bastille.",
+            "size": 11.0
+          }
+        ]
+      },
+      "candidates": [
+        {
+          "source": "metadata",
+          "detail": "pdfInfoTitle",
+          "raw": "Microsoft Word - Chapitre 2 - La Révolution.docx",
+          "value": "Chapitre 2 - La Révolution",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "firstHeading",
+          "raw": "La Révolution française",
+          "value": "La Révolution française",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "fileName",
+          "raw": "pdf-word-title",
+          "value": "pdf-word-title",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "dateFallback",
+          "raw": "Cours du 18 novembre",
+          "value": "Cours du 18 novembre",
+          "accepted": true,
+          "reason": null
+        }
+      ],
+      "expected": {
+        "title": "La Révolution",
+        "chapter": "Chapitre 2",
+        "titleSource": "metadata",
+        "chapterSource": "metadata",
+        "extractedTitle": "La Révolution"
+      },
+      "readingView": null
+    },
+    {
+      "id": "pdf-xmp-title",
+      "note": "PDF sans /Title, dc:title XMP",
+      "file": "files/pdf-xmp-title.pdf",
+      "size": 1354,
+      "sha256": "39646b9fea3e881f3f33d540196956df1579929d3cb357360538199a2e0e1489",
+      "input": {
+        "fileName": "pdf-xmp-title.pdf",
+        "sessionDate": "2026-11-18",
+        "contentTitle": null,
+        "subjectLabel": "S.V.T.",
+        "subjectName": "S.V.T."
+      },
+      "detectedType": "pdf",
+      "detectedBy": "extension",
+      "mime": "application/pdf",
+      "extraction": {
+        "error": null,
+        "metadata": "Le cycle de l’eau",
+        "metadataDetail": "xmpDcTitle",
+        "pdfLines": [
+          {
+            "text": "Fiche de révision",
+            "size": 11.0
+          },
+          {
+            "text": "Évaporation, condensation, précipitations.",
+            "size": 11.0
+          }
+        ]
+      },
+      "candidates": [
+        {
+          "source": "metadata",
+          "detail": "xmpDcTitle",
+          "raw": "Le cycle de l’eau",
+          "value": "Le cycle de l’eau",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "firstHeading",
+          "raw": "Fiche de révision",
+          "value": "Fiche de révision",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "fileName",
+          "raw": "pdf-xmp-title",
+          "value": "pdf-xmp-title",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "dateFallback",
+          "raw": "Cours du 18 novembre",
+          "value": "Cours du 18 novembre",
+          "accepted": true,
+          "reason": null
+        }
+      ],
+      "expected": {
+        "title": "Le cycle de l’eau",
+        "chapter": "Sans chapitre",
+        "titleSource": "metadata",
+        "chapterSource": null,
+        "extractedTitle": "Le cycle de l’eau"
+      },
+      "readingView": null
+    },
+    {
+      "id": "pdf-plain-content",
+      "note": "PDF sans métadonnées, flux non compressé : grande ligne puis en-tête « Nom : »",
+      "file": "files/pdf-plain-content.pdf",
+      "size": 869,
+      "sha256": "93c5df18f71324cd04c7f6d1bdc2b4685b4163108c0cccdb7e41a9ab2d7fea01",
+      "input": {
+        "fileName": "pdf-plain-content.pdf",
+        "sessionDate": "2026-11-18",
+        "contentTitle": null,
+        "subjectLabel": "S.V.T.",
+        "subjectName": "S.V.T."
+      },
+      "detectedType": "pdf",
+      "detectedBy": "extension",
+      "mime": "application/pdf",
+      "extraction": {
+        "error": null,
+        "metadata": null,
+        "metadataDetail": null,
+        "pdfLines": [
+          {
+            "text": "La photosynthèse",
+            "size": 22.0
+          },
+          {
+            "text": "Nom : ............ Prénom : ............ Classe : ......",
+            "size": 10.0
+          },
+          {
+            "text": "Date : ....../....../......",
+            "size": 10.0
+          },
+          {
+            "text": "Les plantes vertes fabriquent leur matière organique.",
+            "size": 11.0
+          }
+        ]
+      },
+      "candidates": [
+        {
+          "source": "firstHeading",
+          "raw": "La photosynthèse",
+          "value": "La photosynthèse",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "fileName",
+          "raw": "pdf-plain-content",
+          "value": "pdf-plain-content",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "dateFallback",
+          "raw": "Cours du 18 novembre",
+          "value": "Cours du 18 novembre",
+          "accepted": true,
+          "reason": null
+        }
+      ],
+      "expected": {
+        "title": "La photosynthèse",
+        "chapter": "Sans chapitre",
+        "titleSource": "firstHeading",
+        "chapterSource": null,
+        "extractedTitle": "La photosynthèse"
+      },
+      "readingView": null
+    },
+    {
+      "id": "pdf-flate-content",
+      "note": "PDF FlateDecode : en-têtes « Nom : » / « Classe : » d’abord, titre en grand (TJ, tiret demi-cadratin)",
+      "file": "files/pdf-flate-content.pdf",
+      "size": 770,
+      "sha256": "4d7624a46fc25577ac699d56c36bca910672c02e62859de4b01f7ce1cd1a9079",
+      "input": {
+        "fileName": "pdf-flate-content.pdf",
+        "sessionDate": "2026-11-18",
+        "contentTitle": null,
+        "subjectLabel": "S.V.T.",
+        "subjectName": "S.V.T."
+      },
+      "detectedType": "pdf",
+      "detectedBy": "extension",
+      "mime": "application/pdf",
+      "extraction": {
+        "error": null,
+        "metadata": null,
+        "metadataDetail": null,
+        "pdfLines": [
+          {
+            "text": "Nom : Martin",
+            "size": 10.0
+          },
+          {
+            "text": "Classe : 4e B",
+            "size": 10.0
+          },
+          {
+            "text": "Chapitre 5 – Les volcans",
+            "size": 20.0
+          },
+          {
+            "text": "Un volcan est un relief formé par l’accumulation de laves.",
+            "size": 11.0
+          }
+        ]
+      },
+      "candidates": [
+        {
+          "source": "firstHeading",
+          "raw": "Chapitre 5 – Les volcans",
+          "value": "Chapitre 5 – Les volcans",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "fileName",
+          "raw": "pdf-flate-content",
+          "value": "pdf-flate-content",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "dateFallback",
+          "raw": "Cours du 18 novembre",
+          "value": "Cours du 18 novembre",
+          "accepted": true,
+          "reason": null
+        }
+      ],
+      "expected": {
+        "title": "Les volcans",
+        "chapter": "Chapitre 5",
+        "titleSource": "firstHeading",
+        "chapterSource": "firstHeading",
+        "extractedTitle": "Les volcans"
+      },
+      "readingView": null
+    },
+    {
+      "id": "pdf-generic-title",
+      "note": "PDF /Title « Document1 » rejeté (générique)",
+      "file": "files/pdf-generic-title.pdf",
+      "size": 808,
+      "sha256": "aa2d18813417aaa82c6b241077b166ce9f7962ac6117a7dcdde700e32e3fb94a",
+      "input": {
+        "fileName": "pdf-generic-title.pdf",
+        "sessionDate": "2026-11-18",
+        "contentTitle": null,
+        "subjectLabel": "MATHEMATIQUES",
+        "subjectName": "Mathématiques"
+      },
+      "detectedType": "pdf",
+      "detectedBy": "extension",
+      "mime": "application/pdf",
+      "extraction": {
+        "error": null,
+        "metadata": "Document1",
+        "metadataDetail": "pdfInfoTitle",
+        "pdfLines": [
+          {
+            "text": "Le théorème de Pythagore",
+            "size": 18.0
+          },
+          {
+            "text": "Dans un triangle rectangle, le carré de l’hypoténuse...",
+            "size": 11.0
+          }
+        ]
+      },
+      "candidates": [
+        {
+          "source": "metadata",
+          "detail": "pdfInfoTitle",
+          "raw": "Document1",
+          "value": "Document1",
+          "accepted": false,
+          "reason": "generic"
+        },
+        {
+          "source": "firstHeading",
+          "raw": "Le théorème de Pythagore",
+          "value": "Le théorème de Pythagore",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "fileName",
+          "raw": "pdf-generic-title",
+          "value": "pdf-generic-title",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "dateFallback",
+          "raw": "Cours du 18 novembre",
+          "value": "Cours du 18 novembre",
+          "accepted": true,
+          "reason": null
+        }
+      ],
+      "expected": {
+        "title": "Le théorème de Pythagore",
+        "chapter": "Sans chapitre",
+        "titleSource": "firstHeading",
+        "chapterSource": null,
+        "extractedTitle": "Le théorème de Pythagore"
+      },
+      "readingView": null
+    },
+    {
+      "id": "pdf-title-is-file-name",
+      "note": "PDF /Title égal au nom du fichier, page vide : repli sur le nom du fichier",
+      "file": "files/fiche_exo_3.pdf",
+      "size": 654,
+      "sha256": "dff1c8f97b4a37434bfd8c3d1923c9c3dbceb7a2aa9410de8ac4473a7e836ebc",
+      "input": {
+        "fileName": "fiche_exo_3.pdf",
+        "sessionDate": "2026-11-18",
+        "contentTitle": null,
+        "subjectLabel": "MATHEMATIQUES",
+        "subjectName": "Mathématiques"
+      },
+      "detectedType": "pdf",
+      "detectedBy": "extension",
+      "mime": "application/pdf",
+      "extraction": {
+        "error": null,
+        "metadata": "fiche_exo_3.pdf",
+        "metadataDetail": "pdfInfoTitle",
+        "pdfLines": []
+      },
+      "candidates": [
+        {
+          "source": "metadata",
+          "detail": "pdfInfoTitle",
+          "raw": "fiche_exo_3.pdf",
+          "value": "fiche_exo_3",
+          "accepted": false,
+          "reason": "fileName"
+        },
+        {
+          "source": "fileName",
+          "raw": "fiche_exo_3",
+          "value": "fiche exo 3",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "dateFallback",
+          "raw": "Cours du 18 novembre",
+          "value": "Cours du 18 novembre",
+          "accepted": true,
+          "reason": null
+        }
+      ],
+      "expected": {
+        "title": "fiche exo 3",
+        "chapter": "Sans chapitre",
+        "titleSource": "fileName",
+        "chapterSource": null,
+        "extractedTitle": null
+      },
+      "readingView": null
+    },
+    {
+      "id": "pdf-encrypted",
+      "note": "PDF chiffré (RC4, mot de passe utilisateur) : replis, titre Pronote",
+      "file": "files/pdf-encrypted.pdf",
+      "size": 1092,
+      "sha256": "9ddec6ca2c2039217894f3fe47d83e3b3f004992c064104e739841a22b59d062",
+      "input": {
+        "fileName": "pdf-encrypted.pdf",
+        "sessionDate": "2026-11-18",
+        "contentTitle": "Le rythme et la pulsation",
+        "subjectLabel": "MUSIQUE",
+        "subjectName": "Musique"
+      },
+      "detectedType": "pdf",
+      "detectedBy": "extension",
+      "mime": "application/pdf",
+      "extraction": {
+        "error": "unreadable",
+        "metadata": null,
+        "metadataDetail": null
+      },
+      "candidates": [
+        {
+          "source": "pronoteTitle",
+          "raw": "Le rythme et la pulsation",
+          "value": "Le rythme et la pulsation",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "fileName",
+          "raw": "pdf-encrypted",
+          "value": "pdf-encrypted",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "dateFallback",
+          "raw": "Cours du 18 novembre",
+          "value": "Cours du 18 novembre",
+          "accepted": true,
+          "reason": null
+        }
+      ],
+      "expected": {
+        "title": "Le rythme et la pulsation",
+        "chapter": "Sans chapitre",
+        "titleSource": "pronoteTitle",
+        "chapterSource": null,
+        "extractedTitle": null
+      },
+      "readingView": null
+    },
+    {
+      "id": "pdf-unreadable",
+      "note": "PDF illisible ; titre Pronote = matière (rejeté) ; nom de fichier avec `__`",
+      "file": "files/controle_SVT__version_finale.pdf",
+      "size": 623,
+      "sha256": "2cbc9adad4ede1cec61c9cfcaf73b92a024836408e5742c81695e629b47b849b",
+      "input": {
+        "fileName": "controle_SVT__version_finale.pdf",
+        "sessionDate": "2026-11-18",
+        "contentTitle": "S.V.T.",
+        "subjectLabel": "S.V.T.",
+        "subjectName": "S.V.T."
+      },
+      "detectedType": "pdf",
+      "detectedBy": "extension",
+      "mime": "application/pdf",
+      "extraction": {
+        "error": "unreadable",
+        "metadata": null,
+        "metadataDetail": null
+      },
+      "candidates": [
+        {
+          "source": "pronoteTitle",
+          "raw": "S.V.T.",
+          "value": "S.V.T",
+          "accepted": false,
+          "reason": "subjectName"
+        },
+        {
+          "source": "fileName",
+          "raw": "controle_SVT__version_finale",
+          "value": "controle SVT version finale",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "dateFallback",
+          "raw": "Cours du 18 novembre",
+          "value": "Cours du 18 novembre",
+          "accepted": true,
+          "reason": null
+        }
+      ],
+      "expected": {
+        "title": "controle SVT version finale",
+        "chapter": "Sans chapitre",
+        "titleSource": "fileName",
+        "chapterSource": null,
+        "extractedTitle": null
+      },
+      "readingView": null
+    },
+    {
+      "id": "odt-meta-title",
+      "note": "ODT meta.xml dc:title ; chapitre trouvé sur le premier titre",
+      "file": "files/odt-meta-title.odt",
+      "size": 1941,
+      "sha256": "ebb835f540b061c89626375cd5d5d60b1be0cb826f57ef62f79fd337cf14c37c",
+      "input": {
+        "fileName": "odt-meta-title.odt",
+        "sessionDate": "2026-11-18",
+        "contentTitle": "Exercices",
+        "subjectLabel": "MATHEMATIQUES",
+        "subjectName": "Mathématiques"
+      },
+      "detectedType": "odt",
+      "detectedBy": "extension",
+      "mime": "application/vnd.oasis.opendocument.text",
+      "extraction": {
+        "error": null,
+        "metadata": "Les fractions",
+        "metadataDetail": "metaXmlDcTitle"
+      },
+      "candidates": [
+        {
+          "source": "metadata",
+          "detail": "metaXmlDcTitle",
+          "raw": "Les fractions",
+          "value": "Les fractions",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "firstHeading",
+          "raw": "Chapitre 4 : Les fractions",
+          "value": "Chapitre 4 : Les fractions",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "pronoteTitle",
+          "raw": "Exercices",
+          "value": "Exercices",
+          "accepted": false,
+          "reason": "generic"
+        },
+        {
+          "source": "fileName",
+          "raw": "odt-meta-title",
+          "value": "odt-meta-title",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "dateFallback",
+          "raw": "Cours du 18 novembre",
+          "value": "Cours du 18 novembre",
+          "accepted": true,
+          "reason": null
+        }
+      ],
+      "expected": {
+        "title": "Les fractions",
+        "chapter": "Chapitre 4",
+        "titleSource": "metadata",
+        "chapterSource": "firstHeading",
+        "extractedTitle": "Les fractions"
+      },
+      "readingView": [
+        {
+          "kind": "heading",
+          "level": 1,
+          "text": "Chapitre 4 : Les fractions"
+        },
+        {
+          "kind": "paragraph",
+          "text": "Une fraction représente un partage en parts égales."
+        },
+        {
+          "kind": "listItem",
+          "level": 1,
+          "text": "Numérateur"
+        },
+        {
+          "kind": "listItem",
+          "level": 1,
+          "text": "Dénominateur"
+        },
+        {
+          "kind": "paragraph",
+          "text": "Exemple : trois quarts s’écrit 3/4."
+        }
+      ]
+    },
+    {
+      "id": "odt-heading",
+      "note": "ODT sans dc:title, premier text:h « Chapitre 3 : … » ; text:s, liens, listes imbriquées",
+      "file": "files/odt-heading.odt",
+      "size": 2058,
+      "sha256": "741f584c93d8540d0f4a45020cbb86b2e9a98881390379b82fd22564ce0cf87a",
+      "input": {
+        "fileName": "odt-heading.odt",
+        "sessionDate": "2026-11-18",
+        "contentTitle": null,
+        "subjectLabel": "MATHEMATIQUES",
+        "subjectName": "Mathématiques"
+      },
+      "detectedType": "odt",
+      "detectedBy": "extension",
+      "mime": "application/vnd.oasis.opendocument.text",
+      "extraction": {
+        "error": null,
+        "metadata": null,
+        "metadataDetail": null
+      },
+      "candidates": [
+        {
+          "source": "firstHeading",
+          "raw": "Chapitre 3 : Les fonctions affines",
+          "value": "Chapitre 3 : Les fonctions affines",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "fileName",
+          "raw": "odt-heading",
+          "value": "odt-heading",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "dateFallback",
+          "raw": "Cours du 18 novembre",
+          "value": "Cours du 18 novembre",
+          "accepted": true,
+          "reason": null
+        }
+      ],
+      "expected": {
+        "title": "Les fonctions affines",
+        "chapter": "Chapitre 3",
+        "titleSource": "firstHeading",
+        "chapterSource": "firstHeading",
+        "extractedTitle": "Les fonctions affines"
+      },
+      "readingView": [
+        {
+          "kind": "heading",
+          "level": 1,
+          "text": "Chapitre 3 : Les fonctions affines"
+        },
+        {
+          "kind": "paragraph",
+          "text": "Une fonction affine s’écrit f(x) = ax + b."
+        },
+        {
+          "kind": "heading",
+          "level": 2,
+          "text": "Définition"
+        },
+        {
+          "kind": "paragraph",
+          "text": "Le nombre a est le coefficient directeur."
+        },
+        {
+          "kind": "listItem",
+          "level": 1,
+          "text": "Si a > 0, f est croissante"
+        },
+        {
+          "kind": "listItem",
+          "level": 2,
+          "text": "cas particulier : a = 1"
+        },
+        {
+          "kind": "listItem",
+          "level": 1,
+          "text": "Si a < 0, f est décroissante"
+        },
+        {
+          "kind": "paragraph",
+          "text": "Le nombre b est l’ordonnée à l’origine."
+        }
+      ]
+    },
+    {
+      "id": "odt-title-style",
+      "note": "ODT paragraphe de style automatique P1 hérité de Title",
+      "file": "files/odt-title-style.odt",
+      "size": 1986,
+      "sha256": "fb047350fc2ccc7e4ace1b7dc0de6a9bd73e1b774d164649bcfad663c4731b0b",
+      "input": {
+        "fileName": "odt-title-style.odt",
+        "sessionDate": "2026-11-18",
+        "contentTitle": null,
+        "subjectLabel": "HISTOIRE-GEOGRAPHIE",
+        "subjectName": "Histoire-géographie"
+      },
+      "detectedType": "odt",
+      "detectedBy": "extension",
+      "mime": "application/vnd.oasis.opendocument.text",
+      "extraction": {
+        "error": null,
+        "metadata": null,
+        "metadataDetail": null
+      },
+      "candidates": [
+        {
+          "source": "firstHeading",
+          "raw": "La Révolution industrielle",
+          "value": "La Révolution industrielle",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "fileName",
+          "raw": "odt-title-style",
+          "value": "odt-title-style",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "dateFallback",
+          "raw": "Cours du 18 novembre",
+          "value": "Cours du 18 novembre",
+          "accepted": true,
+          "reason": null
+        }
+      ],
+      "expected": {
+        "title": "La Révolution industrielle",
+        "chapter": "Sans chapitre",
+        "titleSource": "firstHeading",
+        "chapterSource": null,
+        "extractedTitle": "La Révolution industrielle"
+      },
+      "readingView": [
+        {
+          "kind": "heading",
+          "level": 1,
+          "text": "La Révolution industrielle"
+        },
+        {
+          "kind": "paragraph",
+          "text": "Au XIXe siècle, l’Europe se transforme."
+        },
+        {
+          "kind": "heading",
+          "level": 1,
+          "text": "Partie 2 – Les transformations"
+        },
+        {
+          "kind": "listItem",
+          "level": 1,
+          "text": "Le charbon"
+        },
+        {
+          "kind": "listItem",
+          "level": 1,
+          "text": "La machine à vapeur"
+        }
+      ]
+    },
+    {
+      "id": "odt-heading-levels",
+      "note": "ODT : un titre de niveau 2 précède le niveau 1 ; « Séquence IV – »",
+      "file": "files/odt-heading-levels.odt",
+      "size": 1875,
+      "sha256": "70053f6456954b7ae6f7da3b173f370f8042d9607b5a35dafae57399f2347bea",
+      "input": {
+        "fileName": "odt-heading-levels.odt",
+        "sessionDate": "2026-11-18",
+        "contentTitle": null,
+        "subjectLabel": "FRANCAIS",
+        "subjectName": "Français"
+      },
+      "detectedType": "odt",
+      "detectedBy": "extension",
+      "mime": "application/vnd.oasis.opendocument.text",
+      "extraction": {
+        "error": null,
+        "metadata": null,
+        "metadataDetail": null
+      },
+      "candidates": [
+        {
+          "source": "firstHeading",
+          "raw": "Séquence IV – Le roman d’aventure",
+          "value": "Séquence IV – Le roman d’aventure",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "fileName",
+          "raw": "odt-heading-levels",
+          "value": "odt-heading-levels",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "dateFallback",
+          "raw": "Cours du 18 novembre",
+          "value": "Cours du 18 novembre",
+          "accepted": true,
+          "reason": null
+        }
+      ],
+      "expected": {
+        "title": "Le roman d’aventure",
+        "chapter": "Séquence IV",
+        "titleSource": "firstHeading",
+        "chapterSource": "firstHeading",
+        "extractedTitle": "Le roman d’aventure"
+      },
+      "readingView": [
+        {
+          "kind": "heading",
+          "level": 2,
+          "text": "Rappels"
+        },
+        {
+          "kind": "paragraph",
+          "text": "Un récit raconte une histoire."
+        },
+        {
+          "kind": "heading",
+          "level": 1,
+          "text": "Séquence IV – Le roman d’aventure"
+        },
+        {
+          "kind": "paragraph",
+          "text": "Lecture d’un extrait."
+        }
+      ]
+    },
+    {
+      "id": "signature-odt-as-bin",
+      "note": "Paquet ODT nommé .bin : type détecté par la signature ; « Partie 3 : »",
+      "file": "files/chapitre-trompeur.bin",
+      "size": 1829,
+      "sha256": "d91eeeaf2be43661529b7bf741ea84faa06d7f47c3285ec98318c9667b2d63e9",
+      "input": {
+        "fileName": "chapitre-trompeur.bin",
+        "sessionDate": "2026-11-18",
+        "contentTitle": null,
+        "subjectLabel": "MATHEMATIQUES",
+        "subjectName": "Mathématiques"
+      },
+      "detectedType": "odt",
+      "detectedBy": "signature",
+      "mime": "application/vnd.oasis.opendocument.text",
+      "extraction": {
+        "error": null,
+        "metadata": null,
+        "metadataDetail": null
+      },
+      "candidates": [
+        {
+          "source": "firstHeading",
+          "raw": "Partie 3 : Les solides",
+          "value": "Partie 3 : Les solides",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "fileName",
+          "raw": "chapitre-trompeur",
+          "value": "chapitre-trompeur",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "dateFallback",
+          "raw": "Cours du 18 novembre",
+          "value": "Cours du 18 novembre",
+          "accepted": true,
+          "reason": null
+        }
+      ],
+      "expected": {
+        "title": "Les solides",
+        "chapter": "Partie 3",
+        "titleSource": "firstHeading",
+        "chapterSource": "firstHeading",
+        "extractedTitle": "Les solides"
+      },
+      "readingView": [
+        {
+          "kind": "heading",
+          "level": 1,
+          "text": "Partie 3 : Les solides"
+        },
+        {
+          "kind": "paragraph",
+          "text": "Le cube, le pavé droit et la pyramide."
+        }
+      ]
+    },
+    {
+      "id": "odp-slide-title",
+      "note": "ODP : dc:title « Présentation1 » rejeté, titre de la première diapositive",
+      "file": "files/odp-slide-title.odp",
+      "size": 2023,
+      "sha256": "c47c38f5d4ce904294cdb545a4681b3baf432d55e1de3e80c11e563aac588439",
+      "input": {
+        "fileName": "odp-slide-title.odp",
+        "sessionDate": "2026-11-18",
+        "contentTitle": null,
+        "subjectLabel": "HISTOIRE-GEOGRAPHIE",
+        "subjectName": "Histoire-géographie"
+      },
+      "detectedType": "odp",
+      "detectedBy": "extension",
+      "mime": "application/vnd.oasis.opendocument.presentation",
+      "extraction": {
+        "error": null,
+        "metadata": "Présentation1",
+        "metadataDetail": "metaXmlDcTitle"
+      },
+      "candidates": [
+        {
+          "source": "metadata",
+          "detail": "metaXmlDcTitle",
+          "raw": "Présentation1",
+          "value": "Présentation1",
+          "accepted": false,
+          "reason": "generic"
+        },
+        {
+          "source": "firstHeading",
+          "raw": "Les grandes découvertes",
+          "value": "Les grandes découvertes",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "fileName",
+          "raw": "odp-slide-title",
+          "value": "odp-slide-title",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "dateFallback",
+          "raw": "Cours du 18 novembre",
+          "value": "Cours du 18 novembre",
+          "accepted": true,
+          "reason": null
+        }
+      ],
+      "expected": {
+        "title": "Les grandes découvertes",
+        "chapter": "Sans chapitre",
+        "titleSource": "firstHeading",
+        "chapterSource": null,
+        "extractedTitle": "Les grandes découvertes"
+      },
+      "readingView": [
+        {
+          "kind": "heading",
+          "level": 1,
+          "text": "Les grandes découvertes"
+        },
+        {
+          "kind": "paragraph",
+          "text": "Histoire – 5e"
+        },
+        {
+          "kind": "heading",
+          "level": 1,
+          "text": "Les navigateurs"
+        },
+        {
+          "kind": "listItem",
+          "level": 1,
+          "text": "Partir vers l’ouest"
+        },
+        {
+          "kind": "listItem",
+          "level": 2,
+          "text": "Traverser l’océan"
+        },
+        {
+          "kind": "listItem",
+          "level": 1,
+          "text": "Revenir avec des cartes"
+        }
+      ]
+    },
+    {
+      "id": "docx-core-title",
+      "note": "DOCX core.xml dc:title entre guillemets ; chapitre trouvé sur Heading1",
+      "file": "files/docx-core-title.docx",
+      "size": 2596,
+      "sha256": "e5a095fb21076b742fb2162dcb02e072139b4da52798520cfb60a16eb8477479",
+      "input": {
+        "fileName": "docx-core-title.docx",
+        "sessionDate": "2026-11-18",
+        "contentTitle": null,
+        "subjectLabel": "S.V.T.",
+        "subjectName": "S.V.T."
+      },
+      "detectedType": "docx",
+      "detectedBy": "extension",
+      "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "extraction": {
+        "error": null,
+        "metadata": "« La cellule, unité du vivant »",
+        "metadataDetail": "coreXmlDcTitle"
+      },
+      "candidates": [
+        {
+          "source": "metadata",
+          "detail": "coreXmlDcTitle",
+          "raw": "« La cellule, unité du vivant »",
+          "value": "La cellule, unité du vivant",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "firstHeading",
+          "raw": "Chapitre 1 : La cellule",
+          "value": "Chapitre 1 : La cellule",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "fileName",
+          "raw": "docx-core-title",
+          "value": "docx-core-title",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "dateFallback",
+          "raw": "Cours du 18 novembre",
+          "value": "Cours du 18 novembre",
+          "accepted": true,
+          "reason": null
+        }
+      ],
+      "expected": {
+        "title": "La cellule, unité du vivant",
+        "chapter": "Chapitre 1",
+        "titleSource": "metadata",
+        "chapterSource": "firstHeading",
+        "extractedTitle": "La cellule, unité du vivant"
+      },
+      "readingView": [
+        {
+          "kind": "heading",
+          "level": 1,
+          "text": "Chapitre 1 : La cellule"
+        },
+        {
+          "kind": "paragraph",
+          "text": "Tous les êtres vivants sont constitués de cellules."
+        },
+        {
+          "kind": "listItem",
+          "level": 1,
+          "text": "Le noyau"
+        },
+        {
+          "kind": "listItem",
+          "level": 1,
+          "text": "Le cytoplasme"
+        },
+        {
+          "kind": "listItem",
+          "level": 2,
+          "text": "La membrane"
+        }
+      ]
+    },
+    {
+      "id": "docx-heading1",
+      "note": "DOCX dc:title = matière (rejeté) ; Heading2 ignoré ; Heading1 en deux runs ; w:del ignoré",
+      "file": "files/docx-heading1.docx",
+      "size": 2627,
+      "sha256": "795546471c3e27b7bf7ec34ebb5d6086e06888aeffa579662be073375ab8074f",
+      "input": {
+        "fileName": "docx-heading1.docx",
+        "sessionDate": "2026-11-18",
+        "contentTitle": "Exercices",
+        "subjectLabel": "MATHEMATIQUES",
+        "subjectName": "Mathématiques"
+      },
+      "detectedType": "docx",
+      "detectedBy": "extension",
+      "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "extraction": {
+        "error": null,
+        "metadata": "MATHEMATIQUES",
+        "metadataDetail": "coreXmlDcTitle"
+      },
+      "candidates": [
+        {
+          "source": "metadata",
+          "detail": "coreXmlDcTitle",
+          "raw": "MATHEMATIQUES",
+          "value": "MATHEMATIQUES",
+          "accepted": false,
+          "reason": "subjectName"
+        },
+        {
+          "source": "firstHeading",
+          "raw": "Les puissances de dix",
+          "value": "Les puissances de dix",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "pronoteTitle",
+          "raw": "Exercices",
+          "value": "Exercices",
+          "accepted": false,
+          "reason": "generic"
+        },
+        {
+          "source": "fileName",
+          "raw": "docx-heading1",
+          "value": "docx-heading1",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "dateFallback",
+          "raw": "Cours du 18 novembre",
+          "value": "Cours du 18 novembre",
+          "accepted": true,
+          "reason": null
+        }
+      ],
+      "expected": {
+        "title": "Les puissances de dix",
+        "chapter": "Sans chapitre",
+        "titleSource": "firstHeading",
+        "chapterSource": null,
+        "extractedTitle": "Les puissances de dix"
+      },
+      "readingView": [
+        {
+          "kind": "heading",
+          "level": 2,
+          "text": "Objectifs"
+        },
+        {
+          "kind": "heading",
+          "level": 1,
+          "text": "Les puissances de dix"
+        },
+        {
+          "kind": "paragraph",
+          "text": "Écrire 10 puissance n."
+        },
+        {
+          "kind": "paragraph",
+          "text": "Exemple : 1 000 = 10³."
+        }
+      ]
+    },
+    {
+      "id": "docx-title-style",
+      "note": "DOCX style Title",
+      "file": "files/docx-title-style.docx",
+      "size": 2530,
+      "sha256": "3d2cade7877893d54e49184fe6ac92c6c31d11972e35c73ea0be00f6cd3dcda0",
+      "input": {
+        "fileName": "docx-title-style.docx",
+        "sessionDate": "2026-11-18",
+        "contentTitle": null,
+        "subjectLabel": "HISTOIRE-GEOGRAPHIE",
+        "subjectName": "Histoire-géographie"
+      },
+      "detectedType": "docx",
+      "detectedBy": "extension",
+      "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "extraction": {
+        "error": null,
+        "metadata": null,
+        "metadataDetail": null
+      },
+      "candidates": [
+        {
+          "source": "firstHeading",
+          "raw": "Le Moyen Âge : seigneurs et paysans",
+          "value": "Le Moyen Âge : seigneurs et paysans",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "fileName",
+          "raw": "docx-title-style",
+          "value": "docx-title-style",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "dateFallback",
+          "raw": "Cours du 18 novembre",
+          "value": "Cours du 18 novembre",
+          "accepted": true,
+          "reason": null
+        }
+      ],
+      "expected": {
+        "title": "Le Moyen Âge : seigneurs et paysans",
+        "chapter": "Sans chapitre",
+        "titleSource": "firstHeading",
+        "chapterSource": null,
+        "extractedTitle": "Le Moyen Âge : seigneurs et paysans"
+      },
+      "readingView": [
+        {
+          "kind": "heading",
+          "level": 1,
+          "text": "Le Moyen Âge : seigneurs et paysans"
+        },
+        {
+          "kind": "heading",
+          "level": 1,
+          "text": "Chapitre 6 : La société féodale"
+        },
+        {
+          "kind": "paragraph",
+          "text": "Le seigneur protège les paysans de sa seigneurie."
+        }
+      ]
+    },
+    {
+      "id": "pptx-ctrtitle",
+      "note": "PPTX ctrTitle de la première diapositive",
+      "file": "files/pptx-ctrtitle.pptx",
+      "size": 5841,
+      "sha256": "b26e230f5338f72ca805107ea6389f389a2c05d02cace4328b8e38d8fb3f8208",
+      "input": {
+        "fileName": "pptx-ctrtitle.pptx",
+        "sessionDate": "2026-11-18",
+        "contentTitle": null,
+        "subjectLabel": "PHYSIQUE-CHIMIE",
+        "subjectName": "Physique-chimie"
+      },
+      "detectedType": "pptx",
+      "detectedBy": "extension",
+      "mime": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "extraction": {
+        "error": null,
+        "metadata": null,
+        "metadataDetail": null
+      },
+      "candidates": [
+        {
+          "source": "firstHeading",
+          "raw": "Les états de la matière",
+          "value": "Les états de la matière",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "fileName",
+          "raw": "pptx-ctrtitle",
+          "value": "pptx-ctrtitle",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "dateFallback",
+          "raw": "Cours du 18 novembre",
+          "value": "Cours du 18 novembre",
+          "accepted": true,
+          "reason": null
+        }
+      ],
+      "expected": {
+        "title": "Les états de la matière",
+        "chapter": "Sans chapitre",
+        "titleSource": "firstHeading",
+        "chapterSource": null,
+        "extractedTitle": "Les états de la matière"
+      },
+      "readingView": [
+        {
+          "kind": "heading",
+          "level": 1,
+          "text": "Les états de la matière"
+        },
+        {
+          "kind": "paragraph",
+          "text": "Physique-chimie – 5e"
+        },
+        {
+          "kind": "heading",
+          "level": 1,
+          "text": "Les changements d’état"
+        },
+        {
+          "kind": "listItem",
+          "level": 1,
+          "text": "La fusion"
+        },
+        {
+          "kind": "listItem",
+          "level": 2,
+          "text": "de solide à liquide"
+        },
+        {
+          "kind": "listItem",
+          "level": 1,
+          "text": "La solidification"
+        }
+      ]
+    },
+    {
+      "id": "pptx-theme-empty",
+      "note": "PPTX : ordre de sldIdLst ≠ noms de fichiers ; « Thème 1 : » sans reste → titre Pronote",
+      "file": "files/pptx-theme-empty.pptx",
+      "size": 5722,
+      "sha256": "d0a81d1df6f0a4f166ded946a689040fdebe3f21cfc3e18ee6aa69fd07fcc089",
+      "input": {
+        "fileName": "pptx-theme-empty.pptx",
+        "sessionDate": "2026-11-18",
+        "contentTitle": "La Terre dans le système solaire",
+        "subjectLabel": "S.V.T.",
+        "subjectName": "S.V.T."
+      },
+      "detectedType": "pptx",
+      "detectedBy": "extension",
+      "mime": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "extraction": {
+        "error": null,
+        "metadata": null,
+        "metadataDetail": null
+      },
+      "candidates": [
+        {
+          "source": "firstHeading",
+          "raw": "Thème 1 :",
+          "value": "Thème 1",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "pronoteTitle",
+          "raw": "La Terre dans le système solaire",
+          "value": "La Terre dans le système solaire",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "fileName",
+          "raw": "pptx-theme-empty",
+          "value": "pptx-theme-empty",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "dateFallback",
+          "raw": "Cours du 18 novembre",
+          "value": "Cours du 18 novembre",
+          "accepted": true,
+          "reason": null
+        }
+      ],
+      "expected": {
+        "title": "La Terre dans le système solaire",
+        "chapter": "Thème 1",
+        "titleSource": "pronoteTitle",
+        "chapterSource": "firstHeading",
+        "extractedTitle": null
+      },
+      "readingView": [
+        {
+          "kind": "heading",
+          "level": 1,
+          "text": "Thème 1 :"
+        },
+        {
+          "kind": "listItem",
+          "level": 1,
+          "text": "Le Soleil et les planètes"
+        },
+        {
+          "kind": "heading",
+          "level": 1,
+          "text": "Conclusion"
+        }
+      ]
+    },
+    {
+      "id": "txt-chap-abbrev",
+      "note": "TXT avec BOM et lignes vides ; « CHAP. 2) »",
+      "file": "files/notes.txt",
+      "size": 65,
+      "sha256": "2abc95505dba34187398dbe42824cbc2e982dd8b0dc02af41b1117695a0d8a48",
+      "input": {
+        "fileName": "notes.txt",
+        "sessionDate": "2026-11-18",
+        "contentTitle": null,
+        "subjectLabel": "MATHEMATIQUES",
+        "subjectName": "Mathématiques"
+      },
+      "detectedType": "txt",
+      "detectedBy": "extension",
+      "mime": "text/plain",
+      "extraction": {
+        "error": null,
+        "metadata": null,
+        "metadataDetail": null
+      },
+      "candidates": [
+        {
+          "source": "firstHeading",
+          "raw": "CHAP. 2) Les nombres relatifs",
+          "value": "CHAP. 2) Les nombres relatifs",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "fileName",
+          "raw": "notes",
+          "value": "notes",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "dateFallback",
+          "raw": "Cours du 18 novembre",
+          "value": "Cours du 18 novembre",
+          "accepted": true,
+          "reason": null
+        }
+      ],
+      "expected": {
+        "title": "Les nombres relatifs",
+        "chapter": "Chapitre 2",
+        "titleSource": "firstHeading",
+        "chapterSource": "firstHeading",
+        "extractedTitle": "Les nombres relatifs"
+      },
+      "readingView": null
+    },
+    {
+      "id": "txt-admin-header",
+      "note": "TXT dont la première ligne non vide est un en-tête « Nom : » (rejeté) : titre Pronote",
+      "file": "files/fiche-eleve.txt",
+      "size": 46,
+      "sha256": "46c79cb2aa7823c49f192ab13533afeb0b52989d2390c6065c3e4f884051526e",
+      "input": {
+        "fileName": "fiche-eleve.txt",
+        "sessionDate": "2026-11-18",
+        "contentTitle": "Les angles",
+        "subjectLabel": "MATHEMATIQUES",
+        "subjectName": "Mathématiques"
+      },
+      "detectedType": "txt",
+      "detectedBy": "extension",
+      "mime": "text/plain",
+      "extraction": {
+        "error": null,
+        "metadata": null,
+        "metadataDetail": null
+      },
+      "candidates": [
+        {
+          "source": "firstHeading",
+          "raw": "Nom : ..........  Classe : ......",
+          "value": "Nom : .......... Classe",
+          "accepted": false,
+          "reason": "adminHeader"
+        },
+        {
+          "source": "pronoteTitle",
+          "raw": "Les angles",
+          "value": "Les angles",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "fileName",
+          "raw": "fiche-eleve",
+          "value": "fiche-eleve",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "dateFallback",
+          "raw": "Cours du 18 novembre",
+          "value": "Cours du 18 novembre",
+          "accepted": true,
+          "reason": null
+        }
+      ],
+      "expected": {
+        "title": "Les angles",
+        "chapter": "Sans chapitre",
+        "titleSource": "pronoteTitle",
+        "chapterSource": null,
+        "extractedTitle": null
+      },
+      "readingView": null
+    },
+    {
+      "id": "txt-long-title",
+      "note": "Titre > 120 caractères coupé au mot",
+      "file": "files/long-title.txt",
+      "size": 175,
+      "sha256": "3b57824f744e28a132c568b095a3d6421f0b772264f8a1cce0969a09a6c974aa",
+      "input": {
+        "fileName": "long-title.txt",
+        "sessionDate": "2026-11-18",
+        "contentTitle": null,
+        "subjectLabel": "S.V.T.",
+        "subjectName": "S.V.T."
+      },
+      "detectedType": "txt",
+      "detectedBy": "extension",
+      "mime": "text/plain",
+      "extraction": {
+        "error": null,
+        "metadata": null,
+        "metadataDetail": null
+      },
+      "candidates": [
+        {
+          "source": "firstHeading",
+          "raw": "L’évolution des espèces au cours des temps géologiques, de l’apparition des premières cellules jusqu’aux mammifères actuels, expliquée pas à pas.",
+          "value": "L’évolution des espèces au cours des temps géologiques, de l’apparition des premières cellules jusqu’aux mammifères",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "fileName",
+          "raw": "long-title",
+          "value": "long-title",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "dateFallback",
+          "raw": "Cours du 18 novembre",
+          "value": "Cours du 18 novembre",
+          "accepted": true,
+          "reason": null
+        }
+      ],
+      "expected": {
+        "title": "L’évolution des espèces au cours des temps géologiques, de l’apparition des premières cellules jusqu’aux mammifères",
+        "chapter": "Sans chapitre",
+        "titleSource": "firstHeading",
+        "chapterSource": null,
+        "extractedTitle": "L’évolution des espèces au cours des temps géologiques, de l’apparition des premières cellules jusqu’aux mammifères"
+      },
+      "readingView": null
+    },
+    {
+      "id": "txt-windows-1252",
+      "note": "TXT Windows-1252, CRLF ; « Unité 3 : »",
+      "file": "files/ancien-encodage.txt",
+      "size": 67,
+      "sha256": "1de1c7dfd06c8805d8f660b6bab88304ef9011ee83e5410c22b4a0b943d3e151",
+      "input": {
+        "fileName": "ancien-encodage.txt",
+        "sessionDate": "2026-11-18",
+        "contentTitle": null,
+        "subjectLabel": "FRANCAIS",
+        "subjectName": "Français"
+      },
+      "detectedType": "txt",
+      "detectedBy": "extension",
+      "mime": "text/plain",
+      "extraction": {
+        "error": null,
+        "metadata": null,
+        "metadataDetail": null
+      },
+      "candidates": [
+        {
+          "source": "firstHeading",
+          "raw": "Unité 3 : Le récit fantastique",
+          "value": "Unité 3 : Le récit fantastique",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "fileName",
+          "raw": "ancien-encodage",
+          "value": "ancien-encodage",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "dateFallback",
+          "raw": "Cours du 18 novembre",
+          "value": "Cours du 18 novembre",
+          "accepted": true,
+          "reason": null
+        }
+      ],
+      "expected": {
+        "title": "Le récit fantastique",
+        "chapter": "Unité 3",
+        "titleSource": "firstHeading",
+        "chapterSource": "firstHeading",
+        "extractedTitle": "Le récit fantastique"
+      },
+      "readingView": null
+    },
+    {
+      "id": "txt-theme-dash",
+      "note": "TXT « Thème 2 – … »",
+      "file": "files/techno.txt",
+      "size": 60,
+      "sha256": "769c7a76eebe7dd48f80012fef9af71049cdbfa852d10a458b3f0e44588e820c",
+      "input": {
+        "fileName": "techno.txt",
+        "sessionDate": "2026-11-18",
+        "contentTitle": null,
+        "subjectLabel": "TECHNOLOGIE",
+        "subjectName": "Technologie"
+      },
+      "detectedType": "txt",
+      "detectedBy": "extension",
+      "mime": "text/plain",
+      "extraction": {
+        "error": null,
+        "metadata": null,
+        "metadataDetail": null
+      },
+      "candidates": [
+        {
+          "source": "firstHeading",
+          "raw": "Thème 2 – Les objets connectés",
+          "value": "Thème 2 – Les objets connectés",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "fileName",
+          "raw": "techno",
+          "value": "techno",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "dateFallback",
+          "raw": "Cours du 18 novembre",
+          "value": "Cours du 18 novembre",
+          "accepted": true,
+          "reason": null
+        }
+      ],
+      "expected": {
+        "title": "Les objets connectés",
+        "chapter": "Thème 2",
+        "titleSource": "firstHeading",
+        "chapterSource": "firstHeading",
+        "extractedTitle": "Les objets connectés"
+      },
+      "readingView": null
+    },
+    {
+      "id": "md-heading",
+      "note": "MD « # Titre : » : # et ponctuation finale retirés",
+      "file": "files/fiche.md",
+      "size": 112,
+      "sha256": "a7799727ac0273318d56e63d5877cef0a53c8f68f01e11c035ee0ae899501857",
+      "input": {
+        "fileName": "fiche.md",
+        "sessionDate": "2026-11-18",
+        "contentTitle": null,
+        "subjectLabel": "FRANCAIS",
+        "subjectName": "Français"
+      },
+      "detectedType": "md",
+      "detectedBy": "extension",
+      "mime": "text/markdown",
+      "extraction": {
+        "error": null,
+        "metadata": null,
+        "metadataDetail": null
+      },
+      "candidates": [
+        {
+          "source": "firstHeading",
+          "raw": " Les figures de style :",
+          "value": "Les figures de style",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "fileName",
+          "raw": "fiche",
+          "value": "fiche",
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "source": "dateFallback",
+          "raw": "Cours du 18 novembre",
+          "value": "Cours du 18 novembre",
+          "accepted": true,
+          "reason": null
+        }
+      ],
+      "expected": {
+        "title": "Les figures de style",
+        "chapter": "Sans chapitre",
+        "titleSource": "firstHeading",
+        "chapterSource": null,
+        "extractedTitle": "Les figures de style"
+      },
+      "readingView": null
+    },
+    {
+      "id": "empty-file",
+      "note": "Fichier vide ; nom générique ; repli « Cours du 1er novembre »",
+      "file": "files/Sans titre.txt",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "input": {
+        "fileName": "Sans titre.txt",
+        "sessionDate": "2026-11-01",
+        "contentTitle": null,
+        "subjectLabel": "FRANCAIS",
+        "subjectName": "Français"
+      },
+      "detectedType": "txt",
+      "detectedBy": "extension",
+      "mime": "text/plain",
+      "extraction": {
+        "error": null,
+        "metadata": null,
+        "metadataDetail": null
+      },
+      "candidates": [
+        {
+          "source": "fileName",
+          "raw": "Sans titre",
+          "value": "Sans titre",
+          "accepted": false,
+          "reason": "generic"
+        },
+        {
+          "source": "dateFallback",
+          "raw": "Cours du 1er novembre",
+          "value": "Cours du 1er novembre",
+          "accepted": true,
+          "reason": null
+        }
+      ],
+      "expected": {
+        "title": "Cours du 1er novembre",
+        "chapter": "Sans chapitre",
+        "titleSource": "dateFallback",
+        "chapterSource": null,
+        "extractedTitle": null
+      },
+      "readingView": null
+    },
+    {
+      "id": "not-extractible-png",
+      "note": "PNG : pas de document principal ; titre Pronote = date (rejeté)",
+      "file": "files/schema.png",
+      "size": 69,
+      "sha256": "9853e99cb7e9817f7ee8b6fb9ade7c8e023d2520647034a098f7f85ed81e9cb0",
+      "input": {
+        "fileName": "schema.png",
+        "sessionDate": "2026-11-18",
+        "contentTitle": "Mercredi 18 novembre",
+        "subjectLabel": "S.V.T.",
+        "subjectName": "S.V.T."
+      },
+      "detectedType": null,
+      "detectedBy": null,
+      "mime": "image/png",
+      "extraction": {
+        "error": null,
+        "metadata": null,
+        "metadataDetail": null
+      },
+      "candidates": [
+        {
+          "source": "pronoteTitle",
+          "raw": "Mercredi 18 novembre",
+          "value": "Mercredi 18 novembre",
+          "accepted": false,
+          "reason": "numberOrDate"
+        },
+        {
+          "source": "dateFallback",
+          "raw": "Cours du 18 novembre",
+          "value": "Cours du 18 novembre",
+          "accepted": true,
+          "reason": null
+        }
+      ],
+      "expected": {
+        "title": "Cours du 18 novembre",
+        "chapter": "Sans chapitre",
+        "titleSource": "dateFallback",
+        "chapterSource": null,
+        "extractedTitle": null
+      },
+      "readingView": null
+    }
+  ]
+}

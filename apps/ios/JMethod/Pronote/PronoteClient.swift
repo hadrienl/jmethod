@@ -55,7 +55,8 @@ actor PronoteClient: PronoteSessionClient {
     private var order = 1
     private var compress = false
     private var encrypt = false
-    private var root: URL
+    /// Racine sans requête ni `/` final (`PronoteURL.root`) : base de `appelfonction` et de `FichiersExternes`.
+    private var root: String
     private var parameters: [String: Any] = [:]
     private var userResource: [String: Any] = [:]
     private var selectedResource: [String: Any] = [:]
@@ -74,7 +75,7 @@ actor PronoteClient: PronoteSessionClient {
     init(credentials: PronoteCredentials, transport: (any PronoteTransport)? = nil) throws {
         let url = try PronoteURL.validated(credentials.url)
         self.credentials = credentials
-        self.root = url.deletingLastPathComponent()
+        self.root = PronoteURL.root(url)
         self.transport = transport ?? URLSessionPronoteTransport(origin: url)
     }
 
@@ -112,7 +113,7 @@ actor PronoteClient: PronoteSessionClient {
         let page = try await request(url: url, method: "GET")
         guard let html = String(data: page, encoding: .utf8) else { throw PronoteFailure.invalid("html", "La page Pronote est illisible.") }
         attributes = try ProtocolJSON.parseStart(html)
-        root = url.deletingLastPathComponent()
+        root = PronoteURL.root(url)
         compress = ProtocolJSON.bool(attributes["CoA"])
         encrypt = ProtocolJSON.bool(attributes["CrA"])
 
@@ -280,9 +281,8 @@ actor PronoteClient: PronoteSessionClient {
         guard session == sessionID, NotebookRules.isDownloadableId(attachmentId) else {
             throw PronoteFailure.invalid("download", NotebookRules.downloadUnavailable)
         }
-        let rootText = root.absoluteString.hasSuffix("/") ? String(root.absoluteString.dropLast()) : root.absoluteString
         let encrypted = try NotebookRules.encryptedId(attachmentId, key: key, iv: iv)
-        guard let url = URL(string: NotebookRules.downloadURL(root: rootText, encryptedId: encrypted, name: fileName, session: ProtocolJSON.integer(attributes["h"]))) else {
+        guard let url = URL(string: NotebookRules.downloadURL(root: root, encryptedId: encrypted, name: fileName, session: ProtocolJSON.integer(attributes["h"]))) else {
             throw PronoteFailure.invalid("download", NotebookRules.downloadUnavailable)
         }
         let status: Int
@@ -297,7 +297,13 @@ actor PronoteClient: PronoteSessionClient {
             throw PronoteFailure.invalid("download-network", "Pronote est injoignable. Vérifie ta connexion internet, puis réessaie.")
         }
         switch status {
-        case 200: return
+        case 200:
+            // Même contrôle que le transport, pour tout transport : une page HTML n'est jamais gardée comme document.
+            if !NotebookRules.isHTMLName(fileName), NotebookRules.looksLikeHTML(NotebookRules.head(of: destination)) {
+                try? FileManager.default.removeItem(at: destination)
+                throw PronoteFailure.invalid(NotebookRules.notDocumentCode, NotebookRules.downloadNotDocument)
+            }
+            return
         case 413: throw PronoteFailure.invalid("download-size", NotebookRules.downloadTooLarge)
         // Statut non 2xx : la session est peut-être perdue (reconnexion par jeton puis un nouvel essai, côté session).
         default: throw PronoteFailure.invalid("http-\(status)", NotebookRules.downloadUnavailable)
@@ -422,7 +428,9 @@ actor PronoteClient: PronoteSessionClient {
         let payload = try ProtocolCodec.requestDataSec(serialized, compress: compress, encrypt: encrypt, key: key, iv: iv)
         let number = try ProtocolCodec.orderHex(order, key: key, iv: iv)
         let body: [String: Any] = ["session": ProtocolJSON.integer(attributes["h"]), "no": number, "id": function, "dataSec": payload]
-        let url = root.appendingPathComponent("appelfonction/\(ProtocolJSON.string(attributes["a"]))/\(ProtocolJSON.string(attributes["h"]))/\(number)")
+        guard let url = URL(string: "\(root)/appelfonction/\(ProtocolJSON.string(attributes["a"]))/\(ProtocolJSON.string(attributes["h"]))/\(number)") else {
+            throw PronoteFailure.invalid("url", "Adresse de connexion invalide.")
+        }
         let response = try await request(url: url, method: "POST", body: JSONSerialization.data(withJSONObject: body))
         order += 2
         guard let json = try? JSONSerialization.jsonObject(with: response) as? [String: Any] else {

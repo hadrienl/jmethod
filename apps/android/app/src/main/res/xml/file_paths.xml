@@ -2,4 +2,6 @@
 <!-- Pièces jointes du cahier de textes : cache privé, partagées en lecture seule et temporairement. -->
 <paths>
     <cache-path name="notebook" path="notebook/" />
+    <!-- Documents des cours (stockage privé non cache), partagés en lecture seule par « Ouvrir avec… ». -->
+    <files-path name="documents" path="documents/" />
 </paths>

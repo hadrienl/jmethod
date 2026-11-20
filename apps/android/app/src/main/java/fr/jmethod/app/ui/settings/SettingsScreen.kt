@@ -5,6 +5,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -121,6 +122,11 @@ fun SettingsScreen(
     pronote: PronoteUiState,
     syncInfo: PronoteSyncInfo?,
     contentPadding: PaddingValues,
+    /** « Créer les cours automatiquement » et proposition d’import des 14 derniers jours. */
+    autoCreate: Boolean = false,
+    importOffer: Int? = null,
+    onAutoCreateChange: (Boolean) -> Unit = {},
+    onImportOffer: (Boolean) -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -172,6 +178,7 @@ fun SettingsScreen(
         ) {
             ScreenHeader("Réglages")
             PronoteAccountSection(pronoteViewModel, pronote, syncInfo)
+            NotebookSection(autoCreate, onAutoCreateChange)
             Algorithm(draft, viewModel)
             Intervals(draft, viewModel)
             Colors(ui.subjects) { colorFor = it }
@@ -208,6 +215,7 @@ fun SettingsScreen(
             viewModel.setSubjectColor(id, color)
         }
     }
+    importOffer?.let { ImportOfferDialog(it, onImportOffer) }
     ui.pendingImport?.let { pending ->
         AlertDialog(
             onDismissRequest = viewModel::cancelImport,
@@ -440,4 +448,41 @@ private fun About() {
             style = MaterialTheme.typography.bodyMedium, color = JColors.Slate700,
         )
     }
+}
+
+/** Cahier de textes : création automatique des cours (désactivée par défaut). */
+@Composable
+private fun NotebookSection(autoCreate: Boolean, onChange: (Boolean) -> Unit) {
+    Section(
+        "Cahier de textes",
+        "Une séance publiée dans Pronote peut devenir un cours J-Method, avec ses documents. Rien n’est modifié dans Pronote.",
+    ) {
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                .toggleable(value = autoCreate, role = Role.Switch, onValueChange = onChange),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("Créer les cours automatiquement", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "À chaque lecture du cahier de textes, les séances du jour et des jours passés deviennent des cours, si leur matière est reconnue. Un cours supprimé n’est jamais recréé.",
+                    style = MaterialTheme.typography.bodySmall, color = JColors.Slate600,
+                )
+            }
+            Spacer(Modifier.width(JSpacing.m))
+            androidx.compose.material3.Switch(checked = autoCreate, onCheckedChange = null)
+        }
+    }
+}
+
+@Composable
+internal fun ImportOfferDialog(count: Int, onAnswer: (Boolean) -> Unit) {
+    AlertDialog(
+        onDismissRequest = { onAnswer(false) },
+        title = { Text("Importer les séances récentes ?") },
+        text = { Text(if (count > 1) "Importer aussi les $count séances des 14 derniers jours ?" else "Importer aussi la séance des 14 derniers jours ?") },
+        confirmButton = { TextButton(onClick = { onAnswer(true) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Importer") } },
+        dismissButton = { TextButton(onClick = { onAnswer(false) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Seulement à partir d’aujourd’hui") } },
+        containerColor = Color.White,
+    )
 }

@@ -9,6 +9,7 @@ struct SignInView: View {
     @State private var password = PasswordFieldState()
     @State private var remember = true
     @State private var showPassword = false
+    @State private var showHelp = false
     @FocusState private var focus: Field?
 
     private enum Field { case school, username, password }
@@ -25,7 +26,12 @@ struct SignInView: View {
                     BrandMark(size: 56)
                         .padding(.bottom, Spacing.xs)
                     Text("Connexion").font(.largeTitle.weight(.bold)).foregroundStyle(Theme.text).accessibilityAddTraits(.isHeader)
-                    Text("Connecte-toi avec ton compte Pronote.").foregroundStyle(Theme.textSecondary)
+                    Text("Utilise ton identifiant et ton mot de passe Pronote, pas ceux d’ÉduConnect.").foregroundStyle(Theme.textSecondary)
+                    Button("En savoir plus") { showHelp = true }
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(Theme.violet)
+                        .frame(minHeight: 44)
+                        .accessibilityHint("Où trouver le code de l’établissement et quels identifiants utiliser")
                 }
 
                 VStack(alignment: .leading, spacing: Spacing.m) {
@@ -124,6 +130,7 @@ struct SignInView: View {
         }
         .scrollDismissesKeyboard(.interactively)
         .background(Theme.background)
+        .sheet(isPresented: $showHelp) { SignInHelpSheet() }
         .onAppear(perform: prefill)
         .onChange(of: pronote.savedLogin) { _, _ in prefill() }
         .onChange(of: pronote.errorMessage) { _, message in

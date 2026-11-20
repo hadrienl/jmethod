@@ -57,6 +57,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import fr.jmethod.app.domain.CourseDetailModel
+import fr.jmethod.app.domain.RevisionSession
+import fr.jmethod.app.pronote.NotebookAttachment
+import fr.jmethod.app.ui.documents.DocumentViewerScreen
+import fr.jmethod.app.ui.documents.SheetDocument
+import fr.jmethod.app.ui.today.CollapsibleDescription
+import fr.jmethod.app.ui.today.NearbyDocumentsSection
+import fr.jmethod.app.ui.today.NoDocumentLine
+import fr.jmethod.app.ui.today.CourseDocumentsList
+import fr.jmethod.app.ui.today.NotebookPartSection
+import fr.jmethod.app.ui.today.SheetSectionTitle
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.ModalBottomSheetProperties
+import androidx.compose.foundation.clickable
+import fr.jmethod.app.model.CourseDocument
 import fr.jmethod.app.ui.theme.JColors
 import fr.jmethod.app.ui.theme.JIcons
 import fr.jmethod.app.ui.theme.JShapes
@@ -78,24 +93,50 @@ fun CourseDetailSheet(
     onDelete: () -> Unit,
     /** `null` si la matière du cours a disparu. */
     onOpenNotebook: (() -> Unit)? = null,
+    /** Documents du cours et présence du fichier sur ce téléphone. */
+    documents: List<Pair<CourseDocument, Boolean>> = emptyList(),
+    onOpenDocument: (CourseDocument) -> Unit = {},
+    onRedownload: ((CourseDocument) -> Unit)? = null,
+    /** Contenu de la séance d’origine dans le cahier de textes (section 8.4) ; `null` pour un cours saisi. */
+    notebookPart: RevisionSession.NotebookPart? = null,
+    notebookLoading: Boolean = false,
+    downloadingId: String? = null,
+    onDownloadAttachment: (NotebookAttachment) -> Unit = {},
+    onLink: (String) -> Unit = {},
+    /** Document ouvert dans la feuille. */
+    viewer: SheetDocument? = null,
+    onCloseViewer: () -> Unit = {},
+    /** Documents proches de la même matière (section 8.5). */
+    nearby: List<RevisionSession.Nearby> = emptyList(),
+    onOpenNearby: (RevisionSession.Nearby) -> Unit = {},
+    onAttachNearby: (RevisionSession.Nearby) -> Unit = {},
 ) {
     var confirmDelete by rememberSaveable(model.course.id) { mutableStateOf(false) }
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = Color.White) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = Color.White,
+        sheetGesturesEnabled = viewer == null,
+        properties = ModalBottomSheetProperties(shouldDismissOnBackPress = viewer == null),
+    ) {
+        BackHandler(enabled = viewer != null, onBack = onCloseViewer)
+        if (viewer != null) {
+            Box(Modifier.fillMaxSize()) { DocumentViewerScreen(viewer.document, viewer.file, onClose = onCloseViewer, embedded = true) }
+            return@ModalBottomSheet
+        }
         Column(
             Modifier.verticalScroll(rememberScrollState()).padding(horizontal = JSpacing.xl).padding(bottom = JSpacing.xl).navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(JSpacing.l),
         ) {
             Header(model, onDismiss)
-            model.notes?.let { notes ->
-                Column(
-                    Modifier.fillMaxWidth().clip(JShapes.inner).background(JColors.Slate50)
-                        .border(1.dp, JColors.Slate200, JShapes.inner).padding(JSpacing.l),
-                ) {
-                    Text("Notes de cours", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = JColors.Slate600)
-                    Spacer(Modifier.height(JSpacing.xs))
-                    Text(notes, style = MaterialTheme.typography.bodyMedium, color = JColors.Slate700)
-                }
+            // Le cours : notes puis documents (mêmes accès que la fiche de séance).
+            Column(verticalArrangement = Arrangement.spacedBy(JSpacing.s)) {
+                SheetSectionTitle("Le cours")
+                model.notes?.let { CollapsibleDescription(it) }
+                if (documents.isNotEmpty()) CourseDocumentsList(documents, onOpenDocument, onRedownload) else NoDocumentLine(model.course.source != null)
             }
+            NearbyDocumentsSection(model.subjectLabel, nearby, downloadingId, onOpenNearby, onAttachNearby)
+            notebookPart?.let { NotebookPartSection(it, notebookLoading, downloadingId, onDownloadAttachment, onLink) }
             Column(
                 Modifier.fillMaxWidth().clip(JShapes.inner).background(JColors.Slate50)
                     .border(1.dp, JColors.Slate200, JShapes.inner).padding(JSpacing.l)
@@ -127,7 +168,8 @@ fun CourseDetailSheet(
                 modifier = Modifier.semantics { heading() },
             )
             // Une seule action mise en avant : la prochaine séance à valider ; les suivantes restent discrètes.
-            val nextToValidate = model.timeline.indexOfFirst { it.canValidate }
+            val nextId = RevisionSession.nextOfCourse(model.course.id, model.timeline.map { it.revision })?.id
+            val nextToValidate = model.timeline.indexOfFirst { it.revisionId == nextId }
             Column(verticalArrangement = Arrangement.spacedBy(JSpacing.s)) {
                 model.timeline.forEachIndexed { index, row -> TimelineRow(row, highlighted = index == nextToValidate, onValidate) }
             }

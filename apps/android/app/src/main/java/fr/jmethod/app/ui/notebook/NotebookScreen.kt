@@ -85,10 +85,15 @@ import java.util.Locale
 private fun dayLabel(date: LocalDate) = FrenchDates.weekdayDayMonth(date).sentenceCase()
 
 /** Ouvre un lien `http(s)` déjà validé dans le navigateur externe, jamais dans la WebView Pronote. */
-private fun openLink(context: Context, url: String) {
+internal fun openLink(context: Context, url: String) {
     try {
-        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addCategory(Intent.CATEGORY_BROWSABLE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-    } catch (_: ActivityNotFoundException) {
+        // Navigateur intégré (Custom Tabs), sans cookies ni WebView de l’app.
+        androidx.browser.customtabs.CustomTabsIntent.Builder().setShowTitle(true).build().launchUrl(context, Uri.parse(url))
+    } catch (_: Exception) {
+        try {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addCategory(Intent.CATEGORY_BROWSABLE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        } catch (_: ActivityNotFoundException) {
+        }
     }
 }
 
@@ -96,7 +101,7 @@ private fun openLink(context: Context, url: String) {
  * Ouvre une pièce jointe téléchargée par une URI `content://` en lecture seule. Un document actif
  * (HTML, SVG) est présenté comme texte : jamais exécuté.
  */
-private fun openFile(context: Context, file: File): Boolean {
+internal fun openFile(context: Context, file: File): Boolean {
     val uri = FileProvider.getUriForFile(context, "fr.jmethod.app.files", file)
     val extension = file.extension.lowercase(Locale.ROOT)
     val active = extension in setOf("html", "htm", "xhtml", "svg", "xml", "js", "mht", "mhtml")
@@ -119,19 +124,10 @@ private fun openFile(context: Context, file: File): Boolean {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NotebookScreen(ui: NotebookUiState, viewModel: NotebookViewModel, modifier: Modifier = Modifier) {
+fun NotebookScreen(ui: NotebookUiState, viewModel: NotebookViewModel, snackbar: SnackbarHostState, modifier: Modifier = Modifier) {
     val state = ui.state
     val context = LocalContext.current
-    val snackbar = remember { SnackbarHostState() }
     BackHandler(onBack = viewModel::close)
-    LaunchedEffect(viewModel) {
-        viewModel.eventFlow.collect { event ->
-            when (event) {
-                is NotebookEvent.Open -> if (!openFile(context, event.file)) snackbar.showSnackbar("Aucune app de ce téléphone ne sait ouvrir ce document.")
-                is NotebookEvent.Message -> snackbar.showSnackbar(event.text)
-            }
-        }
-    }
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = JColors.Slate50,
@@ -168,7 +164,7 @@ fun NotebookScreen(ui: NotebookUiState, viewModel: NotebookViewModel, modifier: 
                     Icon(Icons.Filled.Lock, contentDescription = null, tint = JColors.Slate500, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(JSpacing.s))
                     Text(
-                        "Lecture seule : rien n’est modifié dans Pronote et aucun cours n’est créé automatiquement.",
+                        if (ui.autoCreate) "Lecture seule : rien n’est modifié dans Pronote. Les séances deviennent des cours automatiquement (Réglages)." else "Lecture seule : rien n’est modifié dans Pronote. « Créer un cours » transforme une séance en cours J-Method.",
                         style = MaterialTheme.typography.bodySmall, color = JColors.Slate600,
                     )
                 }
@@ -244,7 +240,12 @@ fun NotebookScreen(ui: NotebookUiState, viewModel: NotebookViewModel, modifier: 
                 }
                 if (state.tab == NotebookTab.CONTENTS) {
                     if (sessions.isEmpty()) item(key = "no-session") { Empty("Aucun contenu de cours publié sur cette période.") }
-                    items(sessions, key = { "s-" + it.id }) { SessionCard(it, state.downloadingId, viewModel::download) { url -> openLink(context, url) } }
+                    items(sessions, key = { "s-" + it.id }) { session ->
+                        SessionCard(session, state.downloadingId, viewModel::download, { url -> openLink(context, url) }) {
+                            CourseAction(ui.importStates[session.key], state.preparingSessionId == session.id, state.preparingSessionId != null,
+                                onCreate = { viewModel.prepareCourse(session) }, onView = viewModel::viewCourse)
+                        }
+                    }
                 } else {
                     if (homework.isEmpty()) item(key = "no-homework") { Empty("Aucun devoir publié sur cette période.") }
                     items(homework, key = { "h-" + it.id }) { HomeworkCard(it, state.downloadingId, viewModel::download) { url -> openLink(context, url) } }
@@ -269,18 +270,58 @@ private fun Card(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun SessionCard(session: SessionEntry, downloading: String?, onDownload: (NotebookAttachment) -> Unit, onLink: (String) -> Unit) {
+private fun SessionCard(
+    session: SessionEntry,
+    downloading: String?,
+    onDownload: (NotebookAttachment) -> Unit,
+    onLink: (String) -> Unit,
+    action: @Composable () -> Unit,
+) {
     Card {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.semantics(mergeDescendants = true) { heading() }) {
             Text(session.subject, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
             Text(dayLabel(session.date), style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
         }
-        session.contents.forEach { content -> ContentBlock(content, downloading, onDownload, onLink) }
+        session.contents.forEach { content -> NotebookContentBlock(content, downloading, onDownload, onLink) }
+        action()
+    }
+}
+
+/** « Créer un cours » (jamais importée ou cours supprimé) ou « Voir le cours » (cours créé). */
+@Composable
+private fun CourseAction(
+    importState: fr.jmethod.app.domain.NotebookCourses.ImportState?,
+    preparing: Boolean,
+    busy: Boolean,
+    onCreate: () -> Unit,
+    onView: (String) -> Unit,
+) {
+    when (importState) {
+        is fr.jmethod.app.domain.NotebookCourses.ImportState.View -> Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = JColors.Emerald700, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(6.dp))
+            Text("Cours créé", style = MaterialTheme.typography.bodySmall, color = JColors.Emerald800, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            OutlinedButton(onClick = { onView(importState.courseId) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Voir le cours") }
+        }
+        else -> Button(
+            onClick = onCreate,
+            enabled = !busy,
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+        ) {
+            if (preparing) {
+                CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Color.White)
+                Spacer(Modifier.width(8.dp))
+                Text("Préparation du cours…")
+            } else {
+                Text("Créer un cours")
+            }
+        }
     }
 }
 
 @Composable
-private fun ContentBlock(content: NotebookContent, downloading: String?, onDownload: (NotebookAttachment) -> Unit, onLink: (String) -> Unit) {
+internal fun NotebookContentBlock(content: NotebookContent, downloading: String?, onDownload: (NotebookAttachment) -> Unit, onLink: (String) -> Unit) {
     Column(Modifier.padding(top = JSpacing.xs), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         if (content.category.isNotEmpty()) Text(content.category, style = MaterialTheme.typography.labelMedium, color = JColors.Violet800)
         Text(content.title.ifEmpty { "Séance publiée sans titre" }, style = MaterialTheme.typography.titleMedium)

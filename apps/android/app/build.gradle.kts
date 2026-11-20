@@ -68,6 +68,8 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.webkit)
+    // Liens du cahier de textes : Custom Tabs (navigateur intégré), jamais une WebView de l’app.
+    implementation(libs.androidx.browser)
     implementation(libs.androidx.work.runtime)
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)

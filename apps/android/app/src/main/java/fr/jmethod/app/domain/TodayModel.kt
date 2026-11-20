@@ -62,6 +62,8 @@ data class TodayModel(
         val done: Boolean,
         val doneLabel: String?,
         val canValidate: Boolean,
+        /** Le cours a des documents : petite icône sur la ligne (section 8.3). */
+        val hasDocuments: Boolean = false,
     )
 
     data class TomorrowEvent(
@@ -73,6 +75,8 @@ data class TodayModel(
         val trailing: String?,
         val teacher: String?,
         val canAddCourse: Boolean,
+        /** Cours déjà créé pour cette matière et ce jour : « Voir le cours » au lieu d’« Ajouter ce cours ». */
+        val courseId: String? = null,
     )
 
     companion object {
@@ -117,6 +121,7 @@ data class TodayModel(
                             done = done,
                             doneLabel = if (done) "Fait · ${revision.score?.toString() ?: "undefined"}/100" else null,
                             canValidate = !done,
+                            hasDocuments = RevisionSession.hasDocuments(course),
                         )
                     },
                 )
@@ -168,6 +173,7 @@ data class TodayModel(
                         trailing = if (event.isCancelled) "Annulé" else event.room,
                         teacher = event.teacher?.takeIf { it.isNotEmpty() },
                         canAddCourse = !event.isCancelled,
+                        courseId = RevisionSession.courseForSlot(event, courses, subjects)?.id,
                     )
                 },
             )

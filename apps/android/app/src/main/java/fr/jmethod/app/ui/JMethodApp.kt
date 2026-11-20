@@ -59,6 +59,15 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material3.ExtendedFloatingActionButton
 import fr.jmethod.app.domain.RevisionDetailModel
+import fr.jmethod.app.domain.RevisionSession
+import fr.jmethod.app.documents.CourseFiles
+import fr.jmethod.app.documents.DocType
+import fr.jmethod.app.model.CourseDocument
+import fr.jmethod.app.ui.documents.SheetDocument
+import fr.jmethod.app.ui.notebook.NotebookUiState
+import fr.jmethod.app.ui.today.SessionPage
+import fr.jmethod.app.ui.today.SessionSheet
+import fr.jmethod.app.ui.today.SessionSheetState
 import fr.jmethod.app.ui.courses.CourseDetailSheet
 import fr.jmethod.app.ui.courses.CourseFormScreen
 import fr.jmethod.app.ui.courses.CoursesEvent
@@ -115,6 +124,9 @@ import fr.jmethod.app.ui.pronote.OfflineBanner
 import fr.jmethod.app.ui.pronote.PronoteViewModel
 import fr.jmethod.app.ui.notebook.NotebookScreen
 import fr.jmethod.app.ui.notebook.NotebookViewModel
+import fr.jmethod.app.ui.notebook.NotebookEvent
+import fr.jmethod.app.ui.notebook.openFile
+import fr.jmethod.app.ui.notebook.openLink
 import fr.jmethod.app.ui.settings.SettingsEvent
 import fr.jmethod.app.ui.settings.SettingsScreen
 import fr.jmethod.app.ui.settings.SettingsViewModel
@@ -122,8 +134,6 @@ import fr.jmethod.app.ui.stats.StatsScreen
 import fr.jmethod.app.ui.stats.StatsViewModel
 import androidx.compose.ui.unit.dp
 import fr.jmethod.app.ui.theme.JColors
-import fr.jmethod.app.ui.today.RevisionDetailSheet
-import fr.jmethod.app.ui.today.ScoreSheet
 import fr.jmethod.app.ui.today.TodayEvent
 import fr.jmethod.app.ui.today.TodayScreen
 import fr.jmethod.app.ui.today.TodayViewModel
@@ -275,11 +285,11 @@ fun JMethodApp() {
     val todayViewModel: TodayViewModel = viewModel(factory = viewModelFactory { initializer { TodayViewModel(container.repository, container.clock) } })
     val pronoteViewModel: PronoteViewModel = viewModel(factory = viewModelFactory { initializer { PronoteViewModel(application, container) } })
     val planningViewModel: PlanningViewModel = viewModel(factory = viewModelFactory { initializer { PlanningViewModel(container.repository, container.clock) } })
-    val coursesViewModel: CoursesViewModel = viewModel(factory = viewModelFactory { initializer { CoursesViewModel(container.repository, container.clock) } })
+    val coursesViewModel: CoursesViewModel = viewModel(factory = viewModelFactory { initializer { CoursesViewModel(container.repository, container.clock, container.courseCreator, container.courseFiles) } })
     val statsViewModel: StatsViewModel = viewModel(factory = viewModelFactory { initializer { StatsViewModel(container.repository, container.clock) } })
     val settingsViewModel: SettingsViewModel = viewModel(factory = viewModelFactory { initializer { SettingsViewModel(container.repository, container.clock) } })
     val notebookViewModel: NotebookViewModel = viewModel(
-        factory = viewModelFactory { initializer { NotebookViewModel(pronoteViewModel.controller, container.repository, application.cacheDir) } },
+        factory = viewModelFactory { initializer { NotebookViewModel(pronoteViewModel.controller, container.repository, application.cacheDir, container.courseCreator, container.courseFiles, container.clock) } },
     )
 
     val today by todayViewModel.uiState.collectAsStateWithLifecycle()
@@ -291,6 +301,8 @@ fun JMethodApp() {
     val settings by settingsViewModel.uiState.collectAsStateWithLifecycle()
     val notebook by notebookViewModel.uiState.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableStateOf(Tab.TODAY) }
+    // Document ouvert dans la fiche de séance ou de cours (visionneuse poussée dans la feuille).
+    var sheetViewer by remember { mutableStateOf<SheetDocument?>(null) }
     val snackbar = remember { SnackbarHostState() }
     val celebration = remember { CelebrationState() }
 
@@ -309,6 +321,33 @@ fun JMethodApp() {
                 TodayEvent.Confetti -> celebration.confetti()
                 TodayEvent.Fireworks -> celebration.fireworks()
                 is TodayEvent.Toast -> toast(ToastVisuals(event.title, event.message, if (event.warning) ToastTone.WARNING else ToastTone.SUCCESS))
+            }
+        }
+    }
+    val appContext = LocalContext.current
+    LaunchedEffect(notebookViewModel) {
+        notebookViewModel.eventFlow.collect { event ->
+            when (event) {
+                is NotebookEvent.Open -> if (!openFile(appContext, event.file)) {
+                    snackbar.showSnackbar(ToastVisuals("Document", "Aucune app de ce téléphone ne sait ouvrir ce document.", ToastTone.WARNING))
+                }
+                // Pièce jointe demandée depuis une fiche : visionneuse dans la feuille si elle est encore ouverte.
+                is NotebookEvent.Preview -> if (today?.session != null || courses?.detail != null) {
+                    val preview = CourseDocument("notebook-preview", event.name, DocType.mimeOf(event.name, null), event.file.length(), "")
+                    sheetViewer = SheetDocument(preview, event.file)
+                } else if (!openFile(appContext, event.file)) {
+                    snackbar.showSnackbar(ToastVisuals("Document", "Aucune app de ce téléphone ne sait ouvrir ce document.", ToastTone.WARNING))
+                }
+                is NotebookEvent.Message -> {
+                    snackbar.currentSnackbarData?.dismiss()
+                    snackbar.showSnackbar(ToastVisuals("Cahier de textes", event.text, ToastTone.INFO))
+                }
+                is NotebookEvent.CreateCourse -> coursesViewModel.openFromNotebook(event.draft)
+                is NotebookEvent.ViewCourse -> {
+                    notebookViewModel.close()
+                    tab = Tab.COURSES
+                    coursesViewModel.openDetail(event.courseId)
+                }
             }
         }
     }
@@ -393,6 +432,15 @@ fun JMethodApp() {
                                     current, padding, today, planning, courses, stats, settings, pronote, syncInfo,
                                     todayViewModel, planningViewModel, coursesViewModel, settingsViewModel, pronoteViewModel, notebookViewModel,
                                     onSelectTab = { tab = it },
+                                    onReview = { revisionId ->
+                                        todayViewModel.openSession(revisionId)
+                                        val document = today?.document
+                                        val course = document?.revisions?.firstOrNull { it.id == revisionId }
+                                            ?.let { r -> document.courses.firstOrNull { it.id == r.courseId } }
+                                        sheetViewer = RevisionSession.principalDocument(course)?.let { principal ->
+                                            container.courseFiles.fileOf(principal)?.takeIf { it.isFile }?.let { SheetDocument(principal, it) }
+                                        }
+                                    },
                                 )
                             }
 
@@ -402,29 +450,74 @@ fun JMethodApp() {
                                     .background(MaterialTheme.colorScheme.background),
                             )
 
-                            // Feuilles d’Aujourd’hui ouvertes depuis n’importe quel onglet (validation depuis la fiche d’un cours).
+                            // Fiches ouvertes depuis n’importe quel onglet, sans changer d’onglet (section 8).
+                            val openDocument: (CourseDocument) -> Unit = { document ->
+                                container.courseFiles.fileOf(document)?.takeIf { it.isFile }?.let { sheetViewer = SheetDocument(document, it) }
+                            }
                             today?.let { state ->
-                                val document = state.document
-                                state.scoringRevisionId?.let { id ->
-                                    val revision = document.revisions.firstOrNull { it.id == id }
-                                    val course = revision?.let { r -> document.courses.firstOrNull { it.id == r.courseId } }
-                                    if (revision != null && course != null) {
-                                        ScoreSheet(
-                                            revision, course, document.subjects.firstOrNull { it.id == course.subjectId }, document.settings,
-                                            onDismiss = todayViewModel::closeSheets,
-                                            onSubmit = { score -> todayViewModel.submitScore(revision.id, score, withConfetti = true) },
-                                        )
-                                    }
+                                state.session?.let { session ->
+                                    SessionSheetHost(
+                                        session, state, notebook, pronote, container.courseFiles, sheetViewer,
+                                        todayViewModel, notebookViewModel, coursesViewModel,
+                                        onOpenDocument = openDocument,
+                                        onCloseViewer = { sheetViewer = null },
+                                        onBackToToday = {
+                                            sheetViewer = null
+                                            todayViewModel.closeSheets()
+                                            tab = Tab.TODAY
+                                        },
+                                        onDismiss = {
+                                            sheetViewer = null
+                                            todayViewModel.closeSheets()
+                                        },
+                                    )
                                 }
-                                state.detailRevisionId?.let { id ->
-                                    RevisionDetailModel.build(id, document.courses, document.revisions, document.subjects)?.let { detail ->
-                                        RevisionDetailSheet(
-                                            detail,
-                                            onDismiss = todayViewModel::closeSheets,
-                                            onValidate = { score -> todayViewModel.submitScore(detail.revision.id, score, withConfetti = false) },
-                                        )
-                                    }
+                            }
+                            courses?.detail?.let { detail ->
+                                val course = detail.course
+                                LaunchedEffect(course.id, course.source != null) {
+                                    if (pronote.access == AccessPhase.CONNECTED) notebookViewModel.ensureRead() // cahier (8.1) et documents proches (8.5)
                                 }
+                                val documents = remember(course.documents) { course.documents.orEmpty().map { it to container.courseFiles.exists(it) } }
+                                CourseDetailSheet(
+                                    detail,
+                                    onDismiss = {
+                                        sheetViewer = null
+                                        coursesViewModel.closeDetail()
+                                    },
+                                    // « Valider » ouvre la fiche de la séance (section 8.4).
+                                    onValidate = { revisionId ->
+                                        sheetViewer = null
+                                        coursesViewModel.closeDetail()
+                                        todayViewModel.openSession(revisionId)
+                                    },
+                                    onDelete = { coursesViewModel.delete(course.id) },
+                                    onOpenNotebook = detail.subject?.let { subject ->
+                                        {
+                                            coursesViewModel.closeDetail()
+                                            notebookViewModel.open(subject.id)
+                                        }
+                                    },
+                                    documents = documents,
+                                    onOpenDocument = openDocument,
+                                    onRedownload = if (course.source != null) {
+                                        { document -> notebookViewModel.redownload(course, document) }
+                                    } else {
+                                        null
+                                    },
+                                    notebookPart = RevisionSession.notebookPart(course, notebook?.state?.snapshot),
+                                    notebookLoading = notebook?.state?.loading == true,
+                                    downloadingId = notebook?.state?.downloadingId,
+                                    onDownloadAttachment = { notebookViewModel.download(it, inApp = true) },
+                                    onLink = { openLink(appContext, it) },
+                                    viewer = sheetViewer,
+                                    onCloseViewer = { sheetViewer = null },
+                                    nearby = today?.document?.let { doc ->
+                                        RevisionSession.nearbyDocuments(course, doc.courses, notebook?.state?.snapshot, doc.subjects, container.courseFiles::exists)
+                                    }.orEmpty(),
+                                    onOpenNearby = { item -> openNearby(item, openDocument, notebookViewModel) },
+                                    onAttachNearby = { item -> attachNearby(course.id, item, coursesViewModel, notebookViewModel) },
+                                )
                             }
                         }
                     }
@@ -449,7 +542,7 @@ fun JMethodApp() {
             exit = slideOutHorizontally(motion(200)) { it / 5 } + fadeOut(motion(160)),
             modifier = Modifier.zIndex(1f),
         ) {
-            notebook?.let { NotebookScreen(it, notebookViewModel) }
+            notebook?.let { NotebookScreen(it, notebookViewModel, snackbar) }
         }
         CelebrationOverlay(celebration, Modifier.zIndex(3f))
     }
@@ -474,6 +567,7 @@ private fun TabContent(
     pronoteViewModel: PronoteViewModel,
     notebookViewModel: NotebookViewModel,
     onSelectTab: (Tab) -> Unit,
+    onReview: (String) -> Unit,
 ) {
     when (tab) {
         Tab.TODAY -> {
@@ -483,8 +577,10 @@ private fun TabContent(
                 TodayScreen(
                     today, padding,
                     onScore = todayViewModel::openScore,
-                    onDetail = todayViewModel::openDetail,
+                    onDetail = { todayViewModel.openSession(it) },
                     onAddCourse = coursesViewModel::openCreateFrom,
+                    onReview = onReview,
+                    onViewCourse = coursesViewModel::openDetail,
                 )
             }
         }
@@ -496,17 +592,8 @@ private fun TabContent(
                     planning, planningViewModel, padding,
                     onAddCourseFrom = coursesViewModel::openCreateFrom,
                     onCreateCourse = { coursesViewModel.openCreate() },
+                    onOpenRevision = { todayViewModel.openSession(it) },
                 )
-                planning.detail?.let { detail ->
-                    RevisionDetailSheet(
-                        detail,
-                        onDismiss = planningViewModel::closeDetail,
-                        onValidate = { score ->
-                            planningViewModel.closeDetail()
-                            todayViewModel.submitScore(detail.revision.id, score, withConfetti = false)
-                        },
-                    )
-                }
             }
         }
         Tab.COURSES -> {
@@ -518,27 +605,102 @@ private fun TabContent(
                     onShowPlanning = { onSelectTab(Tab.PLANNING) },
                     onOpenNotebook = { notebookViewModel.open() },
                 )
-                courses.detail?.let { detail ->
-                    CourseDetailSheet(
-                        detail,
-                        onDismiss = coursesViewModel::closeDetail,
-                        // Comme le web : la fiche se ferme et l’autoévaluation s’ouvre.
-                        onValidate = { revisionId ->
-                            coursesViewModel.closeDetail()
-                            todayViewModel.openScore(revisionId)
-                        },
-                        onDelete = { coursesViewModel.delete(detail.course.id) },
-                        onOpenNotebook = detail.subject?.let { subject ->
-                            {
-                                coursesViewModel.closeDetail()
-                                notebookViewModel.open(subject.id)
-                            }
-                        },
-                    )
-                }
             }
         }
         Tab.STATS -> stats?.let { StatsScreen(it, padding) } ?: Loading()
-        Tab.SETTINGS -> settings?.let { SettingsScreen(it, settingsViewModel, pronoteViewModel, pronote, syncInfo, padding) } ?: Loading()
+        Tab.SETTINGS -> settings?.let {
+            val notebookState = notebookViewModel.uiState.collectAsStateWithLifecycle().value
+            SettingsScreen(
+                it, settingsViewModel, pronoteViewModel, pronote, syncInfo, padding,
+                autoCreate = notebookState?.autoCreate == true,
+                importOffer = notebookState?.state?.importOffer,
+                onAutoCreateChange = notebookViewModel::setAutoCreate,
+                onImportOffer = notebookViewModel::answerImportOffer,
+            )
+        } ?: Loading()
+    }
+}
+
+/** Fiche de séance (section 8) : données du cours, du cahier de textes et de l’enchaînement. */
+@Composable
+private fun SessionSheetHost(
+    session: SessionSheetState,
+    state: TodayUiState,
+    notebook: NotebookUiState?,
+    pronote: PronoteUiState,
+    courseFiles: CourseFiles,
+    viewer: SheetDocument?,
+    todayViewModel: TodayViewModel,
+    notebookViewModel: NotebookViewModel,
+    coursesViewModel: CoursesViewModel,
+    onOpenDocument: (CourseDocument) -> Unit,
+    onCloseViewer: () -> Unit,
+    onBackToToday: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val context = LocalContext.current
+    val document = state.document
+    val model = RevisionDetailModel.build(session.revisionId, document.courses, document.revisions, document.subjects)
+    if (model == null) {
+        // Séance ou cours disparu (suppression, restauration) : la fiche se ferme.
+        LaunchedEffect(session.revisionId) { onDismiss() }
+        return
+    }
+    val course = model.course
+    LaunchedEffect(course.id, course.source != null) {
+        if (pronote.access == AccessPhase.CONNECTED) notebookViewModel.ensureRead() // cahier (8.1) et documents proches (8.5)
+    }
+    val documents = remember(course.documents) { course.documents.orEmpty().map { it to courseFiles.exists(it) } }
+    val page = session.page
+    val next = (page as? SessionPage.Result)?.let { result -> document.revisions.firstOrNull { it.id == result.nextRevisionId } }
+    val remaining = state.model.due.size
+    SessionSheet(
+        state = session,
+        model = model,
+        settings = document.settings,
+        today = state.model.today,
+        documents = documents,
+        notebookPart = RevisionSession.notebookPart(course, notebook?.state?.snapshot),
+        notebookLoading = notebook?.state?.loading == true,
+        downloadingId = notebook?.state?.downloadingId,
+        nextLabel = next?.let { RevisionSession.nextLabel(it, document.courses, document.subjects) },
+        remainingLabel = if (remaining > 0) "Encore $remaining séance${if (remaining > 1) "s" else ""} au programme ce soir." else null,
+        viewer = viewer,
+        nearby = RevisionSession.nearbyDocuments(course, document.courses, notebook?.state?.snapshot, document.subjects, courseFiles::exists),
+        onOpenNearby = { item -> openNearby(item, onOpenDocument, notebookViewModel) },
+        onAttachNearby = { item -> attachNearby(course.id, item, coursesViewModel, notebookViewModel) },
+        onOpenDocument = onOpenDocument,
+        onCloseViewer = onCloseViewer,
+        onRedownload = if (course.source != null) {
+            { doc -> notebookViewModel.redownload(course, doc) }
+        } else {
+            null
+        },
+        onDownloadAttachment = { notebookViewModel.download(it, inApp = true) },
+        onLink = { openLink(context, it) },
+        onPage = todayViewModel::showPage,
+        onSubmit = { score -> todayViewModel.submitScore(session.revisionId, score) },
+        onNext = { id ->
+            onCloseViewer()
+            todayViewModel.openSession(id)
+        },
+        onBackToToday = onBackToToday,
+        onDismiss = onDismiss,
+    )
+}
+
+/** Document proche : ouvert dans la feuille (téléchargé au besoin depuis le cahier). */
+private fun openNearby(item: RevisionSession.Nearby, onOpenDocument: (CourseDocument) -> Unit, notebookViewModel: NotebookViewModel) {
+    when (item) {
+        is RevisionSession.Nearby.FromCourse -> onOpenDocument(item.document)
+        is RevisionSession.Nearby.FromNotebook -> notebookViewModel.download(item.attachment, inApp = true)
+    }
+}
+
+/** « Joindre à ce cours » : copie du document, l’autre cours n’est pas modifié. */
+private fun attachNearby(courseId: String, item: RevisionSession.Nearby, coursesViewModel: CoursesViewModel, notebookViewModel: NotebookViewModel) {
+    when (item) {
+        is RevisionSession.Nearby.FromCourse -> coursesViewModel.attachFromCourse(courseId, item.document)
+        is RevisionSession.Nearby.FromNotebook -> notebookViewModel.attachToCourse(courseId, item.sessionKey, item.attachment)
     }
 }

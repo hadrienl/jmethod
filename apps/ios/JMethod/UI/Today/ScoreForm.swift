@@ -1,33 +1,26 @@
 import SwiftUI
 
-/// Autoévaluation 0–100 (`ScoreModal.tsx`) avec aperçu de la replanification.
-struct ScoreSheet: View {
+/// Autoévaluation 0–100 (`ScoreModal.tsx`) avec aperçu de la replanification, poussée dans la fiche de séance (§8.1, point 5).
+/// La validation est confiée à la fiche, qui enchaîne sur la séance suivante (§8.2).
+struct ScoreForm: View {
     let app: AppModel
     let revisionId: String
-    @Environment(\.dismiss) private var dismiss
+    let onValidate: (Int) -> Void
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var score = Double(Constants.initialScore)
+    @State private var submitted = false
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if let revision = app.document.revisions.first(where: { $0.id == revisionId }),
-                   let course = app.course(id: revision.courseId) {
-                    content(revision: revision, course: course, subject: app.subject(id: course.subjectId))
-                } else {
-                    ContentUnavailableView("Séance introuvable", systemImage: "questionmark.circle", description: Text("Cette séance n’existe plus."))
-                }
+        Group {
+            if let revision = app.document.revisions.first(where: { $0.id == revisionId }),
+               let course = app.course(id: revision.courseId) {
+                content(revision: revision, course: course, subject: app.subject(id: course.subjectId))
+            } else {
+                ContentUnavailableView("Séance introuvable", systemImage: "questionmark.circle", description: Text("Cette séance n’existe plus."))
             }
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Annuler") { dismiss() }.accessibilityLabel("Fermer l’autoévaluation")
-                }
-            }
-            .navigationTitle("Faire le point")
-            .navigationBarTitleDisplayMode(.inline)
         }
-        .presentationDetents([.large])
-        .presentationDragIndicator(.visible)
+        .navigationTitle("Faire le point")
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     private func content(revision: Revision, course: Course, subject: Subject?) -> some View {
@@ -116,12 +109,15 @@ struct ScoreSheet: View {
                 .accessibilityElement(children: .combine)
 
                 Button {
-                    app.validate(revisionId: revision.id, score: value)
-                    dismiss()
+                    // Une seule validation, même sur un double toucher.
+                    guard !submitted else { return }
+                    submitted = true
+                    onValidate(value)
                 } label: {
                     Label("Valider la révision", systemImage: "checkmark")
                 }
                 .buttonStyle(PrimaryButtonStyle())
+                .disabled(submitted || revision.status == .completed)
             }
             .padding(.horizontal, Spacing.screen)
             .padding(.top, Spacing.xs)

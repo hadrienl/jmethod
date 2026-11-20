@@ -7,6 +7,7 @@ import UniformTypeIdentifiers
 struct SettingsView: View {
     let app: AppModel
     let pronote: PronoteSession
+    let importer: NotebookCourseImporter
 
     /// Modifications non enregistrées de l'algorithme et des paliers.
     struct Draft: Equatable {
@@ -35,7 +36,9 @@ struct SettingsView: View {
 
     private var current: Draft {
         // Un brouillon périmé (réglages changés ailleurs, restauration) repart des réglages enregistrés.
-        if let draft, draft.base == app.document.settings { return draft }
+        let saved = app.document.settings
+        if let draft, draft.base.sensitivity == saved.sensitivity, draft.base.emergencyThreshold == saved.emergencyThreshold,
+           draft.base.intervals == saved.intervals { return draft }
         return Draft(app.document.settings)
     }
 
@@ -50,6 +53,7 @@ struct SettingsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.m) {
                     PronoteAccountSection(app: app, pronote: pronote)
+                    notebookCourses
                     algorithm
                     intervals
                     colors
@@ -84,6 +88,16 @@ struct SettingsView: View {
         .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in
             handleImport(result)
         }
+        .confirmationDialog(
+            "Importer aussi les \(importer.backfillOffer?.count ?? 0) séance\((importer.backfillOffer?.count ?? 0) > 1 ? "s" : "") des 14 derniers jours ?",
+            isPresented: Binding(get: { importer.backfillOffer != nil }, set: { if !$0 { importer.answerBackfill(importOlder: false) } }),
+            titleVisibility: .visible
+        ) {
+            Button("Importer") { importer.answerBackfill(importOlder: true) }
+            Button("Seulement à partir d’aujourd’hui", role: .cancel) { importer.answerBackfill(importOlder: false) }
+        } message: {
+            Text("Un cours est créé pour chaque séance publiée dans le cahier de textes, avec ses documents.")
+        }
         .alert("Remplacer tes données ?", isPresented: Binding(get: { pendingImport != nil }, set: { if !$0 { pendingImport = nil } })) {
             Button("Remplacer mes données", role: .destructive) {
                 if let accepted = pendingImport { app.restore(accepted) }
@@ -97,6 +111,36 @@ struct SettingsView: View {
     }
 
     // MARK: Sections
+
+    /// « Cahier de textes » : création automatique des cours (désactivée par défaut).
+    private var notebookCourses: some View {
+        section("Cahier de textes", subtitle: "Chaque séance publiée dans Pronote peut devenir un cours, avec ses documents.") {
+            Toggle(isOn: Binding(
+                get: { app.document.settings.autoCreatesCourses },
+                set: { enabled in
+                    if enabled { Task { await importer.activate() } } else { importer.deactivate() }
+                }
+            )) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Créer les cours automatiquement").font(.subheadline.weight(.semibold))
+                    Text(app.document.settings.autoCreatesCourses
+                         ? "Après chaque synchronisation, les nouvelles séances de tes matières deviennent des cours. Un cours supprimé n’est jamais recréé."
+                         : "Désactivé : utilise « Créer un cours » sur une séance du cahier de textes.")
+                        .font(.footnote).foregroundStyle(Theme.textSecondary)
+                }
+            }
+            .tint(Theme.violet)
+            .frame(minHeight: 44)
+            .disabled(importer.running)
+            if importer.running {
+                HStack(spacing: Spacing.xs) {
+                    ProgressView()
+                    Text("Création des cours depuis le cahier de textes…").font(.footnote).foregroundStyle(Theme.textSecondary)
+                }
+                .accessibilityElement(children: .combine)
+            }
+        }
+    }
 
     private var algorithm: some View {
         let value = current
@@ -412,7 +456,8 @@ private struct PronoteAccountSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s) {
-            SectionHeader(title: "Pronote")
+            SectionHeader(title: "Compte Pronote")
+            progressPanel
             status
             if let children = pronote.account?.children, children.count > 1 {
                 Picker("Élève suivi", selection: Binding(
@@ -428,8 +473,10 @@ private struct PronoteAccountSection: View {
             if let sync = app.lastPronoteSync {
                 Text("Dernière mise à jour : \(sync.formatted(.dateTime.locale(Locale(identifier: "fr_FR")).weekday(.wide).day().month(.wide).hour().minute()))")
                     .font(.subheadline).foregroundStyle(Theme.textSecondary)
+                Text("\(app.document.pronoteEvents.count) cours sur les 14 prochains jours")
+                    .font(.subheadline).foregroundStyle(Theme.textSecondary)
             }
-            if let message = pronote.errorMessage, !pronote.isWorking {
+            if let message = pronote.errorMessage, !pronote.isWorking, pronote.access != .connected {
                 Label(message, systemImage: "exclamationmark.circle")
                     .font(.subheadline).foregroundStyle(Theme.danger)
                     .accessibilityLabel("Erreur : \(message)")
@@ -438,12 +485,17 @@ private struct PronoteAccountSection: View {
                 if pronote.access == .connected { pronote.synchronize() } else { pronote.resumeSavedConnection() }
             } label: {
                 HStack(spacing: 10) {
-                    if pronote.isWorking { ProgressView().tint(.white) }
-                    Text(pronote.isWorking ? pronote.phase.progressLabel : (pronote.access == .connected ? "Mettre à jour l’emploi du temps" : "Réessayer la connexion"))
+                    if pronote.access == .connected {
+                        Label("Actualiser", systemImage: "arrow.clockwise")
+                    } else {
+                        if pronote.isWorking { ProgressView().tint(.white) }
+                        Text(pronote.isWorking ? pronote.phase.progressLabel : "Réessayer la connexion")
+                    }
                 }
             }
             .buttonStyle(PrimaryButtonStyle())
             .disabled(pronote.isWorking)
+            .accessibilityHint(pronote.access == .connected ? "Relit ton emploi du temps des 14 prochains jours" : "")
             Button("Se déconnecter", role: .destructive) { confirmingDisconnect = true }
                 .buttonStyle(DestructiveTextButtonStyle())
         }
@@ -454,6 +506,31 @@ private struct PronoteAccountSection: View {
             Button("Annuler", role: .cancel) {}
         } message: {
             Text("« Se déconnecter » garde ton établissement, ton identifiant et ton mot de passe enregistrés sur cet iPhone pour te reconnecter plus vite. L’autre choix efface aussi ton identifiant et ton mot de passe. Dans les deux cas, ton emploi du temps importé et les documents du cahier de textes sont effacés ; tes cours et tes révisions restent enregistrés.")
+        }
+    }
+
+    /// Connecté : synchronisation en cours (barre de progression) ou interrompue, comme Android.
+    @ViewBuilder private var progressPanel: some View {
+        if pronote.access == .connected, pronote.isWorking || pronote.errorMessage != nil {
+            let failed = !pronote.isWorking
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                Text(failed ? "Synchronisation interrompue" : "Synchronisation")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(failed ? Theme.danger : Theme.violetDark)
+                Text(failed ? (pronote.errorMessage ?? "") : pronote.phase.progressLabel)
+                    .font(.subheadline).foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if !failed {
+                    ProgressView()
+                        .progressViewStyle(.linear)
+                        .tint(Theme.violet)
+                        .padding(.top, Spacing.xxs)
+                        .accessibilityLabel("Synchronisation en cours")
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .panel(padding: Spacing.m, fill: failed ? Theme.dangerSoft : Theme.violetSoft)
+            .accessibilityElement(children: .combine)
         }
     }
 

@@ -2,6 +2,7 @@ package fr.jmethod.app.ui.courses
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -236,6 +237,10 @@ fun CourseFormScreen(state: CoursesUiState, viewModel: CoursesViewModel, modifie
                 modifier = Modifier.fillMaxWidth(),
             )
 
+            if (form.notebook != null) {
+                NotebookDocuments(form, viewModel)
+            }
+
             Row(horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 TextButton(onClick = viewModel::closeCreate, modifier = Modifier.heightIn(min = 48.dp)) { Text("Annuler") }
                 Spacer(Modifier.width(JSpacing.m))
@@ -277,4 +282,39 @@ private fun SectionLabel(text: String) {
         color = JColors.Slate700,
         modifier = Modifier.padding(bottom = JSpacing.s).semantics { heading() },
     )
+}
+
+/** Création depuis le cahier de textes : message éventuel et documents joints (cochés par défaut). */
+@Composable
+private fun NotebookDocuments(form: CourseFormState, viewModel: CoursesViewModel) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        form.notice?.let { notice ->
+            Text(
+                notice,
+                style = MaterialTheme.typography.bodySmall,
+                color = JColors.Amber900,
+                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(JColors.Amber50).padding(12.dp),
+            )
+        }
+        Text("Documents joints", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = JColors.Slate700,
+            modifier = Modifier.semantics { heading() })
+        if (form.documents.isEmpty()) {
+            Text("Aucun document joint à cette séance.", style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
+        }
+        form.documents.forEachIndexed { index, document ->
+            Row(
+                Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(12.dp))
+                    .toggleable(value = document.selected, role = Role.Checkbox) { viewModel.toggleDocument(index) }
+                    .padding(horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                androidx.compose.material3.Checkbox(checked = document.selected, onCheckedChange = null)
+                Spacer(Modifier.width(8.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(document.name, style = MaterialTheme.typography.bodyMedium)
+                    document.extractedTitle?.let { Text("Titre lu : $it", style = MaterialTheme.typography.bodySmall, color = JColors.Slate600) }
+                }
+            }
+        }
+    }
 }

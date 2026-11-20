@@ -102,3 +102,11 @@ A desktop-less mobile session opened by token login expires after inactivity. Ab
 - Any `Erreur` on an established session, except 25 (too many attempts), means the session is lost: log in again by token once (fresh cookies, counters, key and IV), persist the rotated token, then replay the request once. A second failure is reported to the user.
 - Like pronotepy's session check, re-login by token before a request when the session has been idle for more than 10 minutes, instead of waiting for the error.
 - Error 25 stops every automatic attempt for at least one hour.
+
+## ENT in front of Pronote (observed 2026-11-18)
+
+When a school enables its ENT, the web pages `pronote/`, `eleve.html`, `mobile.eleve.html` and `parent.html` answer 302 to the ENT CAS, with `service=<page>?p=daCas`. The CAS then offers ÉduConnect (students and parents) or other identity providers.
+
+- `<page>?login=true` still serves the Pronote login form, so Pronote accounts keep working as long as the school leaves them active. The native form loads this page.
+- The mobile token login already uses `mobile.<page>?fd=1&bydlg=…&login=true`. It does not go through the CAS, so existing connections are not affected.
+- If a school disables Pronote accounts, `?login=true` refuses the credentials (`LOGIN_REJECTED`). The only way in is then the official ENT page shown in the WebView (CAS and ÉduConnect, typed by the user), followed by the usual QR flow on the trusted Pronote origin.

@@ -9,6 +9,7 @@ protocol PronoteTransport: Sendable {
     func request(url: URL, method: String, body: Data?, headers: [String: String]) async throws -> PronoteHTTPResponse
     /// `GET` d'une pièce jointe vers un fichier privé, avec les cookies de la session.
     /// - Returns: le statut HTTP, ou 413 si `maxBytes` est dépassé (le fichier partiel est alors effacé).
+    /// - Throws: `http-html` si un 200 renvoie une page HTML à la place d'un fichier non HTML (fichier effacé).
     func download(url: URL, headers: [String: String], maxBytes: Int, to destination: URL) async throws -> Int
 }
 
@@ -79,6 +80,14 @@ actor URLSessionPronoteTransport: PronoteTransport {
         guard let http = response as? HTTPURLResponse else { return 0 }
         guard http.statusCode == 200 else { return http.statusCode }
         if http.expectedContentLength > Int64(maxBytes) { return 413 }
+        // Le nom demandé est le dernier segment de l'URL : seul un `.html`/`.htm` peut légitimement être une page.
+        let expectsHTML = NotebookRules.isHTMLName(url.lastPathComponent)
+        let notDocument = PronoteFailure.invalid(NotebookRules.notDocumentCode, NotebookRules.downloadNotDocument)
+        let contentType = (http.value(forHTTPHeaderField: "Content-Type") ?? "").lowercased()
+        if !expectsHTML, contentType.hasPrefix("text/html") {
+            Self.diagnose(status: http.statusCode, contentType: contentType, bytes: 0, html: true)
+            throw notDocument
+        }
         let manager = FileManager.default
         try manager.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
         guard manager.createFile(atPath: destination.path, contents: nil, attributes: [.protectionKey: FileProtectionType.complete]) else {
@@ -87,10 +96,12 @@ actor URLSessionPronoteTransport: PronoteTransport {
         let handle = try FileHandle(forWritingTo: destination)
         var total = 0
         var buffer = Data()
+        var head = Data()
         buffer.reserveCapacity(64 * 1024)
         do {
             for try await byte in bytes {
                 buffer.append(byte)
+                if head.count < 512 { head.append(byte) }
                 total += 1
                 if total > maxBytes {
                     try? handle.close()
@@ -109,6 +120,22 @@ actor URLSessionPronoteTransport: PronoteTransport {
             try? manager.removeItem(at: destination)
             throw error
         }
+        // Pronote répond 200 avec sa page d'accueil quand l'adresse n'est pas celle d'un document : jamais conservée.
+        let html = !expectsHTML && NotebookRules.looksLikeHTML(head)
+        Self.diagnose(status: http.statusCode, contentType: contentType, bytes: total, html: html)
+        if html {
+            try? manager.removeItem(at: destination)
+            throw notDocument
+        }
         return 200
+    }
+
+    /// Diagnostic de développement seulement : statut, type MIME, taille et indicateur HTML. Jamais l'URL,
+    /// l'identifiant, le nom du fichier, les cookies ni le contenu.
+    private static func diagnose(status: Int, contentType: String, bytes: Int, html: Bool) {
+        #if DEBUG
+        let type = contentType.split(separator: ";").first.map { String($0).trimmingCharacters(in: .whitespaces) } ?? ""
+        print("[JMethod] FichiersExternes status=\(status) type=\(type.isEmpty ? "-" : type) bytes=\(bytes) html=\(html)")
+        #endif
     }
 }
