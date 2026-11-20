@@ -61,7 +61,7 @@ jobs:
           version=$(bash .github/desktop-version.sh)
           echo "DESKTOP_VERSION=$version" >> "$GITHUB_ENV"
         working-directory: .
-      - run: ./gradlew --console=plain :desktopApp:packageMsi -Pjmethod.desktopVersion="$DESKTOP_VERSION"
+      - run: ./gradlew --console=plain :desktopApp:packageMsi :desktopApp:createDistributable -Pjmethod.desktopVersion="$DESKTOP_VERSION"
       - uses: actions/upload-artifact@v4
         with:
           name: J-Method-msi

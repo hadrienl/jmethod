@@ -13,7 +13,10 @@ $ErrorActionPreference = "Stop"
 if (-not $IdentityName) { $IdentityName = "JMethod.Test" }
 if (-not $Publisher) { $Publisher = "CN=J-Method Test" }
 if (-not $PublisherDisplayName) { $PublisherDisplayName = "J-Method" }
-if (-not (Test-Path (Join-Path $AppDir "J-Method.exe"))) { throw "J-Method.exe introuvable dans $AppDir" }
+if (-not (Test-Path (Join-Path $AppDir "J-Method.exe"))) {
+  Get-ChildItem -Recurse -Depth 2 (Split-Path $AppDir) -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName
+  throw "J-Method.exe introuvable dans $AppDir"
+}
 
 $staging = Join-Path ([IO.Path]::GetTempPath()) "jmethod-msix"
 if (Test-Path $staging) { Remove-Item -Recurse -Force $staging }
