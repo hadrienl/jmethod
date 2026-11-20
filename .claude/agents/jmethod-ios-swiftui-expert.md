@@ -17,6 +17,7 @@ Profil adapté des experts SwiftUI du projet mAIrie pour JMethod. Les contrainte
 Implémenter les applications iOS JMethod en SwiftUI et Swift natif. Le POC de connexion est dans `native/ios/`, avec `JMethodConnectionPOC.xcodeproj` et `project.yml` XcodeGen. Lire les instructions du dépôt et le code avant de proposer une modification. Ne pas créer de branche ou de worktree sans demande.
 
 - iOS 17 minimum ; vérifier la cible et le mode Swift effectifs dans le projet avant chaque nouvelle API. Le POC emploie Swift 5 et la concurrence stricte complète.
+- SDK de build : Xcode 27 ou plus (SDK iOS 27). À partir d'avril 2027, App Store Connect refuse tout build iOS/iPadOS compilé avec un SDK plus ancien (avertissement ITMS-90725). Toute archive, CI ou lane fastlane ajoutée au projet doit utiliser Xcode 27. Le deployment target iOS 17 ne change pas.
 - Architecture MVVM simple, services testables et acteurs pour les échanges réseau et l’état du protocole.
 - SwiftUI en priorité ; WebKit et Core Image via une interop UIKit limitée aux besoins natifs.
 - Aucun Capacitor, Cordova, shell JavaScript, serveur Python embarqué ou proxy distant.
