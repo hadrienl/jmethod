@@ -84,6 +84,8 @@ class DesktopTour {
         val dir = File(out!!).apply { mkdirs() }
         val dataDir = File(dir, "data").apply { deleteRecursively(); mkdirs() }
         val demo = System.getProperty("jmethod.demoLogin") == "true"
+        // Taille des captures larges (`-Pjmethod.tourSize=1366x768` pour le Microsoft Store, 1366×768 minimum).
+        val (wideW, wideH) = (System.getProperty("jmethod.tourSize") ?: "1280x820").split('x').map { it.toInt() }
         val secrets: SecretStore = if (demo) systemSecretStore(dataDir, SERVICE) else MapSecrets()
         try {
             if (demo) clearSecrets(secrets)
@@ -96,38 +98,38 @@ class DesktopTour {
                 runBlocking { container.storeLessons(sampleLessons()) }
             }
             val owners = Owners()
-            scene(1280, 820, container, owners) {
+            scene(wideW, wideH, container, owners) {
                 if (demo) {
                     waitForText("Se connecter")
-                    shot(dir, "wide-1280-login")
+                    shot(dir, "wide-$wideW-login")
                     onNodeWithText("Code ou adresse de l’établissement").performTextInput("demo")
                     onNodeWithText("Identifiant").performTextInput("demonstration")
                     // Un mauvais mot de passe d’abord : refus de Pronote affiché sous le bouton.
                     onNodeWithText("Mot de passe").performTextInput("mauvais-mot-de-passe")
                     onNodeWithText("Mot de passe").performKeyInput { pressKey(Key.Enter) }
                     waitUntil(timeoutMillis = 60_000) { onAllNodesWithText("Pronote a refusé", substring = true).fetchSemanticsNodes().isNotEmpty() }
-                    shot(dir, "wide-1280-login-rejected")
+                    shot(dir, "wide-$wideW-login-rejected")
                     onNodeWithText("Mot de passe").performTextInput("pronotevs")
                     // Entrée envoie le formulaire.
                     onNodeWithText("Mot de passe").performKeyInput { pressKey(Key.Enter) }
                 }
                 waitUntil(timeoutMillis = 90_000) { onAllNodesWithContentDescription("Planning").fetchSemanticsNodes().isNotEmpty() }
                 waitForIdle()
-                shot(dir, "wide-1280-today")
-                tab("Planning"); shot(dir, "wide-1280-planning")
-                tab("Mes cours"); shot(dir, "wide-1280-courses")
+                shot(dir, "wide-$wideW-today")
+                tab("Planning"); shot(dir, "wide-$wideW-planning")
+                tab("Mes cours"); shot(dir, "wide-$wideW-courses")
                 onAllNodesWithText("Additionner des fractions").onFirst().performClick()
-                waitForIdle(); shot(dir, "wide-1280-courses-two-pane")
+                waitForIdle(); shot(dir, "wide-$wideW-courses-two-pane")
                 // « Valider » J0 : la fiche de séance s’ouvre en panneau latéral, le PDF du cours s’y affiche.
                 onAllNodesWithText("Valider").onFirst().performClick()
-                waitForIdle(); shot(dir, "wide-1280-session-panel")
+                waitForIdle(); shot(dir, "wide-$wideW-session-panel")
                 onAllNodesWithText("fiche-fractions.pdf").onFirst().performClick()
-                waitForIdle(); shot(dir, "wide-1280-pdf-viewer")
+                waitForIdle(); shot(dir, "wide-$wideW-pdf-viewer")
                 // Échap : le document se ferme, puis la fiche.
                 back(); back()
                 assertEquals(1, onAllNodes(isRoot()).fetchSemanticsNodes().size)
-                tab("Mes progrès"); shot(dir, "wide-1280-stats")
-                tab("Réglages"); shot(dir, "wide-1280-settings")
+                tab("Mes progrès"); shot(dir, "wide-$wideW-stats")
+                tab("Réglages"); shot(dir, "wide-$wideW-settings")
                 tab("Aujourd’hui", substring = true)
             }
             scene(720, 900, container, owners) {
@@ -148,9 +150,9 @@ class DesktopTour {
                 assertNotNull(stored?.password)
                 assertEquals("demonstration", stored?.username)
                 val next = container(dataDir, secrets)
-                scene(1280, 820, next, Owners()) {
+                scene(wideW, wideH, next, Owners()) {
                     waitUntil(timeoutMillis = 90_000) { onAllNodesWithContentDescription("Planning").fetchSemanticsNodes().isNotEmpty() }
-                    waitForIdle(); shot(dir, "wide-1280-relaunch")
+                    waitForIdle(); shot(dir, "wide-$wideW-relaunch")
                 }
             }
         } finally {

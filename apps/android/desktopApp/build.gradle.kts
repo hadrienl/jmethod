@@ -43,9 +43,9 @@ dependencies {
 }
 
 // Visite guidée optionnelle (captures et connexion réelle à la démonstration publique), jamais en CI :
-// ./gradlew :desktopApp:test --tests '*DesktopTour*' -Pjmethod.tour=<dossier> [-Pjmethod.demoLogin=true]
+// ./gradlew :desktopApp:test --tests '*DesktopTour*' -Pjmethod.tour=<dossier> [-Pjmethod.demoLogin=true] [-Pjmethod.tourSize=1366x768]
 tasks.withType<Test>().configureEach {
-    listOf("jmethod.tour", "jmethod.demoLogin").forEach { name ->
+    listOf("jmethod.tour", "jmethod.demoLogin", "jmethod.tourSize").forEach { name ->
         providers.gradleProperty(name).orNull?.let { systemProperty(name, it) }
     }
 }
