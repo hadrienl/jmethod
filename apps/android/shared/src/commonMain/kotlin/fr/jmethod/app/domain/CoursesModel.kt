@@ -166,7 +166,7 @@ data class CourseDetailModel(
                         canValidate = state != State.COMPLETED,
                     )
                 },
-                deleteConfirm = "Es-tu sûr de vouloir supprimer définitivement le cours C${course.courseNumber} : ${course.title} ?",
+                deleteConfirm = "Es-tu sûr de vouloir supprimer définitivement le cours ${course.displayReference} : ${course.title} ?",
             )
         }
     }

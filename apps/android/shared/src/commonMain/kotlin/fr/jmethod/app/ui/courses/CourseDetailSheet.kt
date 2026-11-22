@@ -223,7 +223,7 @@ private fun Header(model: CourseDetailModel, onDismiss: () -> Unit) {
             Spacer(Modifier.height(JSpacing.s))
             Text(
                 buildAnnotatedString {
-                    withStyle(SpanStyle(color = JColors.Violet700, fontFeatureSettings = "tnum")) { append("C${model.course.courseNumber}") }
+                    withStyle(SpanStyle(color = JColors.Violet700, fontFeatureSettings = "tnum")) { append(model.course.displayReference) }
                     append(" · ")
                     append(model.course.title)
                 },

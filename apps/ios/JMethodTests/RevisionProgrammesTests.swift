@@ -63,6 +63,22 @@ final class RevisionProgrammesTests: XCTestCase {
         XCTAssertEqual(scored.revisions.first { $0.stepLabel == "J3" }?.scheduledDate, "2026-11-26")
         XCTAssertEqual(scored.revisions.first { $0.stepLabel == "J10" }?.scheduledDate, "2026-12-03")
     }
+    func testNextSessionPrioritizesRetainedEmergencyAfterRhythmReindexing() throws {
+        var doc = try RevisionProgrammes.start(document(), courseIds: ["c1","c2"], startDate: "2026-11-23", id: "p")
+        for day in [0,1,3] {
+            let revision = try XCTUnwrap(doc.revisions.first { $0.nominalOffsetDays == day && $0.isEmergencySession != true })
+            doc.revisions = try score(doc, id: revision.id).revisions
+        }
+        let j7 = try XCTUnwrap(doc.revisions.first { $0.stepLabel == "J7" })
+        doc.revisions = try score(doc, id: j7.id, value: 0).revisions
+        let emergency = try XCTUnwrap(doc.revisions.first { $0.isEmergencySession == true })
+        var rhythm = RevisionRhythm.standard; rhythm.revision = 2; rhythm.steps.removeAll { [1,3].contains($0.offsetDays) }
+        let updated = try RevisionProgrammes.reapply(doc, programmeIds: ["p"], rhythm: rhythm)
+        XCTAssertLessThan(try XCTUnwrap(updated.revisions.first { $0.stepLabel == "J14" }).stepIndex, emergency.stepIndex)
+        XCTAssertEqual(RevisionSession.nextOfCourse("c1", revisions: updated.revisions)?.id, emergency.id)
+        XCTAssertEqual(RevisionSession.nextOfCourse("c2", revisions: updated.revisions)?.id, emergency.id)
+    }
+
     func testMigrationAndProtectedStorage() async throws {
         var course = sheet(1)
         course.documents = [CourseDocument(id: "d", name: "fiche.pdf", mime: "application/pdf", size: 12, file: "documents/c1/d.pdf")]

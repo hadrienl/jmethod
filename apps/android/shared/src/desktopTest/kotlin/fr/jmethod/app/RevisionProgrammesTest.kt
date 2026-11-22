@@ -64,6 +64,22 @@ class RevisionProgrammesTest {
         assertEquals("2026-12-03", scored.revisions.first { it.stepLabel == "J10" }.scheduledDate)
         assertTrue(scored.revisions.contains(retained.first { it.status == RevisionStatus.COMPLETED }))
     }
+    @Test fun nextSessionPrioritizesRetainedEmergencyAfterRhythmReindexing() {
+        var doc = RevisionProgrammes.start(document(), listOf("c1", "c2"), "2026-11-23", "p")
+        for (day in listOf(0,1,3)) {
+            val revision = doc.revisions.first { it.nominalOffsetDays == day && it.isEmergencySession != true }
+            doc = doc.copy(revisions = score(doc, revision.id).revisions)
+        }
+        val j7 = doc.revisions.first { it.stepLabel == "J7" }
+        doc = doc.copy(revisions = score(doc, j7.id, 0).revisions)
+        val emergency = doc.revisions.first { it.isEmergencySession == true }
+        val rhythm = RevisionRhythm.DEFAULT.copy(revision = 2, steps = RevisionRhythm.DEFAULT.steps.filter { it.offsetDays !in listOf(1,3) })
+        val updated = RevisionProgrammes.reapply(doc, setOf("p"), rhythm)
+        assertTrue(updated.revisions.first { it.stepLabel == "J14" }.stepIndex < emergency.stepIndex)
+        assertEquals(emergency.id, RevisionSession.nextOfCourse("c1", updated.revisions)?.id)
+        assertEquals(emergency.id, RevisionSession.nextOfCourse("c2", updated.revisions)?.id)
+    }
+
     @Test fun migrationPreservesDatesScoresPhasesDocumentsAndIsIdempotent() {
         val course = sheet("c1").copy(documents = listOf(CourseDocument("d","fiche.pdf","application/pdf",12,"documents/c1/d.pdf")))
         val legacy = AdaptiveAlgorithm.generateInitialRevisions(course, listOf(0,1,7)).mapIndexed { i,r -> if (i == 0) r.copy(status = RevisionStatus.COMPLETED, score = 75, completedDate = "2026-11-22") else r }

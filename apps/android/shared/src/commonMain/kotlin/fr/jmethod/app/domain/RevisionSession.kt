@@ -47,8 +47,15 @@ object RevisionSession {
         displayOrder(revisions, courses, subjects, today).firstOrNull { it.status != RevisionStatus.COMPLETED && it.id != excluding }
 
     /** Prochaine séance due d’un cours (section 8.4) : la première non faite dans l’ordre des J. */
-    fun nextOfCourse(courseId: String, revisions: List<Revision>): Revision? =
-        revisions.filter { it.appliesTo(courseId) && it.status != RevisionStatus.COMPLETED }.minByOrNull { it.stepIndex }
+    fun nextOfCourse(courseId: String, revisions: List<Revision>): Revision? {
+        val pending = revisions.filter { it.appliesTo(courseId) && it.status != RevisionStatus.COMPLETED }
+        if (pending.none { it.programmeId != null }) return pending.minByOrNull { it.stepIndex }
+        // Une réapplication réindexe les nouvelles étapes, pas les rattrapages historiques.
+        // Le J nominal reste comparable ; un historique ambigu suit ses dates sans inventer de J.
+        val knownDays = pending.all { it.nominalOffsetDays != null }
+        return pending.minWithOrNull(compareBy<Revision> { if (knownDays) it.nominalOffsetDays!! else 0 }
+            .thenBy { it.scheduledDate }.thenBy { it.stepIndex })
+    }
 
     /** Libellé du bouton d’enchaînement : « Séance suivante · <matière> — <titre> ». */
     fun nextLabel(revision: Revision, courses: List<Course>, subjects: List<Subject>): String? {

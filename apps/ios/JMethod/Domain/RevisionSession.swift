@@ -32,10 +32,17 @@ enum RevisionSession {
 
     /// Prochaine séance à faire d'un cours (§8.4) : la première non faite dans l'ordre des J.
     static func nextOfCourse(_ courseId: String, revisions: [Revision]) -> Revision? {
-        revisions.enumerated()
-            .filter { $0.element.applies(to: courseId) && $0.element.status != .completed }
-            .min { $0.element.stepIndex != $1.element.stepIndex ? $0.element.stepIndex < $1.element.stepIndex : $0.offset < $1.offset }?
-            .element
+        let pending = revisions.enumerated().filter { $0.element.applies(to: courseId) && $0.element.status != .completed }
+        let programme = pending.contains { $0.element.programmeId != nil }
+        let knownDays = pending.allSatisfy { $0.element.nominalOffsetDays != nil }
+        return pending.min { lhs, rhs in
+            if programme {
+                if knownDays, let a = lhs.element.nominalOffsetDays, let b = rhs.element.nominalOffsetDays, a != b { return a < b }
+                if lhs.element.scheduledDate != rhs.element.scheduledDate { return lhs.element.scheduledDate < rhs.element.scheduledDate }
+            }
+            if lhs.element.stepIndex != rhs.element.stepIndex { return lhs.element.stepIndex < rhs.element.stepIndex }
+            return lhs.offset < rhs.offset
+        }?.element
     }
 
     /// Retard d'une séance à faire par rapport au jour préparé ce soir (lendemain de `today`).
