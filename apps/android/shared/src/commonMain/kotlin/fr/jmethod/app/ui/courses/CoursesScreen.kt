@@ -98,6 +98,7 @@ fun CoursesScreen(
                 item(key = "first") { FirstCourse(onCreate = { viewModel.openCreate() }, onShowPlanning = onShowPlanning) }
                 return@LazyColumn
             }
+            item(key = "programmes") { RevisionProgrammePanel(state, viewModel) }
             item(key = "search") { SearchField(state.search, viewModel::setSearch) }
             item(key = "chips") { SubjectChips(state, viewModel::setSubjectFilter) }
             if (state.list.empty) {
@@ -144,7 +145,7 @@ private fun FirstCourse(onCreate: () -> Unit, onShowPlanning: () -> Unit) {
         EmptyState(
             icon = JIcons.School,
             title = "Aucun cours pour l’instant",
-            message = "Crée ton premier cours : ses révisions seront planifiées automatiquement, de Découvrir à Se tester. " +
+            message = "Enregistre ta première feuille de cours, puis démarre son programme de révision. " +
                 "Tu peux aussi l’ajouter depuis ton emploi du temps, avec « Ajouter ce cours » dans Aujourd’hui ou dans le Planning.",
         ) {
             Button(onClick = onCreate, shape = JShapes.control, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {

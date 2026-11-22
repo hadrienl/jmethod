@@ -115,8 +115,8 @@ data class TodayModel(
                             revision = revision,
                             course = course,
                             phase = revision.phase,
-                            badge = "${revision.phase.info.label} · ${revision.stepLabel}",
-                            courseLine = "${course.chapter} · C${course.courseNumber}",
+                            badge = "${revision.phaseLabel} · ${revision.stepLabel}",
+                            courseLine = if (revision.programmeId == null) "${course.chapter} · ${course.displayReference}" else RevisionProgrammes.references(revision, courses),
                             title = course.title,
                             done = done,
                             doneLabel = if (done) "Fait · ${revision.score?.toString() ?: "undefined"}/100" else null,
@@ -204,18 +204,29 @@ object ScoreSubmission {
         score: Int,
         now: Instant,
         zone: ZoneId,
+        programmes: List<fr.jmethod.app.model.RevisionProgramme> = emptyList(),
     ): Outcome {
         val today = now.atZone(zone).toLocalDate().toString()
         val target = revisions.firstOrNull { it.id == revisionId }
         if (target == null || target.status == RevisionStatus.COMPLETED) {
             return Outcome(today, null, ignored = true, revisions = revisions, celebrate = false, toast = null)
         }
+        require(score in 0..100) { "Le score doit être compris entre 0 et 100." }
         val programme = EveningProgramme.of(revisions, courses, today)
-        val courseRevisions = revisions.filter { it.courseId == target.courseId }
-        val result = AdaptiveAlgorithm.applyAdaptiveReview(
-            courseRevisions, revisionId, score, settings, today, programme.preparationDate, now, zone,
+        fun sameProgramme(r: Revision) = if (target.programmeId != null) r.programmeId == target.programmeId else r.courseId == target.courseId && r.programmeId == null
+        val currentProgramme = programmes.firstOrNull { it.id == target.programmeId }
+        require(target.programmeId == null || currentProgramme != null) { "Le programme de cette séance n’existe plus." }
+        val courseRevisions = revisions.filter(::sameProgramme)
+        val fixed = currentProgramme != null && (!currentProgramme.adaptiveEnabled || currentProgramme.needsReview)
+        val programmeSettings = if (currentProgramme == null) settings else settings.copy(intervals = currentProgramme.rhythmSnapshot.steps.map { it.offsetDays })
+        val result = if (fixed) {
+            val updated = courseRevisions.map { if (it.id == revisionId) it.copy(status = RevisionStatus.COMPLETED, completedDate = today, score = score) else it }
+            AdaptiveAlgorithm.Result(updated, AdaptiveAlgorithm.Explanation(score, 1.0, "Séance validée. Les dates des prochaines séances sont conservées.",
+                AdaptiveAlgorithm.ActionType.EXACT, updated.firstOrNull { it.status != RevisionStatus.COMPLETED }?.scheduledDate))
+        } else AdaptiveAlgorithm.applyAdaptiveReview(
+            courseRevisions, revisionId, score, programmeSettings, today, programme.preparationDate, now, zone,
         )
-        val updated = revisions.filter { it.courseId != target.courseId } + result.updatedRevisions
+        val updated = revisions.filterNot(::sameProgramme) + result.updatedRevisions
         val remaining = EveningProgramme.of(updated, courses, today)
         val emergency = result.explanation.actionType == AdaptiveAlgorithm.ActionType.EMERGENCY
         return Outcome(

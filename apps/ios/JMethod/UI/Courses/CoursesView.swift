@@ -5,6 +5,7 @@ struct CoursesView: View {
     let app: AppModel
     let onShowPlanning: () -> Void
     @State private var search = ""
+    @State private var showProgramme = false
     @State private var subjectId: String?
 
     var body: some View {
@@ -24,6 +25,15 @@ struct CoursesView: View {
                 } else {
                     ScrollView {
                         VStack(alignment: .leading, spacing: Spacing.m) {
+                            Button { showProgramme = true } label: { Label("Démarrer un programme de révision", systemImage: "calendar.badge.plus") }
+                                .buttonStyle(PrimaryButtonStyle())
+                            ForEach(document.programmes) { programme in
+                                let refs = document.courses.filter { programme.courseIds.contains($0.id) }.map(\.displayReference).joined(separator: " + ")
+                                VStack(alignment: .leading) {
+                                    Text("\(refs) · J0 le \(programme.startDate)").font(.headline)
+                                    Text(programme.needsReview ? "Rythme historique à vérifier dans les réglages" : (programme.adaptiveEnabled ? "Adaptation aux scores" : "Dates fixes")).font(.caption)
+                                }.surface()
+                            }
                             SubjectChips(subjects: document.subjects, selection: $subjectId)
                             NotebookCard { app.presented = .notebook(subjectId: nil) }
                             if list.empty {
@@ -51,6 +61,7 @@ struct CoursesView: View {
                 }
             }
         }
+        .sheet(isPresented: $showProgramme) { RevisionProgrammeSheet(app: app) }
     }
 }
 
@@ -93,7 +104,7 @@ private struct EmptyCourses: View {
             VStack(alignment: .leading, spacing: Spacing.s) {
                 IconTile(systemName: "books.vertical", size: 56)
                 Text("Ajoute ton premier cours").font(.title2.weight(.bold)).accessibilityAddTraits(.isHeader)
-                Text("Après chaque cours, note son chapitre et son titre : J-Method programme aussitôt tes séances Découvrir, S’entraîner et Se tester.")
+                Text("Enregistre ta première feuille de cours, puis choisis les feuilles à réviser ensemble et leur date J0.")
                     .font(.subheadline).foregroundStyle(Theme.textSecondary)
                 Button { app.openAddCourse() } label: {
                     Label("Créer mon premier cours", systemImage: "plus")

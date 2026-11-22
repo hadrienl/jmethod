@@ -54,6 +54,49 @@ class CourseCreatorTest {
     }
 
     @Test
+    fun personalSheetsHaveNoImplicitProgrammeAndReferencesAreUniquePerSubject() = runBlocking {
+        val f = fixture()
+        val created = f.creator.create(CourseEditing.Form("maths", "", "", "2026-11-18", "", "C42"), null, emptyList())!!
+        assertEquals("C42", created.course.displayReference)
+        assertEquals("C42", created.course.title)
+        assertTrue(f.repository.current().revisions.isEmpty())
+        assertTrue(f.repository.current().programmes.isEmpty())
+        assertNull(f.creator.create(CourseEditing.Form("maths", "", "", "2026-11-18", "", "c42"), null, emptyList()))
+        assertNotNull(f.creator.create(CourseEditing.Form("francais", "", "", "2026-11-18", "", "C42"), null, emptyList()))
+    }
+
+    @Test
+    fun samePronoteSessionCanExplicitlySupplySeveralSheetsWithoutCreatingJs() = runBlocking {
+        val f = fixture()
+        assertNotNull(f.creator.create(form, source, emptyList()))
+        val seen = f.repository.current().notebookImports[source.sessionKey]
+        assertNotNull(f.creator.create(form, source, emptyList(), CourseCreator.Expectation.Manual(seen)))
+        assertEquals(2, f.repository.current().courses.size)
+        assertTrue(f.repository.current().revisions.isEmpty())
+        assertTrue(f.repository.current().courses.all { it.sources == listOf(source) })
+    }
+
+    @Test
+    fun associatedResourcePreservesReferenceAndProgramme() = runBlocking {
+        val f = fixture()
+        val created = f.creator.create(CourseEditing.Form("anglais", "", "", "2026-11-18", "Mes notes", "C42"), null, emptyList())!!
+        f.repository.update { fr.jmethod.app.domain.RevisionProgrammes.start(it, listOf(created.course.id), "2026-11-19", "p") }
+        val before = f.repository.current().revisions
+        val draft = fr.jmethod.app.documents.NotebookCourseDraft(sessionKey = source.sessionKey, ordinal = 1, subjectId = "anglais", subjectLabel = source.subjectLabel,
+            date = source.date, chapter = "Sans chapitre", title = "Ressource", description = "", documents = emptyList(), notice = null)
+        f.creator.associate(created.course.id, draft, listOf(document()))
+        val after = f.repository.current()
+        val leaf = after.courses.single()
+        assertEquals("C42", leaf.displayReference)
+        assertEquals("Mes notes", leaf.description)
+        assertEquals(listOf("fiche.odt"), leaf.documents!!.map { it.name })
+        assertTrue(f.files.exists(leaf.documents!!.first()))
+        assertEquals(listOf(draft.source), leaf.sources)
+        assertEquals(before, after.revisions)
+        assertEquals(after, fr.jmethod.app.data.DataMigrations.migrateNotebookKeys(after))
+    }
+
+    @Test
     fun deletionDuringPreparationIsNeverUndone() = runBlocking {
         val f = fixture()
         // Le formulaire est préparé alors que la séance n’a jamais été importée…

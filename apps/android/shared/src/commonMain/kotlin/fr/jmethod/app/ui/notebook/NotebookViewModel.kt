@@ -469,12 +469,13 @@ class NotebookViewModel(
 
     /** Document absent (restauration) : relit le cahier et le retélécharge si la séance est encore dans la fenêtre. */
     fun redownload(course: Course, document: CourseDocument) {
-        val key = course.source?.sessionKey ?: return
+        val keys = (course.sources ?: listOfNotNull(course.source)).map { it.sessionKey }.toSet()
+        if (keys.isEmpty()) return
         viewModelScope.launch {
             try {
                 val snapshot = readForCourses()
-                val session = snapshot.sessions.firstOrNull { it.key == key }
-                val attachment = session?.contents?.flatMap { it.attachments }?.firstOrNull { it.kind == NotebookAttachment.Kind.FILE && it.name == document.name }
+                val attachment = snapshot.sessions.filter { it.key in keys }.flatMap { session -> session.contents.flatMap { it.attachments } }
+                    .firstOrNull { it.kind == NotebookAttachment.Kind.FILE && it.name == document.name }
                 if (attachment == null) {
                     events.send(NotebookEvent.Message("Ce document n’est plus dans le cahier de textes (28 derniers jours) : il ne peut pas être retéléchargé."))
                     return@launch

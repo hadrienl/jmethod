@@ -47,6 +47,8 @@ data class CourseFormState(
     val notebook: NotebookCourseDraft? = null,
     val documents: List<PendingDocument> = emptyList(),
     val notice: String? = null,
+    val reference: String = "",
+    val existingTargetId: String? = null,
 )
 
 data class CoursesUiState(
@@ -65,6 +67,11 @@ data class CoursesUiState(
     val formSuggestions: List<String>,
     /** Nombre d’échéances générées par les intervalles actuels (écart D8). */
     val intervalCount: Int,
+    val courses: List<fr.jmethod.app.model.Course> = emptyList(),
+    val revisions: List<fr.jmethod.app.model.Revision> = emptyList(),
+    val programmes: List<fr.jmethod.app.model.RevisionProgramme> = emptyList(),
+    val defaultStartDate: String = "",
+    val settings: fr.jmethod.app.model.AppSettings = fr.jmethod.app.model.AppSettings(),
 )
 
 sealed interface CoursesEvent {
@@ -104,11 +111,39 @@ class CoursesViewModel(
                 ?.let { CourseDetailModel.build(it, document.subjects, document.revisions) },
             form = formState,
             formSubjectId = formSubject,
-            formCourseNumber = CourseEditing.courseNumber(document.courses, formSubject, formState.chapter),
+            formCourseNumber = (document.courses.filter { it.subjectId == formSubject }.maxOfOrNull { it.courseNumber } ?: 0) + 1,
             formSuggestions = CourseEditing.chapterSuggestions(document.courses, formSubject, formState.chapter),
-            intervalCount = document.settings.intervals.size,
+            intervalCount = fr.jmethod.app.domain.RevisionProgrammes.selectedRhythm(document.settings).steps.size,
+            courses = document.courses, revisions = document.revisions, programmes = document.programmes,
+            defaultStartDate = clock.today().plusDays(1).toString(), settings = document.settings,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    fun startProgramme(ids: List<String>, date: String, onSuccess: () -> Unit) {
+        viewModelScope.launch {
+            try {
+                repository.update { fr.jmethod.app.domain.RevisionProgrammes.start(it, ids, date) }
+                onSuccess()
+                events.send(CoursesEvent.Toast("Programme créé", "Les feuilles sélectionnées ont leur propre rythme de révision.", false))
+            } catch (error: kotlinx.coroutines.CancellationException) { throw error }
+            catch (error: Exception) { events.send(CoursesEvent.Toast("Programme non créé", error.message ?: "Enregistrement impossible.", true)) }
+        }
+    }
+
+    fun renameReference(id: String, value: String) {
+        viewModelScope.launch {
+            try {
+                repository.update { doc ->
+                    val course = requireNotNull(doc.courses.firstOrNull { it.id == id })
+                    val reference = value.trim()
+                    require(reference.isNotEmpty() && reference.length <= 24) { "Saisis une référence de 1 à 24 caractères." }
+                    require(doc.courses.none { it.id != id && it.subjectId == course.subjectId && it.displayReference.equals(reference, true) }) { "Cette référence existe déjà dans cette matière." }
+                    doc.copy(courses = doc.courses.map { if (it.id == id) it.copy(reference = reference) else it })
+                }
+            } catch (error: kotlinx.coroutines.CancellationException) { throw error }
+            catch (error: Exception) { events.send(CoursesEvent.Toast("Référence inchangée", error.message ?: "Enregistrement impossible.", true)) }
+        }
+    }
 
     fun setSearch(value: String) { search.value = value }
     fun setSubjectFilter(subjectId: String?) { subjectFilter.value = subjectId }
@@ -126,7 +161,7 @@ class CoursesViewModel(
             showErrors = false,
             notebook = null,
             documents = emptyList(),
-            notice = null,
+            notice = null, reference = "", existingTargetId = null,
         )
     }
 
@@ -142,7 +177,7 @@ class CoursesViewModel(
             showErrors = false,
             notebook = draft,
             documents = draft.documents,
-            notice = draft.notice,
+            notice = draft.notice, reference = "", existingTargetId = null,
         )
     }
 
@@ -155,10 +190,12 @@ class CoursesViewModel(
     }
 
     fun closeCreate() = form.update { it.copy(open = false, showErrors = false) }
-    fun setFormSubject(subjectId: String) = form.update { it.copy(subjectId = subjectId) }
+    fun setFormSubject(subjectId: String) = form.update { it.copy(subjectId = subjectId, existingTargetId = null) }
+    fun setExistingTarget(id: String?) = form.update { it.copy(existingTargetId = id) }
     fun setChapter(value: String) = form.update { it.copy(chapter = value) }
     fun setTitle(value: String) = form.update { it.copy(title = value) }
     fun setDate(value: String) = form.update { it.copy(date = value) }
+    fun setReference(value: String) = form.update { it.copy(reference = value) }
     fun setDescription(value: String) = form.update { it.copy(description = value) }
 
     fun submitCreate() {
@@ -166,22 +203,31 @@ class CoursesViewModel(
         // Double tap : le formulaire est déjà fermé par la première soumission, rien n’est renvoyé.
         if (!current.open) return
         // Titre et chapitre obligatoires (`required` du formulaire web), après `trim`.
-        if (current.title.isBlank() || current.chapter.isBlank()) {
+        if (current.reference.length > 24) {
             form.update { it.copy(showErrors = true) }
             return
         }
         form.update { it.copy(open = false, showErrors = false, notebook = null, documents = emptyList(), notice = null) }
         viewModelScope.launch {
             val subjectId = current.subjectId ?: repository.current().subjects.firstOrNull()?.id ?: "maths"
-            val input = CourseEditing.Form(subjectId, current.chapter, current.title, current.date, current.description)
+            val input = CourseEditing.Form(subjectId, current.chapter, current.title, current.date, current.description, current.reference)
             val notebook = current.notebook
-            val created = withContext(Dispatchers.IO) {
-                creator.create(input, notebook?.source, current.documents, CourseCreator.Expectation.Manual(notebook?.seenImport))
+            if (notebook != null && current.existingTargetId != null) {
+                try {
+                    withContext(Dispatchers.IO) { creator.associate(current.existingTargetId, notebook, current.documents) }
+                    events.send(CoursesEvent.Toast("Ressource associée", "La feuille conserve sa référence et son programme.", false))
+                } catch (error: kotlinx.coroutines.CancellationException) { throw error }
+                catch (error: Exception) { events.send(CoursesEvent.Toast("Association impossible", error.message ?: "Réessaie.", true)) }
+                return@launch
             }
-            created?.toast?.let { events.send(CoursesEvent.Toast(it.title, it.message, it.type == CourseEditing.ToastType.INFO)) }
-            if (created == null && notebook != null) {
-                creator.lastRefusal?.let { events.send(CoursesEvent.Toast("Cours non créé", it, true)) }
-            }
+            try {
+                val created = withContext(Dispatchers.IO) {
+                    creator.create(input, notebook?.source, current.documents, CourseCreator.Expectation.Manual(notebook?.seenImport))
+                }
+                created?.let { events.send(CoursesEvent.Toast("Feuille enregistrée", "${it.course.displayReference} est disponible. Démarre son programme pour créer les J.", false)) }
+                if (created == null) creator.lastRefusal?.let { events.send(CoursesEvent.Toast("Feuille non créée", it, true)) }
+            } catch (error: kotlinx.coroutines.CancellationException) { throw error }
+            catch (error: Exception) { events.send(CoursesEvent.Toast("Feuille non créée", error.message ?: "Enregistrement impossible.", true)) }
         }
     }
 

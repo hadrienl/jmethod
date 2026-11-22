@@ -5,6 +5,7 @@ import SwiftUI
 struct AddCourseSheet: View {
     @Bindable var app: AppModel
     @Environment(\.dismiss) private var dismiss
+    @State private var existingTargetId: String?
     @FocusState private var focus: Field?
 
     private enum Field { case chapter, title, notes }
@@ -12,19 +13,25 @@ struct AddCourseSheet: View {
     var body: some View {
         let draft = app.courseDraft
         let courses = app.document.courses
-        let number = CourseCreation.courseNumber(subjectId: draft.subjectId, chapter: draft.chapter, courses: courses)
+        let number = (courses.filter { $0.subjectId == draft.subjectId }.map(\.courseNumber).max() ?? 0) + 1
         let suggestions = CourseCreation.chapterSuggestions(subjectId: draft.subjectId, chapter: draft.chapter, courses: courses)
-        let canSubmit = CourseCreation.canSubmit(draft)
-        let milestones = app.document.settings.intervals.count
+        let canSubmit = app.document.subjects.contains { $0.id == draft.subjectId } && (draft.reference?.count ?? 0) <= 24
 
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.l) {
-                    Text("J-Method programme automatiquement \(milestones > 1 ? "les \(milestones) échéances" : "l’échéance") de révision de ce cours.")
+                    Text("Enregistre ta feuille, puis démarre son programme depuis Mes cours.")
                         .font(.subheadline).foregroundStyle(Theme.textSecondary)
 
                     if let notebook = app.notebookDraft {
                         notebookSection(notebook)
+                        Picker("Destination des ressources", selection: $existingTargetId) {
+                            Text("Nouvelle feuille").tag(String?.none)
+                            ForEach(courses.filter { $0.subjectId == draft.subjectId }) { course in
+                                Text("Associer à \(course.displayReference) · \(course.title)").tag(Optional(course.id))
+                            }
+                        }
+                        if existingTargetId != nil { Text("La référence, les notes et les révisions de cette feuille seront conservées.").font(.footnote) }
                     }
 
                     section("Matière") {
@@ -40,7 +47,12 @@ struct AddCourseSheet: View {
                         }
                     }
 
-                    section("Chapitre") {
+                    section("Référence personnelle") {
+                        TextField("C\(number)", text: Binding(get: { app.courseDraft.reference ?? "" }, set: { app.courseDraft.reference = $0 }))
+                            .textFieldStyle(.roundedBorder)
+                        Text("Ton numéro de feuille, unique dans cette matière. Vide : attribution automatique.").font(.footnote)
+                    }
+                    section("Chapitre (facultatif)") {
                         HStack(alignment: .top, spacing: Spacing.s) {
                             TextField("Chapitre", text: $app.courseDraft.chapter, prompt: Text("ex : Arithmétique, Guerre froide…"))
                                 .textInputAutocapitalization(.sentences)
@@ -50,13 +62,13 @@ struct AddCourseSheet: View {
                                 .accessibilityIdentifier("course-chapter")
                                 .inputField()
                             VStack(spacing: 2) {
-                                Text("C\(number)").font(.headline.monospacedDigit()).foregroundStyle(Theme.violetDark)
+                                Text(draft.reference.flatMap { $0.isEmpty ? nil : $0 } ?? "C\(number)").lineLimit(1).font(.headline.monospacedDigit()).foregroundStyle(Theme.violetDark)
                                 Text("Numéro").font(.caption2).foregroundStyle(Theme.textMuted)
                             }
                             .frame(minWidth: 64, minHeight: 48)
                             .background(Theme.violetSoft, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
                             .accessibilityElement(children: .combine)
-                            .accessibilityLabel("Numéro attribué automatiquement : C\(number)")
+                            .accessibilityLabel("Référence : \(draft.reference.flatMap { $0.isEmpty ? nil : $0 } ?? "C\(number)")")
                         }
                         if !suggestions.isEmpty {
                             Text("Chapitres existants :").font(.footnote).foregroundStyle(Theme.textSecondary)
@@ -69,7 +81,7 @@ struct AddCourseSheet: View {
                         }
                     }
 
-                    section("Titre de la leçon") {
+                    section("Titre de la leçon (facultatif)") {
                         TextField("Titre de la leçon", text: $app.courseDraft.title, prompt: Text("ex : Algorithme d’Euclide et PGCD"))
                             .textInputAutocapitalization(.sentences)
                             .focused($focus, equals: .title)
@@ -79,7 +91,7 @@ struct AddCourseSheet: View {
                             .inputField()
                     }
 
-                    section("Date du cours (J0)") {
+                    section("Date de la feuille") {
                         DatePicker("Date du cours", selection: dateBinding, displayedComponents: .date)
                             .datePickerStyle(.compact)
                             .environment(\.locale, Locale(identifier: "fr_FR"))
@@ -87,7 +99,7 @@ struct AddCourseSheet: View {
                             .environment(\.calendar, SchoolDay.parisCalendar)
                             .tint(Theme.violet)
                             .frame(minHeight: 44)
-                        Text("La première séance (Découvrir, J0) est programmée ce jour-là.")
+                        Text("Les J seront créés lorsque tu démarreras un programme.")
                             .font(.footnote).foregroundStyle(Theme.textSecondary)
                     }
 
@@ -103,20 +115,22 @@ struct AddCourseSheet: View {
                 .padding(.top, Spacing.xs)
                 .padding(.bottom, Spacing.l)
             }
+            .onChange(of: app.courseDraft.subjectId) { _, _ in existingTargetId = nil }
             .scrollDismissesKeyboard(.interactively)
             .background(Theme.surface)
             // Action principale toujours visible, au-dessus du clavier.
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 VStack(alignment: .leading, spacing: Spacing.xs) {
                     Button {
-                        if app.createCourse() { dismiss() }
+                        if let id = existingTargetId { if app.associateNotebook(to: id) { dismiss() } }
+                        else if app.createCourse() { dismiss() }
                     } label: {
-                        Label("Créer le cours C\(number)", systemImage: "plus")
+                        Label(existingTargetId == nil ? "Enregistrer la feuille" : "Associer les ressources", systemImage: "plus")
                     }
                     .buttonStyle(PrimaryButtonStyle())
                     .disabled(!canSubmit)
                     if !canSubmit {
-                        Text("Indique une matière, un chapitre et un titre pour créer le cours.")
+                        Text("Choisis une matière et une référence de 24 caractères maximum.")
                             .font(.footnote).foregroundStyle(Theme.textSecondary)
                     }
                 }

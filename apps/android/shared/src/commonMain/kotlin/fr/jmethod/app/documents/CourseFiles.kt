@@ -90,8 +90,7 @@ class CourseCreator(private val repository: AppRepository, private val clock: Ap
             // Ceinture et bretelles : aucun cours existant pour la même séance (date, matière, rang).
             Expectation.Automatic -> document.settings.notebookAutoCreate == true && entry == null &&
                 fr.jmethod.app.domain.NotebookCourses.courseFor(source, document.courses) == null
-            is Expectation.Manual -> entry == expectation.seen &&
-                !(entry?.status == NotebookImport.CREATED && document.courses.any { it.id == entry.courseId })
+            is Expectation.Manual -> entry == expectation.seen
         }
     }
 
@@ -101,9 +100,17 @@ class CourseCreator(private val repository: AppRepository, private val clock: Ap
         documents: List<PendingDocument>,
         expectation: Expectation = Expectation.Manual(null),
     ): CourseEditing.Created? {
-        if (!CourseEditing.isValid(form)) return null
+        val state = repository.current()
+        val nextNumber = (state.courses.filter { it.subjectId == form.subjectId }.maxOfOrNull { it.courseNumber } ?: 0) + 1
+        val reference = form.reference?.trim()?.takeIf { it.isNotEmpty() } ?: "C$nextNumber"
+        if (reference.length > 24 || state.courses.any { it.subjectId == form.subjectId && it.displayReference.equals(reference, true) }) {
+            lastRefusal = "Cette référence existe déjà dans la matière, ou dépasse 24 caractères."
+            return null
+        }
+        val personalForm = form.copy(reference = reference, title = form.title.trim().ifEmpty { reference }, chapter = form.chapter.trim().ifEmpty { "Sans chapitre" })
+        if (!CourseEditing.isValid(personalForm)) return null
         val now = clock.now()
-        val courseId = "course-${now.toEpochMilli()}"
+        val courseId = "course-${java.util.UUID.randomUUID()}"
         val stored = documents.filter { it.selected && it.file.isFile }.take(fr.jmethod.app.domain.NotebookCourses.MAX_DOCUMENTS).mapNotNull {
             runCatching { files.store(courseId, it.file, it.name, it.type, it.extractedTitle) }.getOrNull()
         }
@@ -116,9 +123,14 @@ class CourseCreator(private val repository: AppRepository, private val clock: Ap
                 refused = true
                 return@update document
             }
-            val result = CourseEditing.create(document.courses, document.revisions, document.settings.intervals, form, now, AppClock.ZONE)
+            val result = CourseEditing.create(document.courses, document.revisions, emptyList(), personalForm, now, AppClock.ZONE)
                 ?: return@update document
-            val course = result.course.copy(source = source, documents = stored.takeIf { it.isNotEmpty() })
+            if (document.courses.any { it.id == courseId || (it.subjectId == personalForm.subjectId && it.displayReference.equals(reference, true)) }) {
+                refused = true
+                return@update document
+            }
+            val course = result.course.copy(id = courseId, source = source, sources = source?.let { listOf(it) }, documents = stored.takeIf { it.isNotEmpty() },
+                courseNumber = reference.removePrefix("C").toIntOrNull() ?: nextNumber)
             created = result.copy(course = course, courses = listOf(course) + result.courses.drop(1))
             document.copy(
                 courses = listOf(course) + result.courses.drop(1),
@@ -130,6 +142,34 @@ class CourseCreator(private val repository: AppRepository, private val clock: Ap
         if (created == null) files.deleteCourse(courseId)
         lastRefusal = if (refused) "Cette séance a été traitée entre-temps : aucun cours n’a été créé." else null
         return created
+    }
+
+    /** Associe une ressource à une feuille existante, sans créer de C ni de J. */
+    suspend fun associate(courseId: String, draft: NotebookCourseDraft, documents: List<PendingDocument>) {
+        val source = draft.source
+        val initial = requireNotNull(repository.current().courses.firstOrNull { it.id == courseId }) { "La feuille n’existe plus." }
+        require(initial.subjectId == draft.subjectId) { "Choisis une feuille de la même matière." }
+        val names = initial.documents.orEmpty().map { it.name }.toMutableSet()
+        val selected = documents.filter { it.selected && names.add(it.name) }
+        require(initial.documents.orEmpty().size + selected.size <= fr.jmethod.app.domain.NotebookCourses.MAX_DOCUMENTS) { "Une feuille peut contenir au plus 10 documents." }
+        val stored = mutableListOf<CourseDocument>()
+        try {
+            selected.forEach { stored += files.store(courseId, it.file, it.name, it.type, it.extractedTitle) }
+            repository.update { document ->
+                val course = requireNotNull(document.courses.firstOrNull { it.id == courseId }) { "La feuille n’existe plus." }
+                require(course.subjectId == draft.subjectId)
+                require(allowed(document, source, Expectation.Manual(draft.seenImport))) { "Cette séance a été traitée entre-temps. Rouvre-la avant de l’associer." }
+                val docs = course.documents.orEmpty()
+                require(docs.size + stored.size <= fr.jmethod.app.domain.NotebookCourses.MAX_DOCUMENTS && stored.none { added -> docs.any { it.name == added.name } }) { "Les documents de la feuille ont changé. Réessaie." }
+                val sources = (course.sources ?: listOfNotNull(course.source)) + source
+                document.copy(courses = document.courses.map { if (it.id == courseId) it.copy(source = it.source ?: source,
+                    sources = sources.distinctBy { it.sessionKey }, documents = (docs + stored).takeIf { it.isNotEmpty() }) else it },
+                    notebookImports = document.notebookImports + (source.sessionKey to NotebookImport(NotebookImport.CREATED, courseId, AppDocumentCodec.isoMillis(clock.now()))))
+            }
+        } catch (error: Exception) {
+            stored.forEach { files.fileOf(it)?.delete() }
+            throw error
+        }
     }
 
     /**
@@ -156,7 +196,14 @@ class CourseCreator(private val repository: AppRepository, private val clock: Ap
     /** Suppression : fichiers effacés et séance marquée `dismissed` (jamais recréée automatiquement). */
     suspend fun delete(courseId: String): CourseEditing.Deleted? {
         var deleted: CourseEditing.Deleted? = null
+        var blocked = false
         repository.update { document ->
+            if (document.programmes.any { courseId in it.courseIds }) {
+                blocked = true
+                deleted = CourseEditing.Deleted(document.courses, document.revisions, CourseEditing.Toast("Feuille conservée",
+                    "Cette feuille appartient à un programme. Son historique et ses documents sont conservés.", CourseEditing.ToastType.INFO))
+                return@update document
+            }
             val course = document.courses.firstOrNull { it.id == courseId }
             val result = CourseEditing.delete(document.courses, document.revisions, courseId)
             deleted = result
@@ -168,7 +215,7 @@ class CourseCreator(private val repository: AppRepository, private val clock: Ap
                     (key to NotebookImport(NotebookImport.DISMISSED, courseId, AppDocumentCodec.isoMillis(clock.now()).dropLast(5) + "Z")),
             )
         }
-        files.deleteCourse(courseId)
+        if (!blocked) files.deleteCourse(courseId)
         return deleted
     }
 }

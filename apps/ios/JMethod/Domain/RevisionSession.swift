@@ -33,7 +33,7 @@ enum RevisionSession {
     /// Prochaine séance à faire d'un cours (§8.4) : la première non faite dans l'ordre des J.
     static func nextOfCourse(_ courseId: String, revisions: [Revision]) -> Revision? {
         revisions.enumerated()
-            .filter { $0.element.courseId == courseId && $0.element.status != .completed }
+            .filter { $0.element.applies(to: courseId) && $0.element.status != .completed }
             .min { $0.element.stepIndex != $1.element.stepIndex ? $0.element.stepIndex < $1.element.stepIndex : $0.offset < $1.offset }?
             .element
     }
@@ -83,14 +83,19 @@ enum RevisionSession {
 
     /// nil pour un cours saisi à la main.
     static func notebookPart(for course: Course, snapshot: NotebookSnapshot?) -> NotebookPart? {
-        guard let source = course.source, source.kind == CourseSource.notebookKind else { return nil }
+        let sources = course.sources ?? course.source.map { [$0] } ?? []
+        guard !sources.isEmpty else { return nil }
         let imported = Set((course.documents ?? []).map(\.name))
-        let contents = notebookSession(for: course, in: snapshot)?.contents.map { content in
+        let sessions = sources.compactMap { source -> NotebookSession? in
+            var leaf = course; leaf.source = source
+            return notebookSession(for: leaf, in: snapshot)
+        }
+        let contents: [NotebookContent]? = sessions.isEmpty ? nil : sessions.flatMap { session in session.contents.map { content in
             var copy = content
             copy.attachments = content.attachments.filter { $0.kind != .file || !imported.contains($0.name) }
             return copy
-        }
-        return NotebookPart(sourceLine: sessionLine(source.date), contents: contents)
+        } }
+        return NotebookPart(sourceLine: sources.map { sessionLine($0.date) }.joined(separator: " · "), contents: contents)
     }
 
     // MARK: Documents proches (§8.5)

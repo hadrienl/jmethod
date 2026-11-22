@@ -123,13 +123,13 @@ final class AppModelTests: XCTestCase {
         await model.load()
         XCTAssertEqual(model.loadState, .ready)
         XCTAssertEqual(model.today, "2026-11-18")
-        XCTAssertEqual(model.document, AppModel.emptyDocument)
+        XCTAssertEqual(model.document, RevisionProgrammes.migrate(AppModel.emptyDocument))
         XCTAssertEqual(model.document.subjects, Constants.defaultSubjects)
-        XCTAssertEqual(model.document.settings, Constants.defaultSettings)
+        XCTAssertEqual(model.document.settings, RevisionProgrammes.migrate(AppModel.emptyDocument).settings)
         XCTAssertTrue(model.document.courses.isEmpty && model.document.revisions.isEmpty && model.document.pronoteEvents.isEmpty)
         XCTAssertTrue(defaults.bool(forKey: AppModel.demoMigrationKey))
         let saved = try await waitForSaved(url) { _ in true }
-        XCTAssertEqual(saved, AppModel.emptyDocument)
+        XCTAssertEqual(saved, RevisionProgrammes.migrate(AppModel.emptyDocument))
         let screen = TodayScreen(today: model.today, courses: [], revisions: [], subjects: model.document.subjects, pronoteEvents: [])
         XCTAssertTrue(screen.emptyProgramme)
         XCTAssertEqual(screen.hero.title, "Tu peux souffler !")
@@ -147,17 +147,18 @@ final class AppModelTests: XCTestCase {
 
         let (model, _, _, defaults) = makeModel(at: "2026-11-17T19:00:00Z", url: url)
         await model.load()
-        let expected = try Fixture.document(today: "2026-11-17")
+        let expected = RevisionProgrammes.migrate(try Fixture.document(today: "2026-11-17"))
         XCTAssertEqual(model.document, expected)
         XCTAssertTrue(defaults.bool(forKey: AppModel.demoMigrationKey))
         let saved = try await DocumentStore(url: url).load()
         XCTAssertEqual(saved, expected, "la migration est enregistrée avant d'être marquée faite")
 
-        // Migration unique : un document chargé plus tard n'est plus filtré.
-        try await DocumentStore(url: url).save(installed, version: 1)
+        // Migration unique : un document v2 chargé plus tard n'est plus filtré.
+        let reinstalled = RevisionProgrammes.migrate(installed)
+        try await DocumentStore(url: url).save(reinstalled, version: 1)
         let (again, _, _, _) = makeModel(at: "2026-11-17T19:00:00Z", url: url, preferences: defaults)
         await again.load()
-        XCTAssertEqual(again.document, installed)
+        XCTAssertEqual(again.document, reinstalled)
     }
 
     func testDayRefreshesAtMidnight() async throws {

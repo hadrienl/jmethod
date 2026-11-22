@@ -206,6 +206,7 @@ private struct SessionCard: View {
                 Label("Cours créé", systemImage: "checkmark.circle.fill")
                     .font(.footnote.weight(.semibold)).foregroundStyle(Theme.success)
                 Spacer(minLength: Spacing.xs)
+                Button("Autre feuille", action: onCreate).disabled(busy)
                 Button("Voir le cours") { onShow(courseId) }
                     .buttonStyle(TintedButtonStyle(fullWidth: false))
                     .accessibilityLabel("Voir le cours créé depuis cette séance")

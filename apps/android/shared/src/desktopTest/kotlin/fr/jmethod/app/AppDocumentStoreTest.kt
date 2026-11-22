@@ -36,7 +36,7 @@ class AppDocumentStoreTest {
         assertEquals(document.revisions, loaded.revisions)
         assertFalse(File(folder.root, "jmethod-data.json.tmp").exists())
         // Champs optionnels absents (comme `undefined` côté web), pas de jeton dans le document.
-        val text = file.readText()
+        val text = File(folder.root, "jmethod-data-v2.json").readText()
         assertFalse(text.contains("null"))
         assertFalse(text.contains("jeton"))
     }
@@ -49,7 +49,7 @@ class AppDocumentStoreTest {
         assertTrue(document.revisions.isEmpty())
         assertTrue(document.pronoteEvents.isEmpty())
         assertEquals(fr.jmethod.app.model.DEFAULT_SUBJECTS, document.subjects)
-        assertEquals(AppSettings(), document.settings)
+        assertEquals(AppSettings().copy(rhythm = fr.jmethod.app.model.RevisionRhythm.DEFAULT), document.settings)
         assertEquals(document, DataMigrations.migrate(document))
     }
 

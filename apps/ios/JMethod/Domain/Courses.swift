@@ -41,9 +41,9 @@ struct CoursesList: Equatable {
         let filtered = courses.filter { course in
             if let subjectId, course.subjectId != subjectId { return false }
             guard !query.isEmpty else { return true }
-            return [course.title, course.chapter, "c\(course.courseNumber)"].contains { Self.searchKey($0).range(of: query, options: .literal) != nil }
+            return [course.title, course.chapter, course.displayReference].contains { Self.searchKey($0).range(of: query, options: .literal) != nil }
         }
-        let revisionsByCourse = Dictionary(grouping: revisions, by: \.courseId)
+        let revisionsByCourse = Dictionary(uniqueKeysWithValues: courses.map { course in (course.id, revisions.filter { $0.applies(to: course.id) }) })
 
         groups = subjects.compactMap { subject in
             let subjectCourses = filtered.filter { $0.subjectId == subject.id }
@@ -77,7 +77,7 @@ struct CoursesList: Equatable {
         let lastScore = revisions.last { $0.score != nil }?.score
         return Card(
             course: course,
-            badge: "C\(course.courseNumber)",
+            badge: course.displayReference,
             dateLine: "Cours du \(FrenchDate.format(course.date, "dd/MM/yyyy"))",
             lastScoreLine: lastScore.map { "Dernier score : \($0)/100" },
             counter: "\(completed) / \(revisions.count) J",
@@ -141,7 +141,7 @@ struct CourseDetail: Equatable {
             let done = revision.status == .completed
             return Item(
                 revision: revision,
-                phaseLabel: Constants.phaseConfig(revision.phase).label,
+                phaseLabel: revision.phaseLabel,
                 emergencyBadge: revision.isEmergencySession == true,
                 state: done ? .completed : revision.status == .overdue ? .overdue : .pending,
                 plannedLine: "Prévu : \(FrenchDate.format(revision.scheduledDate, "dd MMM yyyy"))",
@@ -149,7 +149,7 @@ struct CourseDetail: Equatable {
                 right: done ? "\(revision.score.map(String.init) ?? "—")/100" : "Valider"
             )
         }
-        deleteConfirm = "Es-tu sûr de vouloir supprimer définitivement le cours C\(course.courseNumber) : \(course.title) ?"
+        deleteConfirm = "Es-tu sûr de vouloir supprimer définitivement le cours \(course.displayReference) : \(course.title) ?"
     }
 }
 
@@ -161,6 +161,7 @@ struct CourseDraft: Equatable, Sendable {
     /// `yyyy-MM-dd`, date du cours (J0).
     var date: String
     var description: String
+    var reference: String? = nil
 
     init(subjectId: String? = nil, chapter: String = "", title: String = "", date: String, description: String = "") {
         self.subjectId = subjectId

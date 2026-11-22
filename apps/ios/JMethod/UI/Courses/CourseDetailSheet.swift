@@ -8,6 +8,7 @@ struct CourseDetailSheet: View {
     let importer: NotebookCourseImporter
     let courseId: String
     @Environment(\.dismiss) private var dismiss
+    @State private var reference = ""
     @State private var confirmingDelete = false
     @State private var path: [SheetRoute] = []
 
@@ -16,7 +17,7 @@ struct CourseDetailSheet: View {
             Group {
                 if let course = app.course(id: courseId) {
                     content(CourseDetail(course: course, subjects: app.document.subjects,
-                                         revisions: app.document.revisions.filter { $0.courseId == courseId }))
+                                         revisions: app.document.revisions.filter { $0.applies(to: courseId) }))
                 } else {
                     ContentUnavailableView("Cours introuvable", systemImage: "questionmark.circle", description: Text("Ce cours n’existe plus."))
                 }
@@ -26,6 +27,7 @@ struct CourseDetailSheet: View {
                     Button("Fermer") { dismiss() }.accessibilityLabel("Fermer la fiche du cours")
                 }
             }
+            .onAppear { reference = app.course(id: courseId)?.displayReference ?? "" }
             .navigationTitle("Fiche du cours")
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: SheetRoute.self) { SheetDocumentView(app: app, route: $0) }
@@ -45,7 +47,7 @@ struct CourseDetailSheet: View {
                     }
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel("\(detail.subjectLabel), chapitre : \(detail.course.chapter)")
-                    (Text("C\(detail.course.courseNumber) ").foregroundColor(Theme.violet) + Text(detail.course.title))
+                    (Text("\(detail.course.displayReference) ").foregroundColor(Theme.violet) + Text(detail.course.title))
                         .font(.title2.weight(.bold))
                         .foregroundStyle(Theme.text)
                         .accessibilityAddTraits(.isHeader)
@@ -72,6 +74,9 @@ struct CourseDetailSheet: View {
                 .panel(padding: Spacing.m)
                 .accessibilityElement(children: .combine)
 
+                TextField("Référence personnelle", text: $reference).textFieldStyle(.roundedBorder)
+                Button("Enregistrer la référence") { app.renameReference(courseId: courseId, value: reference) }
+                    .disabled(reference.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || reference.count > 24 || reference == detail.course.displayReference)
                 CourseMaterialSections(app: app, notebook: notebook, importer: importer, course: detail.course) { path.append($0) }
 
                 if let subject = detail.subject {

@@ -76,8 +76,11 @@ struct RevisionSessionSheet: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.l) {
                 header(detail)
-                CourseMaterialSections(app: app, notebook: notebook, importer: importer, course: detail.course) { path.append($0) }
-                    .id(detail.course.id)
+                ForEach(app.document.courses.filter { detail.revision.applies(to: $0.id) }) { course in
+                    Text(course.displayReference).font(.headline)
+                    CourseMaterialSections(app: app, notebook: notebook, importer: importer, course: course) { path.append($0) }
+                        .id(course.id)
+                }
                 history(detail)
                 if let completed = detail.completedLine {
                     Label(completed, systemImage: "checkmark.circle.fill")
@@ -119,7 +122,7 @@ struct RevisionSessionSheet: View {
                 Tag(text: "\(revision.stepLabel) · \(detail.phaseLabel)", foreground: colors.text, background: colors.background)
             }
             Text(detail.course.title).font(.title2.weight(.bold)).foregroundStyle(Theme.text).accessibilityAddTraits(.isHeader)
-            Text("\(detail.course.chapter) · C\(detail.course.courseNumber)").font(.subheadline).foregroundStyle(Theme.textSecondary)
+            Text(RevisionProgrammes.references(detail.revision, courses: app.document.courses)).font(.subheadline).foregroundStyle(Theme.textSecondary)
             if let late = RevisionSession.lateLabel(revision, today: app.today) {
                 Label(late, systemImage: "clock.arrow.circlepath").font(.footnote.weight(.semibold)).foregroundStyle(Theme.warning)
             } else if detail.completedLine == nil {

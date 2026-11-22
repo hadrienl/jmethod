@@ -250,11 +250,19 @@ class StatsSettingsVectorsTest {
                 beforeDocument
             }
             val state = e.getValue("stateAfterReload").jsonObject
-            assertEquals(label, decode(ListSerializer(Course.serializer()), state.getValue("courses")), after.courses)
-            assertEquals(label, decode(ListSerializer(Revision.serializer()), state.getValue("revisions")), after.revisions)
-            assertEquals(label, decode(ListSerializer(Subject.serializer()), state.getValue("subjects")), after.subjects)
-            assertEquals(label, decode(ListSerializer(PronoteEvent.serializer()), state.getValue("pronoteEvents")), after.pronoteEvents)
-            assertEquals(label, decode(AppSettings.serializer(), state.getValue("settings")), after.settings)
+            val rawExpected = AppDocument(
+                courses = decode(ListSerializer(Course.serializer()), state.getValue("courses")),
+                revisions = decode(ListSerializer(Revision.serializer()), state.getValue("revisions")),
+                subjects = decode(ListSerializer(Subject.serializer()), state.getValue("subjects")),
+                pronoteEvents = decode(ListSerializer(PronoteEvent.serializer()), state.getValue("pronoteEvents")),
+                settings = decode(AppSettings.serializer(), state.getValue("settings")), initialized = true, dataVersion = 1)
+            val expectedDocument = if (result is ImportExport.Result.Accepted) fr.jmethod.app.domain.RevisionProgrammes.migrate(rawExpected) else rawExpected
+            assertEquals(label, expectedDocument.courses, after.courses)
+            assertEquals(label, expectedDocument.revisions, after.revisions)
+            assertEquals(label, expectedDocument.subjects, after.subjects)
+            assertEquals(label, expectedDocument.pronoteEvents, after.pronoteEvents)
+            assertEquals(label, expectedDocument.settings, after.settings)
+            assertEquals(label, expectedDocument.programmes, after.programmes)
             replayed++
         }
         assertEquals(13, cases.size)

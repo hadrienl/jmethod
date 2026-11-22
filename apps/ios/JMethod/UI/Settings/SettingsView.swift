@@ -55,7 +55,7 @@ struct SettingsView: View {
                     PronoteAccountSection(app: app, pronote: pronote)
                     notebookCourses
                     algorithm
-                    intervals
+                    RhythmSettingsCard(app: app).disabled(current.dirty)
                     colors
                     backup
                     about

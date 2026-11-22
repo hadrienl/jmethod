@@ -126,12 +126,14 @@ final class NotebookCourseImporter {
 
     /// Document restauré sans son fichier : relit le cahier et le retélécharge si la séance est encore dans la fenêtre.
     func redownload(_ document: CourseDocument, of course: Course) async throws {
-        guard let key = course.source?.sessionKey else { throw Failure.notInNotebook }
+        let sources = course.sources ?? course.source.map { [$0] } ?? []
+        guard !sources.isEmpty else { throw Failure.notInNotebook }
         let read = try await pronote.readNotebook()
-        let session = read.snapshot.sessions.first { NotebookCourses.sessionKey($0) == key }
-            ?? read.snapshot.sessions.first { NotebookCourses.matchingCourse($0, courses: [course]) != nil }
-        guard let session,
-              let attachment = NotebookCourses.fileAttachments(of: session).first(where: { $0.name == document.name }) else { throw Failure.notInNotebook }
+        let keys = Set(sources.map(\.sessionKey))
+        guard let session = read.snapshot.sessions.first(where: { item in
+            (keys.contains(NotebookCourses.sessionKey(item)) || NotebookCourses.matchingCourse(item, courses: [course]) != nil)
+                && NotebookCourses.fileAttachments(of: item).contains { $0.name == document.name }
+        }), let attachment = NotebookCourses.fileAttachments(of: session).first(where: { $0.name == document.name }) else { throw Failure.notInNotebook }
         let directory = NotebookCourseDraft.newStagingDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let destination = directory.appendingPathComponent(NotebookRules.saveAsName(attachment.name))

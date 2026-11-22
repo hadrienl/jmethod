@@ -69,7 +69,7 @@ object AdaptiveAlgorithm {
     ): Result {
         val completionDate = actualCompletionDate ?: now.atZone(zone).toLocalDate().toString()
         val referenceDate = schedulingReferenceDate ?: completionDate
-        val revisions = allRevisionsForCourse.sortedBy { it.stepIndex }.toMutableList()
+        val revisions = (if (allRevisionsForCourse.any { it.programmeId != null }) allRevisionsForCourse.sortedWith(compareBy<Revision> { it.nominalOffsetDays ?: 0 }.thenBy { it.isEmergencySession == true }) else allRevisionsForCourse.sortedBy { it.stepIndex }).toMutableList()
         val targetIndex = revisions.indexOfFirst { it.id == revisionId }
         require(targetIndex != -1) { "Revision $revisionId non trouvée" }
 
@@ -97,13 +97,15 @@ object AdaptiveAlgorithm {
             val emergencyDate = reference.plusDays(1).toString()
             nextDateStr = emergencyDate
             val emergency = Revision(
-                id = "${currentRev.courseId}-emerg-${now.toEpochMilli()}",
+                id = if (currentRev.programmeId == null) "${currentRev.courseId}-emerg-${now.toEpochMilli()}" else "${currentRev.id}-emerg-${now.toEpochMilli()}",
                 courseId = currentRev.courseId,
                 stepIndex = currentRev.stepIndex,
                 stepLabel = "${currentRev.stepLabel}* (Rattrapage)",
                 scheduledDate = emergencyDate,
                 status = RevisionStatus.PENDING,
-                phase = Phase.CONSOLIDATION,
+                phase = if (currentRev.programmeId == null) Phase.CONSOLIDATION else currentRev.phase,
+                programmeId = currentRev.programmeId, courseIds = currentRev.courseIds, rhythmStepId = currentRev.rhythmStepId,
+                nominalOffsetDays = currentRev.nominalOffsetDays, originRevisionId = if (currentRev.programmeId == null) null else currentRev.id,
                 isEmergencySession = true,
                 adjustedIntervalDays = 1,
             )
@@ -112,8 +114,8 @@ object AdaptiveAlgorithm {
         } else if (nextPendingIndex != -1) {
             val nextRev = revisions[nextPendingIndex]
             val intervals = settings.intervals
-            val currentIntervalVal = intervals.at(currentRev.stepIndex) ?: 0
-            val nextIntervalVal = intervals.at(nextRev.stepIndex) ?: (currentIntervalVal + 1)
+            val currentIntervalVal = currentRev.nominalOffsetDays ?: intervals.at(currentRev.stepIndex) ?: 0
+            val nextIntervalVal = nextRev.nominalOffsetDays ?: intervals.at(nextRev.stepIndex) ?: (currentIntervalVal + 1)
             val defaultStepGap = max(1, nextIntervalVal - currentIntervalVal)
 
             val adaptedGap = max(1, jsRound(defaultStepGap * factor))
@@ -122,11 +124,15 @@ object AdaptiveAlgorithm {
             revisions[nextPendingIndex] = nextRev.copy(scheduledDate = nextDateStr, adjustedIntervalDays = adaptedGap)
 
             var lastDate = nextDate
+            var previousNominal = nextIntervalVal
             for (i in nextPendingIndex + 1 until revisions.size) {
+                if (currentRev.programmeId != null && (revisions[i].status == RevisionStatus.COMPLETED || revisions[i].isEmergencySession == true)) continue
                 val stepGap = max(
                     1,
-                    (intervals.at(revisions[i].stepIndex) ?: 0) - (intervals.at(revisions[i - 1].stepIndex) ?: 0),
+                    (revisions[i].nominalOffsetDays ?: intervals.at(revisions[i].stepIndex) ?: 0) -
+                        (if (currentRev.programmeId != null) previousNominal else intervals.at(revisions[i - 1].stepIndex) ?: 0),
                 )
+                previousNominal = revisions[i].nominalOffsetDays ?: intervals.at(revisions[i].stepIndex) ?: 0
                 val scaledStepGap = max(1, jsRound(stepGap * factor))
                 lastDate = lastDate.plusDays(scaledStepGap.toLong())
                 revisions[i] = revisions[i].copy(scheduledDate = lastDate.toString(), adjustedIntervalDays = scaledStepGap)

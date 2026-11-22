@@ -44,6 +44,7 @@ data class SettingsUiState(
     val revisionCount: Int,
     /** Import lu et validé, en attente de confirmation (il remplace les données). */
     val pendingImport: ImportExport.Result.Accepted?,
+    val document: fr.jmethod.app.model.AppDocument,
 )
 
 sealed interface SettingsEvent {
@@ -64,7 +65,7 @@ class SettingsViewModel(private val repository: AppRepository, private val clock
     val uiState: StateFlow<SettingsUiState?> = combine(repository.document.filterNotNull(), draft, pending) { document, current, import ->
         // Un brouillon périmé (réglages changés ailleurs, import) repart des réglages enregistrés.
         val effective = current?.takeIf { it.base == document.settings } ?: SettingsDraft.of(document.settings)
-        SettingsUiState(effective, document.subjects, document.courses.size, document.revisions.size, import)
+        SettingsUiState(effective, document.subjects, document.courses.size, document.revisions.size, import, document)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     private fun edit(transform: (SettingsDraft) -> SettingsDraft) {
@@ -98,6 +99,21 @@ class SettingsViewModel(private val repository: AppRepository, private val clock
             }
             draft.value = null
             events.send(SettingsEvent.Toast("Réglages enregistrés", "Ils s’appliquent aux prochaines validations et aux nouveaux cours."))
+        }
+    }
+
+    fun saveRhythm(rhythm: fr.jmethod.app.model.RevisionRhythm, adaptive: Boolean, applyToOngoing: Boolean) {
+        viewModelScope.launch {
+            try {
+                fr.jmethod.app.domain.RevisionProgrammes.validate(rhythm)
+                repository.update { document ->
+                    val updated = document.copy(settings = document.settings.copy(rhythm = rhythm,
+                        intervals = rhythm.steps.map { it.offsetDays }, adaptiveEnabled = adaptive))
+                    if (applyToOngoing) fr.jmethod.app.domain.RevisionProgrammes.reapply(updated, document.programmes.map { it.id }.toSet(), rhythm) else updated
+                }
+                events.send(SettingsEvent.Toast("Rythme enregistré", if (applyToOngoing) "Les séances réalisées et les rattrapages ont été conservés." else "Les programmes existants gardent leur rythme et leur mode."))
+            } catch (error: kotlinx.coroutines.CancellationException) { throw error }
+            catch (error: Exception) { events.send(SettingsEvent.Toast("Rythme non enregistré", error.message ?: "Enregistrement impossible.", true)) }
         }
     }
 

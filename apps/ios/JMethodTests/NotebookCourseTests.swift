@@ -259,7 +259,29 @@ final class NotebookCourseTests: XCTestCase {
         }
         XCTAssertEqual(Set(app.document.courses.map(\.id)).count, 2, "identifiants distincts dans la même milliseconde")
         XCTAssertEqual(app.document.courses.map(\.courseNumber).sorted(), [1, 2], "numérotation comme une création manuelle")
-        XCTAssertEqual(app.document.revisions.count, 20)
+        XCTAssertTrue(app.document.revisions.isEmpty, "importer des ressources ne démarre aucun programme")
+    }
+
+    func testAssociateResourcePreservesPersonalSheetAndProgramme() async throws {
+        let (app, root) = try await makeModel()
+        app.openAddCourse(); app.courseDraft.reference = "C42"; app.courseDraft.description = "Mes notes"
+        XCTAssertTrue(app.createCourse())
+        let course = try XCTUnwrap(app.document.courses.first)
+        XCTAssertTrue(app.startProgramme(courseIds: [course.id], startDate: "2026-11-19"))
+        let before = app.document.revisions
+        let resource = NotebookCourses.source(for: session("extra", date: "2026-11-18"))
+        let staged = try stagedFile("Fiche.txt", contents: "x", in: root.appendingPathComponent("staging-associate"))
+        app.notebookDraft = NotebookCourseDraft(form: CourseDraft(subjectId: "maths", date: "2026-11-18"), source: resource, documents: [staged])
+        XCTAssertTrue(app.associateNotebook(to: course.id))
+        let enriched = try XCTUnwrap(app.course(id: course.id))
+        XCTAssertEqual(enriched.displayReference, "C42")
+        XCTAssertEqual(enriched.description, "Mes notes")
+        XCTAssertEqual(enriched.sources, [resource])
+        XCTAssertEqual(enriched.documents?.map(\.name), ["Fiche.txt"])
+        XCTAssertTrue(app.documentExists(try XCTUnwrap(enriched.documents?.first)))
+        XCTAssertEqual(app.document.revisions, before)
+        XCTAssertEqual(app.document.courses.count, 1)
+        XCTAssertEqual(NotebookCourses.migratingKeys(app.document), app.document)
     }
 
     func testCancelledFormRemovesStagedFiles() async throws {

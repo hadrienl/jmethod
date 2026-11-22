@@ -28,7 +28,12 @@ object AppDocumentCodec {
 
     fun encode(document: AppDocument): String = json.encodeToString(AppDocument.serializer(), document)
 
-    fun decode(text: String): AppDocument = json.decodeFromString(AppDocument.serializer(), text)
+    class UnsupportedVersion : IllegalStateException("Ces données nécessitent une version plus récente de J-Method. Elles n’ont pas été modifiées.")
+    fun decode(text: String): AppDocument {
+        val document = json.decodeFromString(AppDocument.serializer(), text)
+        if (document.schemaVersion !in 1..2) throw UnsupportedVersion()
+        return document
+    }
 
     /**
      * Export au format de `exportAllData` (sans `pronoteEvents`), `exportDate` en ISO UTC à la milliseconde,
@@ -37,20 +42,30 @@ object AppDocumentCodec {
     fun export(document: AppDocument, now: java.time.Instant): String {
         val full = json.encodeToJsonElement(AppDocument.serializer(), document).jsonObject
         val exported = kotlinx.serialization.json.buildJsonObject {
-            put("version", kotlinx.serialization.json.JsonPrimitive("1.0"))
+            put("version", kotlinx.serialization.json.JsonPrimitive(if (document.schemaVersion >= 2) "2.0" else "1.0"))
             put("exportDate", kotlinx.serialization.json.JsonPrimitive(isoMillis(now)))
+            if (document.schemaVersion >= 2) {
+                put("schemaVersion", kotlinx.serialization.json.JsonPrimitive(document.schemaVersion))
+                put("programmes", full.getValue("programmes"))
+            }
             // `notebookImports` (cahier de textes → cours) seulement s’il existe : ignoré par le web.
             val keys = listOf("courses", "revisions", "subjects", "settings") + if (document.notebookImports.isEmpty()) emptyList() else listOf("notebookImports")
             for (key in keys) {
                 val value = full.getValue(key)
                 put(key, when (key) {
                     "revisions" -> reorderRevisions(value)
-                    "settings" -> reorder(value as JsonObject, settingsKeyOrder)
+                    "settings" -> reorder(if (document.schemaVersion < 2) JsonObject((value as JsonObject).filterKeys { it != "rhythm" && it != "adaptiveEnabled" }) else value as JsonObject, settingsKeyOrder)
                     else -> value
                 })
             }
         }
-        return JsStringify.stringify(exported)
+        val payload = if (document.schemaVersion < 2) exported else kotlinx.serialization.json.buildJsonObject {
+            put("version", kotlinx.serialization.json.JsonPrimitive("2.0"))
+            put("exportDate", kotlinx.serialization.json.JsonPrimitive(isoMillis(now)))
+            put("schemaVersion", kotlinx.serialization.json.JsonPrimitive(2))
+            put("data", exported)
+        }
+        return JsStringify.stringify(payload)
     }
 
     /** Ordre des clés d’une révision dans le stockage du web (création, rattrapage, puis validation). */
@@ -88,7 +103,11 @@ object AppDocumentCodec {
      * absentes reprennent les valeurs par défaut.
      */
     fun decodeExport(text: String): AppDocument? = runCatching {
-        val root: JsonObject = json.parseToJsonElement(text).jsonObject
+        val envelope: JsonObject = json.parseToJsonElement(text).jsonObject
+        if (envelope["data"] != null && (envelope["schemaVersion"] as? kotlinx.serialization.json.JsonPrimitive)?.content != "2") return null
+        val root = (envelope["data"] as? JsonObject) ?: envelope
+        val schema = (root["schemaVersion"] as? kotlinx.serialization.json.JsonPrimitive)?.content?.toIntOrNull() ?: 1
+        if (schema !in 1..2) return null
         if (root["courses"] == null || root["revisions"] == null) return null
         json.decodeFromJsonElement(AppDocument.serializer(), root).copy(initialized = true, dataVersion = DataMigrations.CURRENT_VERSION)
     }.getOrNull()
@@ -171,6 +190,10 @@ object JsStringify {
  * soit l’ancienne version, soit la nouvelle, jamais un document tronqué.
  */
 class AppDocumentStore(private val file: File) {
+    // Le document v1 reste intact : sauvegarde avant migration et protection contre une ancienne app.
+    private val v2File = File(file.parentFile, "${file.nameWithoutExtension}-v2.json")
+    private fun readableFile() = if (v2File.exists()) v2File else file
+
 
     sealed interface ReadResult {
         data object Missing : ReadResult
@@ -180,28 +203,33 @@ class AppDocumentStore(private val file: File) {
     }
 
     fun read(): ReadResult {
-        if (!file.exists()) return ReadResult.Missing
+        val selected = readableFile()
+        if (!selected.exists()) return ReadResult.Missing
         return try {
-            ReadResult.Loaded(AppDocumentCodec.decode(file.readText(Charsets.UTF_8)))
+            ReadResult.Loaded(AppDocumentCodec.decode(selected.readText(Charsets.UTF_8)))
+        } catch (error: AppDocumentCodec.UnsupportedVersion) {
+            throw error
         } catch (_: Exception) {
-            val kept = File(file.parentFile, "${file.nameWithoutExtension}.corrompu-${System.currentTimeMillis()}.json")
-            file.renameTo(kept)
+            val kept = File(file.parentFile, "${selected.nameWithoutExtension}.corrompu-${System.currentTimeMillis()}.json")
+            check(selected.renameTo(kept)) { "Le fichier illisible ne peut pas être mis de côté." }
             ReadResult.Corrupted(kept)
         }
     }
 
     @Synchronized
     fun write(document: AppDocument) {
+        require(document.schemaVersion <= 2) { "Version de document non prise en charge." }
+        val target = if (document.schemaVersion >= 2) v2File else file
         val directory = requireNotNull(file.absoluteFile.parentFile)
         directory.mkdirs()
-        val temporary = File(directory, "${file.name}.tmp")
+        val temporary = File(directory, "${target.name}.tmp")
         FileOutputStream(temporary).use { out ->
             out.write(AppDocumentCodec.encode(document).toByteArray(Charsets.UTF_8))
             out.flush()
             out.fd.sync()
         }
         try {
-            Files.move(temporary.toPath(), file.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+            Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
         } catch (error: Exception) {
             temporary.delete()
             throw error

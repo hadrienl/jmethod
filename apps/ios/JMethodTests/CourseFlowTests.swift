@@ -36,14 +36,14 @@ final class CourseFlowTests: XCTestCase {
         return document
     }
 
-    func testFirstCourseIsCreatedWithItsRevisionsAndPersisted() async throws {
+    func testPersonalSheetIsCreatedWithoutRevisionsThenProgrammeIsExplicit() async throws {
         let (app, _, url) = try await model(at: "2026-11-17T17:30:00Z")
         XCTAssertTrue(app.document.courses.isEmpty)
         app.openAddCourse()
         XCTAssertEqual(app.presented, .addCourse)
         XCTAssertEqual(app.courseDraft.subjectId, "maths", "première matière de la liste")
         XCTAssertEqual(app.courseDraft.date, "2026-11-17", "date du lancement de l'app")
-        XCTAssertFalse(app.createCourse(), "refusé sans chapitre ni titre")
+        app.courseDraft.reference = "C42"
         app.courseDraft.chapter = "  Statistiques "
         app.courseDraft.title = " Moyenne "
         XCTAssertTrue(app.createCourse())
@@ -53,11 +53,13 @@ final class CourseFlowTests: XCTestCase {
         XCTAssertEqual(course.title, "Moyenne")
         XCTAssertNil(course.description)
         XCTAssertEqual(course.createdAt, "2026-11-17")
-        XCTAssertEqual(app.document.revisions.map(\.id), (0..<10).map { "course-1794936600000-rev-\($0)" })
-        XCTAssertEqual(app.toast?.title, "Nouveau cours créé !")
-        XCTAssertEqual(app.toast?.message, "C1 « Moyenne » ajouté avec ses 10 échéances de révision.")
-        // Le soir du 17 prépare le 18 : le J0 (17) et le J1 (18) sont au programme.
-        XCTAssertEqual(app.programme.due.map(\.id), ["course-1794936600000-rev-0", "course-1794936600000-rev-1"])
+        XCTAssertEqual(course.displayReference, "C42")
+        XCTAssertTrue(app.document.revisions.isEmpty)
+        XCTAssertTrue(app.document.programmes.isEmpty)
+        XCTAssertEqual(app.toast?.title, "Feuille enregistrée")
+        XCTAssertTrue(app.programme.due.isEmpty)
+        XCTAssertTrue(app.startProgramme(courseIds: [course.id], startDate: "2026-11-18"))
+        XCTAssertEqual(app.programme.due.map(\.stepLabel), ["J0"], "J1 reste au lendemain du jour préparé")
         let stored = try await saved(url) { !$0.courses.isEmpty }
         XCTAssertEqual(stored?.courses, app.document.courses)
         XCTAssertEqual(stored?.revisions, app.document.revisions)
@@ -93,19 +95,26 @@ final class CourseFlowTests: XCTestCase {
         XCTAssertEqual(app.document.courses.first?.date, "2026-11-19")
     }
 
-    func testDeletingCourseRemovesItsRevisionsButKeepsSlots() async throws {
+    func testDeletingProgrammeLinkedSheetPreservesHistoryAndDocuments() async throws {
         let document = try Fixture.document(today: "2026-11-17")
-        let (app, _, url) = try await model(at: "2026-11-17T19:00:00Z", document: document)
-        app.presented = .course(courseId: "course-test-1")
+        let (app, _, _) = try await model(at: "2026-11-17T19:00:00Z", document: document)
+        let before = app.document
         app.deleteCourse(id: "course-test-1")
-        XCTAssertEqual(app.document.courses.map(\.id), ["course-test-2"])
-        XCTAssertFalse(app.document.revisions.contains { $0.courseId == "course-test-1" })
-        XCTAssertEqual(app.document.revisions.count, 10)
-        XCTAssertEqual(app.document.pronoteEvents, document.pronoteEvents)
-        XCTAssertEqual(app.toast?.title, "Cours supprimé")
+        XCTAssertEqual(app.document, before)
+        XCTAssertEqual(app.toast?.title, "Feuille conservée")
         XCTAssertEqual(app.toast?.kind, .info)
-        let stored = try await saved(url) { $0.courses.count == 1 }
-        XCTAssertEqual(stored?.courses.map(\.id), ["course-test-2"])
+    }
+
+    func testSheetWithoutProgrammeCanBeDeleted() async throws {
+        let (app, _, _) = try await model(at: "2026-11-17T19:00:00Z")
+        app.openAddCourse()
+        XCTAssertTrue(app.createCourse(), "titre et chapitre facultatifs")
+        let course = try XCTUnwrap(app.document.courses.first)
+        XCTAssertEqual(course.displayReference, "C1")
+        XCTAssertEqual(course.title, "C1")
+        XCTAssertTrue(app.document.revisions.isEmpty)
+        app.deleteCourse(id: course.id)
+        XCTAssertTrue(app.document.courses.isEmpty)
     }
 
     func testValidatingFromPlanningUsesEveningReference() async throws {

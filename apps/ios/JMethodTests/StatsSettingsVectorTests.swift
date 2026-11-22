@@ -262,11 +262,17 @@ final class StatsSettingsVectorTests: XCTestCase {
                 after = beforeDocument
             }
             let state = try XCTUnwrap(expected["stateAfterReload"] as? [String: Any])
-            check(after.courses, try decodeJSON([Course].self, state["courses"]), "\(name) cours")
-            check(after.revisions, try decodeJSON([Revision].self, state["revisions"]), "\(name) séances")
-            check(after.subjects, try decodeJSON([Subject].self, state["subjects"]), "\(name) matières")
-            check(after.pronoteEvents, try decodeJSON([PronoteEvent].self, state["pronoteEvents"]), "\(name) créneaux")
-            check(after.settings, try decodeJSON(AppSettings.self, state["settings"]), "\(name) réglages")
+            let rawExpected = AppDocument(settings: try decodeJSON(AppSettings.self, state["settings"]),
+                subjects: try decodeJSON([Subject].self, state["subjects"]), courses: try decodeJSON([Course].self, state["courses"]),
+                revisions: try decodeJSON([Revision].self, state["revisions"]), pronoteEvents: try decodeJSON([PronoteEvent].self, state["pronoteEvents"]), initialized: true)
+            let expectedDocument: AppDocument
+            if case .accepted = result { expectedDocument = RevisionProgrammes.migrate(rawExpected) } else { expectedDocument = rawExpected }
+            check(after.courses, expectedDocument.courses, "\(name) cours")
+            check(after.revisions, expectedDocument.revisions, "\(name) séances")
+            check(after.subjects, expectedDocument.subjects, "\(name) matières")
+            check(after.pronoteEvents, expectedDocument.pronoteEvents, "\(name) créneaux")
+            check(after.settings, expectedDocument.settings, "\(name) réglages")
+            check(after.programmes, expectedDocument.programmes, "\(name) programmes")
             replayed += 1
         }
         check(list.count, 13, "importExport")

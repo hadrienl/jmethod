@@ -156,13 +156,13 @@ data class PlanningModel(
                             revisionId = revision.id,
                             subjectName = subject.name,
                             stepLabel = revision.stepLabel,
-                            phaseLine = "${revision.phase.displayLabel} · C${course.courseNumber}",
+                            phaseLine = "${revision.phaseLabel} · ${RevisionProgrammes.references(revision, courses)}",
                             title = course.title,
                             chapter = course.chapter,
                             done = done,
                             footer = if (done) "Terminée · ${revision.score?.toString() ?: "—"}/100" else "Voir la séance →",
-                            accessibilityLabel = "${subject.name}, ${revision.stepLabel}, ${revision.phase.displayLabel}, " +
-                                "C${course.courseNumber} ${course.title}${if (done) ", terminée" else ""}",
+                            accessibilityLabel = "${subject.name}, ${revision.stepLabel}, ${revision.phaseLabel}, " +
+                                "${RevisionProgrammes.references(revision, courses)} ${course.title}${if (done) ", terminée" else ""}",
                         )
                     },
                     empty = if (dayRevisions.isEmpty()) EMPTY_DAY else null,
@@ -193,6 +193,7 @@ data class RevisionDetailModel(
     val historyEmpty: String?,
     val completedLine: String?,
     val canValidate: Boolean,
+    val members: List<Course> = emptyList(),
 ) {
     data class HistoryRow(val revisionId: String, val label: String, val detail: String)
 
@@ -205,7 +206,7 @@ data class RevisionDetailModel(
             val reference = revision.completedDate ?: revision.scheduledDate
             val history = revisions
                 .filter {
-                    it.courseId == course.id && it.id != revision.id && it.status == RevisionStatus.COMPLETED &&
+                    (if (revision.programmeId == null) it.courseId == course.id else it.programmeId == revision.programmeId) && it.id != revision.id && it.status == RevisionStatus.COMPLETED &&
                         (!completed || (it.completedDate ?: it.scheduledDate) <= reference)
                 }
                 .sortedWith { a, b ->
@@ -217,17 +218,17 @@ data class RevisionDetailModel(
                 course = course,
                 subject = subject,
                 subjectName = subject.name,
-                title = "C${course.courseNumber} · ${course.title}",
+                title = "${RevisionProgrammes.references(revision, courses)} · ${course.title}",
                 chapterLine = "Chapitre : ${course.chapter}",
                 stepLabel = revision.stepLabel,
-                phaseLabel = revision.phase.displayLabel,
+                phaseLabel = revision.phaseLabel,
                 plannedLine = "Prévue le ${FrenchDates.format(revision.scheduledDate, FrenchDates::dayMonthYear)}",
                 description = course.description?.takeIf { it.isNotEmpty() },
                 historyTitle = "Sessions précédentes (${history.size})",
                 history = history.map {
                     HistoryRow(
                         revisionId = it.id,
-                        label = "${it.stepLabel} · ${it.phase.displayLabel}",
+                        label = "${it.stepLabel} · ${it.phaseLabel}",
                         detail = "${FrenchDates.format(it.completedDate ?: it.scheduledDate, FrenchDates::numeric)} · " +
                             (it.score?.let { score -> "$score/100" } ?: "Sans note"),
                     )
@@ -240,6 +241,7 @@ data class RevisionDetailModel(
                     null
                 },
                 canValidate = !completed,
+                members = (revision.courseIds ?: listOf(revision.courseId)).mapNotNull { id -> courses.firstOrNull { it.id == id } },
             )
         }
     }

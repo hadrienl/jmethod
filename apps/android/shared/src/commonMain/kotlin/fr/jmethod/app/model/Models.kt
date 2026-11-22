@@ -46,7 +46,11 @@ data class Course(
     val source: CourseSource? = null,
     /** Documents copiés dans le stockage privé ; l’export n’en contient que les métadonnées. */
     val documents: List<CourseDocument>? = null,
-)
+    val reference: String? = null,
+    val sources: List<CourseSource>? = null,
+) {
+    val displayReference: String get() = reference?.takeIf { it.isNotBlank() } ?: "C$courseNumber"
+}
 
 @Serializable
 data class CourseSource(
@@ -100,7 +104,19 @@ data class Revision(
     val phase: Phase,
     val adjustedIntervalDays: Int? = null,
     val isEmergencySession: Boolean? = null,
-)
+    val programmeId: String? = null,
+    val courseIds: List<String>? = null,
+    val rhythmStepId: String? = null,
+    val nominalOffsetDays: Int? = null,
+    val originRevisionId: String? = null,
+) {
+    val phaseLabel: String get() = if (programmeId == null) phase.info.label else when (phase) {
+        Phase.ENCODAGE -> "Encodage"
+        Phase.CONSOLIDATION -> "Consolidation"
+        Phase.RECUPERATION -> "Récupération"
+    }
+    fun appliesTo(id: String): Boolean = id in (courseIds ?: listOf(courseId))
+}
 
 @Serializable
 data class PronoteEvent(
@@ -133,6 +149,8 @@ data class AppSettings(
     val notebookAutoCreate: Boolean? = null,
     /** YYYY-MM-DD : seules les séances à partir de cette date sont créées automatiquement. */
     val notebookAutoCreateSince: String? = null,
+    val rhythm: RevisionRhythm? = null,
+    val adaptiveEnabled: Boolean = true,
 )
 
 /**
@@ -153,4 +171,6 @@ data class AppDocument(
     val dataVersion: Int = 0,
     /** Séances du cahier de textes déjà transformées en cours, par `sessionKey`. */
     val notebookImports: Map<String, NotebookImport> = emptyMap(),
+    val programmes: List<RevisionProgramme> = emptyList(),
+    val schemaVersion: Int = 1,
 )

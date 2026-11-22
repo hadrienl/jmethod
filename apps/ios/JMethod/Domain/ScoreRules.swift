@@ -55,17 +55,37 @@ enum ScoreSubmission {
         var explanation: AdaptiveAlgorithm.Explanation?
     }
 
-    static func submit(revisions: [Revision], courses: [Course], settings: AppSettings, revisionId: String, score: Int, now: Date) throws -> Outcome {
+    static func submit(revisions: [Revision], courses: [Course], settings: AppSettings, revisionId: String, score: Int, now: Date, programmes: [RevisionProgramme] = []) throws -> Outcome {
         let today = SchoolDay.today(now: now)
         guard let target = revisions.first(where: { $0.id == revisionId }), target.status != .completed else {
             return Outcome(today: today, preparationDate: nil, ignored: true, revisions: revisions, celebrate: false, toast: nil, explanation: nil)
         }
+        guard (0...100).contains(score) else { throw RevisionProgrammes.Failure(message: "Le score doit être compris entre 0 et 100.") }
         let before = EveningProgramme(revisions: revisions, courses: courses, today: today)
-        let result = try AdaptiveAlgorithm.applyReview(
-            courseRevisions: revisions.filter { $0.courseId == target.courseId }, revisionId: revisionId, score: score,
-            settings: settings, actualCompletionDate: today, schedulingReferenceDate: before.preparationDate, now: now
-        )
-        let updated = revisions.filter { $0.courseId != target.courseId } + result.updatedRevisions
+        func sameProgramme(_ revision: Revision) -> Bool {
+            if let id = target.programmeId { return revision.programmeId == id }
+            return revision.courseId == target.courseId && revision.programmeId == nil
+        }
+        let currentProgramme = programmes.first { $0.id == target.programmeId }
+        guard target.programmeId == nil || currentProgramme != nil else { throw RevisionProgrammes.Failure(message: "Le programme de cette séance n’existe plus.") }
+        var programmeSettings = settings
+        if let currentProgramme { programmeSettings.intervals = currentProgramme.rhythmSnapshot.steps.map(\.offsetDays) }
+        let result: AdaptiveAlgorithm.Result
+        if let currentProgramme, !currentProgramme.adaptiveEnabled || currentProgramme.needsReview {
+            let changed = revisions.filter(sameProgramme).map { revision -> Revision in
+                guard revision.id == revisionId else { return revision }
+                var value = revision; value.status = .completed; value.completedDate = today; value.score = score
+                return value
+            }
+            result = AdaptiveAlgorithm.Result(updatedRevisions: changed, explanation: .init(score: score, factor: 1,
+                message: "Séance validée. Les dates des prochaines séances sont conservées.", actionType: .exact,
+                nextDate: changed.first { $0.status != .completed }?.scheduledDate))
+        } else {
+            result = try AdaptiveAlgorithm.applyReview(
+                courseRevisions: revisions.filter(sameProgramme), revisionId: revisionId, score: score,
+                settings: programmeSettings, actualCompletionDate: today, schedulingReferenceDate: before.preparationDate, now: now)
+        }
+        let updated = revisions.filter { !sameProgramme($0) } + result.updatedRevisions
         let after = EveningProgramme(revisions: updated, courses: courses, today: today)
         let emergency = result.explanation.actionType == .emergency
         return Outcome(

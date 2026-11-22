@@ -180,7 +180,7 @@ fun SettingsScreen(
                 PronoteAccountSection(pronoteViewModel, pronote, syncInfo)
                 NotebookSection(autoCreate, onAutoCreateChange)
                 Algorithm(draft, viewModel)
-                Intervals(draft, viewModel)
+                RhythmSettingsPanel(ui, viewModel)
                 Colors(ui.subjects) { colorFor = it }
                 Backup(ui, onExport = viewModel::requestExport, onImport = { importer() })
                 About()

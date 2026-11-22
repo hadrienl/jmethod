@@ -114,6 +114,9 @@ struct SignInView: View {
                     .buttonStyle(PrimaryButtonStyle())
                     .disabled(!canSubmit)
 
+                    Button("Continuer sans Pronote") { pronote.useLocally() }
+                        .buttonStyle(SecondaryButtonStyle()).disabled(pronote.isWorking)
+
                     if let message = pronote.errorMessage, !pronote.isWorking {
                         Label(message, systemImage: "exclamationmark.circle")
                             .font(.subheadline)

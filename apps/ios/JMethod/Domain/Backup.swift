@@ -22,6 +22,8 @@ enum Backup {
         var settings: AppSettings?
         /// nil : suivi des imports du cahier de textes conservé (sauvegarde web ou ancienne).
         var notebookImports: [String: NotebookImport]? = nil
+        var programmes: [RevisionProgramme] = []
+        var schemaVersion = 1
 
         func apply(to document: AppDocument) -> AppDocument {
             var result = document
@@ -31,7 +33,9 @@ enum Backup {
             if let notebookImports { result.notebookImports = notebookImports }
             if let settings { result.settings = settings }
             result.initialized = true
-            return result
+            result.programmes = programmes
+            result.schemaVersion = schemaVersion
+            return RevisionProgrammes.migrate(NotebookCourses.migratingKeys(result))
         }
     }
 
@@ -68,8 +72,17 @@ enum Backup {
     }
 
     static func parse(_ data: Data) -> ImportResult {
-        guard let root = (try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed])) as? [String: Any],
-              !falsy(root["courses"]), !falsy(root["revisions"]) else {
+        guard let envelope = (try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed])) as? [String: Any] else {
+            return .rejected(title: errorTitle, message: invalidMessage)
+        }
+        let root: [String: Any]
+        if let payload = envelope["data"] {
+            guard envelope["schemaVersion"] as? Int == 2, envelope["version"] as? String == "2.0", let object = payload as? [String: Any], object["schemaVersion"] as? Int == 2 else {
+                return shapeError("cette version nécessite une app plus récente")
+            }
+            root = object
+        } else { root = envelope }
+        guard !falsy(root["courses"]), !falsy(root["revisions"]) else {
             return .rejected(title: errorTitle, message: invalidMessage)
         }
         // D13 : validation de forme avant tout remplacement.
@@ -110,7 +123,22 @@ enum Backup {
             imports = decoded
         default: return shapeError("le suivi du cahier de textes est illisible")
         }
-        return .accepted(Accepted(courses: courses, revisions: revisions, subjects: subjects, settings: settings, notebookImports: imports))
+        let schema: Int
+        if let raw = root["schemaVersion"] {
+            guard let number = raw as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID(), let value = raw as? Int else { return shapeError("la version du document est illisible") }
+            schema = value
+        } else { schema = 1 }
+        guard (1...2).contains(schema) else { return shapeError("cette version nécessite une app plus récente") }
+        var programmes: [RevisionProgramme] = []
+        if schema == 2 {
+            guard let raw = root["programmes"], let decoded = decodeList(RevisionProgramme.self, raw) else { return shapeError("les programmes sont illisibles") }
+            programmes = decoded
+            var candidate = AppDocument(settings: settings ?? Constants.defaultSettings, subjects: subjects ?? [], courses: courses, revisions: revisions, pronoteEvents: [], initialized: true)
+            candidate.programmes = programmes; candidate.schemaVersion = 2
+            do { try RevisionProgrammes.validateDocument(candidate, checkSubjects: subjects != nil) }
+            catch { return shapeError("les feuilles, programmes ou rythmes sont incohérents") }
+        }
+        return .accepted(Accepted(courses: courses, revisions: revisions, subjects: subjects, settings: settings, notebookImports: imports, programmes: programmes, schemaVersion: schema))
     }
 
     // MARK: Export
@@ -118,6 +146,20 @@ enum Backup {
     /// Texte identique à `JSON.stringify({ version, exportDate, courses, revisions, subjects, settings }, null, 2)`,
     /// ordre des clés du web ; `pronoteEvents` n'est pas exporté.
     static func export(_ document: AppDocument, now: Date) -> String {
+        if document.schemaVersion >= 2 {
+            // Même contrat Codable que le document local ; les fichiers joints restent locaux.
+            guard let data = try? DocumentStore.encode(document),
+                  var object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return "{}" }
+            object.removeValue(forKey: "pronoteEvents")
+            object.removeValue(forKey: "initialized")
+            object.removeValue(forKey: "dataVersion")
+            object["version"] = "2.0"; object["exportDate"] = isoMillis(now)
+            if object["programmes"] == nil { object["programmes"] = [] }
+            let envelope: [String: Any] = ["version": "2.0", "schemaVersion": 2, "exportDate": isoMillis(now), "data": object]
+            guard let output = try? JSONSerialization.data(withJSONObject: envelope, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]),
+                  let text = String(data: output, encoding: .utf8) else { return "{}" }
+            return text
+        }
         let value: JSValue = .object([
             ("version", .string("1.0")),
             ("exportDate", .string(isoMillis(now))),

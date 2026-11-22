@@ -48,7 +48,7 @@ object RevisionSession {
 
     /** Prochaine séance due d’un cours (section 8.4) : la première non faite dans l’ordre des J. */
     fun nextOfCourse(courseId: String, revisions: List<Revision>): Revision? =
-        revisions.filter { it.courseId == courseId && it.status != RevisionStatus.COMPLETED }.minByOrNull { it.stepIndex }
+        revisions.filter { it.appliesTo(courseId) && it.status != RevisionStatus.COMPLETED }.minByOrNull { it.stepIndex }
 
     /** Libellé du bouton d’enchaînement : « Séance suivante · <matière> — <titre> ». */
     fun nextLabel(revision: Revision, courses: List<Course>, subjects: List<Subject>): String? {
@@ -100,14 +100,14 @@ object RevisionSession {
      * sont retirées : elles s’ouvrent depuis « Le cours ».
      */
     fun notebookPart(course: Course, snapshot: NotebookSnapshot?): NotebookPart? {
-        val source = course.source ?: return null
-        // Séance d’origine retrouvée par sa clé stable (date, matière, rang), jamais par le `N` de session.
-        val session = snapshot?.sessions?.firstOrNull { it.key == source.sessionKey }
+        val sources = (course.sources ?: listOfNotNull(course.source)).distinctBy { it.sessionKey }
+        if (sources.isEmpty()) return null
         val imported = course.documents.orEmpty().mapTo(HashSet()) { it.name }
-        val contents = session?.contents?.map { content ->
+        val sessions = sources.mapNotNull { source -> snapshot?.sessions?.firstOrNull { it.key == source.sessionKey } }
+        val contents = if (sessions.isEmpty()) null else sessions.flatMap { session -> session.contents.map { content ->
             content.copy(attachments = content.attachments.filter { it.kind != NotebookAttachment.Kind.FILE || it.name !in imported })
-        }
-        return NotebookPart(sessionLine(source.date), contents)
+        } }
+        return NotebookPart(sources.joinToString(" · ") { sessionLine(it.date) }, contents)
     }
 
     // region Documents proches (section 8.5)

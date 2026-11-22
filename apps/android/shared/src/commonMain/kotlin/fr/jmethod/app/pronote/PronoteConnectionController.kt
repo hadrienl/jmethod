@@ -771,6 +771,12 @@ class PronoteConnectionController(
         if (last == null || Duration.between(last, now()) > FOREGROUND_SYNC_AFTER) retry()
     }
 
+    /** Les feuilles personnelles et leurs programmes ne nécessitent pas de compte Pronote. */
+    fun useLocally() {
+        if (state.value.access != AccessPhase.SIGNED_OUT || state.value.busy || state.value.browserStarted) return
+        state.update { it.copy(access = AccessPhase.OFFLINE, isError = false, title = "Cours personnels", message = "Utilisation locale sans Pronote. Tes feuilles et révisions sont enregistrées sur $device.") }
+    }
+
     /** Ouvre l’app sur les données locales sans attendre la fin de la reprise. */
     fun skipResume() {
         if (state.value.access != AccessPhase.CHECKING) return

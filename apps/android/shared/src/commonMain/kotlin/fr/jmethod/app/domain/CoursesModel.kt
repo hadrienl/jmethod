@@ -39,7 +39,7 @@ data class CoursesListModel(
             if (query.isEmpty()) return true
             return course.title.foldForSearch().contains(query) ||
                 course.chapter.foldForSearch().contains(query) ||
-                "c${course.courseNumber}".contains(query)
+                course.displayReference.foldForSearch().contains(query)
         }
 
         fun build(
@@ -50,7 +50,7 @@ data class CoursesListModel(
             subjectId: String?,
         ): CoursesListModel {
             val filtered = courses.filter { (subjectId == null || it.subjectId == subjectId) && matches(it, search) }
-            val byCourse = revisions.groupBy { it.courseId }
+            val byCourse = courses.associate { course -> course.id to revisions.filter { it.appliesTo(course.id) } }
             val groups = subjects.mapNotNull { subject ->
                 val subjectCourses = filtered.filter { it.subjectId == subject.id }
                 if (subjectCourses.isEmpty()) return@mapNotNull null
@@ -76,7 +76,7 @@ data class CoursesListModel(
             val lastScore = courseRevisions.lastOrNull { it.score != null }?.score
             return Card(
                 course = course,
-                badge = "C${course.courseNumber}",
+                badge = course.displayReference,
                 dateLine = "Cours du ${FrenchDates.format(course.date, FrenchDates::numeric)}",
                 lastScoreLine = lastScore?.let { "Dernier score : $it/100" },
                 counter = "$completed / ${courseRevisions.size} J",
@@ -126,7 +126,7 @@ data class CourseDetailModel(
     companion object {
         fun build(course: Course, subjects: List<Subject>, allRevisions: List<Revision>): CourseDetailModel {
             val subject = subjects.firstOrNull { it.id == course.subjectId }
-            val sorted = allRevisions.filter { it.courseId == course.id }.sortedBy { it.stepIndex }
+            val sorted = allRevisions.filter { it.appliesTo(course.id) }.sortedBy { it.stepIndex }
             val completedCount = sorted.count { it.status == RevisionStatus.COMPLETED }
             // Écart D1 : 0 % au lieu de NaN % pour un cours sans révision.
             val percent = if (sorted.isEmpty()) 0 else jsRound(completedCount.toDouble() / sorted.size * 100)
@@ -137,7 +137,7 @@ data class CourseDetailModel(
                 subject = subject,
                 subjectLabel = subject?.name ?: "Matière",
                 chapterLine = "Chapitre : ${course.chapter}",
-                title = "C${course.courseNumber} ${course.title}",
+                title = "${course.displayReference} ${course.title}",
                 // Écart D2 : « Créé le » affiche la date de création, la date du cours reste « Cours du ».
                 createdLine = "Créé le ${FrenchDates.format(course.createdAt, FrenchDates::paddedDayMonthYear)}",
                 courseDateLine = "Cours du ${FrenchDates.format(course.date, FrenchDates::paddedDayMonthYear)}",
@@ -156,7 +156,7 @@ data class CourseDetailModel(
                         revisionId = revision.id,
                         stepLabel = revision.stepLabel,
                         phase = revision.phase,
-                        phaseLabel = revision.phase.displayLabel,
+                        phaseLabel = revision.phaseLabel,
                         emergencyBadge = revision.isEmergencySession == true,
                         state = state,
                         plannedLine = "Prévu : ${FrenchDates.format(revision.scheduledDate, FrenchDates::paddedDayMonthShortYear)}",
@@ -181,6 +181,7 @@ object CourseEditing {
         /** `yyyy-MM-dd`, date du cours (J0). */
         val date: String,
         val description: String,
+        val reference: String? = null,
     )
 
     data class Prefill(val subjectId: String?, val date: String, val title: String)
@@ -243,6 +244,7 @@ object CourseEditing {
             chapter = form.chapter.trim(),
             courseNumber = courseNumber(courses, form.subjectId, form.chapter),
             title = form.title.trim(),
+            reference = form.reference,
             date = form.date,
             description = form.description.trim().ifEmpty { null },
             createdAt = now.atZone(zone).toLocalDate().toString(),

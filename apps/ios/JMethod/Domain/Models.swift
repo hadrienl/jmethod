@@ -29,6 +29,9 @@ struct Course: Codable, Identifiable, Hashable, Sendable {
     var source: CourseSource? = nil
     /// Documents joints, copiés dans le stockage privé de l'app (métadonnées seulement dans le JSON).
     var documents: [CourseDocument]? = nil
+    var reference: String? = nil
+    var sources: [CourseSource]? = nil
+    var displayReference: String { reference.flatMap { $0.isEmpty ? nil : $0 } ?? "C\(courseNumber)" }
 }
 
 /// Origine d'un cours créé depuis le cahier de textes.
@@ -81,6 +84,12 @@ struct Revision: Codable, Identifiable, Hashable, Sendable {
     var phase: Phase
     var adjustedIntervalDays: Int?
     var isEmergencySession: Bool?
+    var programmeId: String? = nil
+    var courseIds: [String]? = nil
+    var rhythmStepId: String? = nil
+    var nominalOffsetDays: Int? = nil
+    var originRevisionId: String? = nil
+    func applies(to id: String) -> Bool { (courseIds ?? [courseId]).contains(id) }
 }
 
 struct PronoteEvent: Codable, Identifiable, Hashable, Sendable {
@@ -109,6 +118,8 @@ struct AppSettings: Codable, Hashable, Sendable {
     var notebookAutoCreate: Bool?
     /// `yyyy-MM-dd` : jour d'activation de la création automatique (séances éligibles à partir de ce jour).
     var notebookAutoCreateSince: String?
+    var rhythm: RevisionRhythm? = nil
+    var adaptiveEnabled: Bool = true
 
     var autoCreatesCourses: Bool { notebookAutoCreate == true }
 
@@ -141,6 +152,8 @@ struct AppSettings: Codable, Hashable, Sendable {
         userGrade = try container.decodeIfPresent(String.self, forKey: .userGrade) ?? defaults.userGrade
         notebookAutoCreate = try container.decodeIfPresent(Bool.self, forKey: .notebookAutoCreate)
         notebookAutoCreateSince = try container.decodeIfPresent(String.self, forKey: .notebookAutoCreateSince)
+        rhythm = try container.decodeIfPresent(RevisionRhythm.self, forKey: .rhythm)
+        adaptiveEnabled = try container.decodeIfPresent(Bool.self, forKey: .adaptiveEnabled) ?? true
     }
 }
 
@@ -155,9 +168,11 @@ struct AppDocument: Codable, Equatable, Sendable {
     var initialized: Bool
     /// Séances du cahier de textes déjà importées ou refusées, par `sessionKey`.
     var notebookImports: [String: NotebookImport] = [:]
+    var programmes: [RevisionProgramme] = []
+    var schemaVersion: Int = 1
 
     private enum CodingKeys: String, CodingKey {
-        case settings, subjects, courses, revisions, pronoteEvents, initialized, notebookImports
+        case settings, subjects, courses, revisions, pronoteEvents, initialized, notebookImports, programmes, schemaVersion
     }
 
     init(settings: AppSettings, subjects: [Subject], courses: [Course], revisions: [Revision], pronoteEvents: [PronoteEvent], initialized: Bool,
@@ -181,6 +196,9 @@ struct AppDocument: Codable, Equatable, Sendable {
         // Un fichier existant contient des données : il est considéré comme initialisé.
         initialized = try container.decodeIfPresent(Bool.self, forKey: .initialized) ?? true
         notebookImports = (try? container.decodeIfPresent([String: NotebookImport].self, forKey: .notebookImports)) ?? [:]
+        programmes = try container.decodeIfPresent([RevisionProgramme].self, forKey: .programmes) ?? []
+        schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
+        guard (1...2).contains(schemaVersion) else { throw DecodingError.dataCorruptedError(forKey: .schemaVersion, in: container, debugDescription: "Cette sauvegarde nécessite une version plus récente de J-Method.") }
     }
 
     /// `notebookImports` n'est écrit que s'il contient des séances (fichier identique à celui du web sinon).
@@ -193,5 +211,7 @@ struct AppDocument: Codable, Equatable, Sendable {
         try container.encode(pronoteEvents, forKey: .pronoteEvents)
         try container.encode(initialized, forKey: .initialized)
         if !notebookImports.isEmpty { try container.encode(notebookImports, forKey: .notebookImports) }
+        if !programmes.isEmpty { try container.encode(programmes, forKey: .programmes) }
+        if schemaVersion > 1 { try container.encode(schemaVersion, forKey: .schemaVersion) }
     }
 }

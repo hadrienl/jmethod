@@ -112,17 +112,20 @@ object ImportExport {
             val settings: AppSettings?,
             /** Séances déjà importées (`notebook-to-course.md`) ; `null` : celles de l’appareil sont conservées. */
             val notebookImports: Map<String, fr.jmethod.app.model.NotebookImport>? = null,
+            val programmes: List<fr.jmethod.app.model.RevisionProgramme> = emptyList(),
+            val schemaVersion: Int = 1,
         ) : Result {
             /** État après import : les créneaux Pronote de l’appareil sont conservés. */
             fun applyTo(document: AppDocument): AppDocument = document.copy(
                 courses = courses,
                 revisions = revisions,
+                programmes = programmes, schemaVersion = schemaVersion,
                 subjects = subjects ?: document.subjects,
                 settings = settings ?: document.settings,
                 notebookImports = notebookImports ?: document.notebookImports,
                 initialized = true,
                 dataVersion = DataMigrations.CURRENT_VERSION,
-            ).let(DataMigrations::migrateNotebookKeys)
+            ).let(DataMigrations::migrateNotebookKeys).let(RevisionProgrammes::migrate)
         }
 
         data class Rejected(val title: String, val message: String) : Result
@@ -143,8 +146,14 @@ object ImportExport {
     private fun shapeError(what: String) = Result.Rejected(ERROR_TITLE, "Ce fichier n’est pas une sauvegarde J-Method : $what.")
 
     fun parse(text: String): Result {
-        val root = runCatching { AppDocumentCodec.json.parseToJsonElement(text) }.getOrNull()
-        if (root !is JsonObject) return Result.Rejected(ERROR_TITLE, INVALID_MESSAGE)
+        val envelope = runCatching { AppDocumentCodec.json.parseToJsonElement(text) }.getOrNull()
+        if (envelope !is JsonObject) return Result.Rejected(ERROR_TITLE, INVALID_MESSAGE)
+        val root = if (envelope["data"] != null) {
+            if ((envelope["schemaVersion"] as? JsonPrimitive)?.content != "2" || (envelope["version"] as? JsonPrimitive)?.content != "2.0") return shapeError("cette version nécessite une app plus récente")
+            val payload = envelope["data"] as? JsonObject ?: return shapeError("le contenu est illisible")
+            if ((payload["schemaVersion"] as? JsonPrimitive)?.content != "2") return shapeError("les versions de la sauvegarde sont incohérentes")
+            payload
+        } else envelope
         if (falsy(root["courses"]) || falsy(root["revisions"])) return Result.Rejected(ERROR_TITLE, INVALID_MESSAGE)
         val json = AppDocumentCodec.strictJson
         // D13 : validation de forme avant tout remplacement.
@@ -184,6 +193,15 @@ object ImportExport {
                 )
             }.getOrNull() ?: return shapeError("les séances importées du cahier de textes sont illisibles")
         }
-        return Result.Accepted(courses, revisions, subjects, settings, imports)
+        val schema = root["schemaVersion"]?.let { (it as? JsonPrimitive)?.content?.toIntOrNull() ?: return shapeError("la version du document est illisible") } ?: 1
+        if (schema !in 1..2) return shapeError("cette version nécessite une app plus récente")
+        val programmes = if (schema == 2) runCatching {
+            json.decodeFromJsonElement(ListSerializer(fr.jmethod.app.model.RevisionProgramme.serializer()), root.getValue("programmes"))
+        }.getOrNull() ?: return shapeError("les programmes sont illisibles") else emptyList()
+        if (schema == 2) {
+            val candidate = AppDocument(courses = courses, revisions = revisions, subjects = subjects ?: emptyList(), settings = settings ?: AppSettings(), programmes = programmes, schemaVersion = 2)
+            if (runCatching { RevisionProgrammes.validateDocument(candidate, checkSubjects = subjects != null) }.isFailure) return shapeError("les feuilles, programmes ou rythmes sont incohérents")
+        }
+        return Result.Accepted(courses, revisions, subjects, settings, imports, programmes, schema)
     }
 }

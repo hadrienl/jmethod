@@ -101,7 +101,7 @@ struct TodayScreen: Equatable {
                     revision: revision,
                     course: course,
                     badge: "\(Constants.todayPhase(revision.phase).label) · \(revision.stepLabel)",
-                    courseLine: "\(course.chapter) · C\(course.courseNumber)",
+                    courseLine: revision.programmeId == nil ? "\(course.chapter) · \(course.displayReference)" : RevisionProgrammes.references(revision, courses: courses),
                     title: course.title,
                     done: done,
                     doneLabel: done ? "Fait · \(revision.score.map(String.init) ?? "")/100" : nil,

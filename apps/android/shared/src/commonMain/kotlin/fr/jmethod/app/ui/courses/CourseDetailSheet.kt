@@ -109,7 +109,9 @@ fun CourseDetailSheet(
     nearby: List<RevisionSession.Nearby> = emptyList(),
     onOpenNearby: (RevisionSession.Nearby) -> Unit = {},
     onAttachNearby: (RevisionSession.Nearby) -> Unit = {},
+    onRenameReference: (String) -> Unit = {},
 ) {
+    var editedReference by rememberSaveable(model.course.id, model.course.displayReference) { mutableStateOf(model.course.displayReference) }
     var confirmDelete by rememberSaveable(model.course.id) { mutableStateOf(false) }
     AdaptiveSheet(onDismissRequest = onDismiss, gesturesEnabled = viewer == null, dismissOnBack = viewer == null) {
         SystemBackHandler(enabled = viewer != null, onBack = onCloseViewer)
@@ -123,6 +125,10 @@ fun CourseDetailSheet(
             verticalArrangement = Arrangement.spacedBy(JSpacing.l),
         ) {
             Header(model, onDismiss)
+            androidx.compose.material3.OutlinedTextField(value = editedReference, onValueChange = { editedReference = it },
+                label = { Text("Référence personnelle") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            TextButton(enabled = editedReference.trim().isNotEmpty() && editedReference.length <= 24 && editedReference.trim() != model.course.displayReference,
+                onClick = { onRenameReference(editedReference) }) { Text("Enregistrer la référence") }
             // Le cours : notes puis documents (mêmes accès que la fiche de séance).
             Column(verticalArrangement = Arrangement.spacedBy(JSpacing.s)) {
                 SheetSectionTitle("Le cours")
