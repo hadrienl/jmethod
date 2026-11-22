@@ -336,7 +336,8 @@ final class AppModel {
             course.source = notebook.source
             var stored: [CourseDocument] = []
             for item in staged.prefix(CourseDocumentStore.maximumDocuments) {
-                if let document = try? documentStore.store(item.url, name: item.name, mime: item.mime, courseId: course.id, extractedTitle: item.extractedTitle) {
+                if var document = try? documentStore.store(item.url, name: item.name, mime: item.mime, courseId: course.id, extractedTitle: item.extractedTitle) {
+                    document.sourceSessionKey = notebook.source.sessionKey
                     stored.append(document)
                 }
             }
@@ -403,14 +404,24 @@ final class AppModel {
         guard let draft = notebookDraft, let index = document.courses.firstIndex(where: { $0.id == courseId }),
               document.courses[index].subjectId == draft.form.subjectId else { return false }
         let course = document.courses[index]
-        var names = Set((course.documents ?? []).map(\.name))
-        let selected = draft.documents.filter { $0.selected && names.insert($0.name).inserted }
+        let requested = draft.documents.filter(\.selected)
+        guard Set(requested.map(\.name)).count == requested.count else {
+            showToast("Association impossible", "Plusieurs fichiers de cette séance portent le même nom. Sélectionne-en un seul à la fois.", warning: true); return false
+        }
+        guard !requested.contains(where: { candidate in (course.documents ?? []).contains { $0.name == candidate.name && RevisionSession.documentSourceKey($0, course: course) == nil } }) else {
+            showToast("Association impossible", "Un ancien fichier de même nom a une provenance ambiguë. Les ressources restent accessibles dans le cahier de textes.", warning: true); return false
+        }
+        let selected = requested.filter { !RevisionSession.hasDocument(from: draft.source.sessionKey, name: $0.name, course: course) }
         guard (course.documents ?? []).count + selected.count <= CourseDocumentStore.maximumDocuments else {
             showToast("Association impossible", "Une feuille peut contenir au plus 10 documents.", warning: true); return false
         }
         var stored: [CourseDocument] = []
         do {
-            for item in selected { stored.append(try documentStore.store(item.url, name: item.name, mime: item.mime, courseId: courseId, extractedTitle: item.extractedTitle)) }
+            for item in selected {
+                var saved = try documentStore.store(item.url, name: item.name, mime: item.mime, courseId: courseId, extractedTitle: item.extractedTitle)
+                saved.sourceSessionKey = draft.source.sessionKey
+                stored.append(saved)
+            }
         } catch {
             stored.forEach { if let url = documentStore.url(for: $0) { try? FileManager.default.removeItem(at: url) } }
             showToast("Association impossible", error.localizedDescription, warning: true); return false
@@ -419,7 +430,12 @@ final class AppModel {
         if !sources.contains(where: { $0.sessionKey == draft.source.sessionKey }) { sources.append(draft.source) }
         document.courses[index].source = course.source ?? draft.source
         document.courses[index].sources = sources
-        let docs = (course.documents ?? []) + stored
+        let existing = (course.documents ?? []).map { original -> CourseDocument in
+            var copy = original
+            copy.sourceSessionKey = RevisionSession.documentSourceKey(original, course: course)
+            return copy
+        }
+        let docs = existing + stored
         document.courses[index].documents = docs.isEmpty ? nil : docs
         document.notebookImports[draft.source.sessionKey] = NotebookImport(status: .created, courseId: courseId, at: Self.isoString(now()))
         persist(); discardNotebookDraft()
@@ -489,12 +505,13 @@ final class AppModel {
 
     /// « Joindre à ce cours » (§8.5) : copie le fichier dans les documents du cours (nouvel identifiant, même nom,
     /// titre lu conservé). L'autre cours et le titre de ce cours ne changent pas.
-    func attachDocument(from source: URL, name: String, mime: String?, extractedTitle: String?, to courseId: String) throws {
+    func attachDocument(from source: URL, name: String, mime: String?, extractedTitle: String?, to courseId: String, sourceSessionKey: String? = nil) throws {
         guard let index = document.courses.firstIndex(where: { $0.id == courseId }) else { throw AttachFailure.courseMissing }
         let existing = document.courses[index].documents ?? []
-        guard !existing.contains(where: { $0.name == name }) else { throw AttachFailure.alreadyAttached }
+        guard !existing.contains(where: { $0.name == name && (sourceSessionKey == nil || RevisionSession.documentSourceKey($0, course: document.courses[index]) == sourceSessionKey || RevisionSession.documentSourceKey($0, course: document.courses[index]) == nil) }) else { throw AttachFailure.alreadyAttached }
         guard existing.count < CourseDocumentStore.maximumDocuments else { throw AttachFailure.full }
-        let stored = try documentStore.store(source, name: name, mime: mime, courseId: courseId, extractedTitle: extractedTitle)
+        var stored = try documentStore.store(source, name: name, mime: mime, courseId: courseId, extractedTitle: extractedTitle)
+        stored.sourceSessionKey = sourceSessionKey
         document.courses[index].documents = existing + [stored]
         persist()
         toast = .init(title: "Document joint", message: "« \(name) » est maintenant dans ce cours.", kind: .success)

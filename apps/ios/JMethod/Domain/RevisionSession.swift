@@ -88,18 +88,39 @@ enum RevisionSession {
         var contents: [NotebookContent]?
     }
 
+    static func documentSourceKey(_ document: CourseDocument, course: Course) -> String? {
+        if let key = document.sourceSessionKey { return key }
+        let sources = course.sources ?? course.source.map { [$0] } ?? []
+        let keys = Set(sources.map(\.sessionKey))
+        return keys.count == 1 ? keys.first : nil
+    }
+    static func documentSourceLine(_ document: CourseDocument) -> String? {
+        guard let key = document.sourceSessionKey, key.hasPrefix("pn1:"), let day = key.dropFirst(4).split(separator: "|").first,
+              SchoolDay.isValid(String(day)) else { return nil }
+        return sessionLine(String(day))
+    }
+    static func hasDocument(from sessionKey: String, name: String, course: Course) -> Bool {
+        (course.documents ?? []).contains { $0.name == name && documentSourceKey($0, course: course) == sessionKey }
+    }
+    static func notebookDocumentCandidates(_ document: CourseDocument, course: Course, snapshot: NotebookSnapshot) -> [(NotebookSession, NotebookAttachment)] {
+        guard let key = documentSourceKey(document, course: course) else { return [] }
+        let keys = Set([key])
+        return snapshot.sessions.filter { keys.contains(NotebookCourses.sessionKey($0)) }.flatMap { session in
+            NotebookCourses.fileAttachments(of: session).filter { $0.name == document.name }.map { (session, $0) }
+        }
+    }
+
     /// nil pour un cours saisi à la main.
     static func notebookPart(for course: Course, snapshot: NotebookSnapshot?) -> NotebookPart? {
         let sources = course.sources ?? course.source.map { [$0] } ?? []
         guard !sources.isEmpty else { return nil }
-        let imported = Set((course.documents ?? []).map(\.name))
         let sessions = sources.compactMap { source -> NotebookSession? in
             var leaf = course; leaf.source = source
             return notebookSession(for: leaf, in: snapshot)
         }
         let contents: [NotebookContent]? = sessions.isEmpty ? nil : sessions.flatMap { session in session.contents.map { content in
             var copy = content
-            copy.attachments = content.attachments.filter { $0.kind != .file || !imported.contains($0.name) }
+            copy.attachments = content.attachments.filter { $0.kind != .file || !hasDocument(from: NotebookCourses.sessionKey(session), name: $0.name, course: course) }
             return copy
         } }
         return NotebookPart(sourceLine: sources.map { sessionLine($0.date) }.joined(separator: " · "), contents: contents)
@@ -118,6 +139,7 @@ enum RevisionSession {
         var origin: Origin
         var name: String
         var extractedTitle: String?
+        var sourceSessionKey: String? = nil
         /// Date de la séance d'origine (`yyyy-MM-dd`).
         var date: String
         var dateLine: String { RevisionSession.sessionDate(date) }
@@ -137,7 +159,13 @@ enum RevisionSession {
                                 fileExists: (CourseDocument) -> Bool = { _ in true }) -> [NearbyDocument] {
         let reference = course.source?.date ?? course.date
         let label = course.source.map { NotebookCourses.subjectKey($0.subjectLabel) }
-        let own = Set((course.documents ?? []).map(\.name))
+        func alreadyAttached(_ name: String, key: String?) -> Bool {
+            (course.documents ?? []).contains { document in
+                guard document.name == name else { return false }
+                guard let key, let origin = document.sourceSessionKey else { return true }
+                return origin == key
+            }
+        }
         func sameSubject(label other: String?, subjectId: String?) -> Bool {
             if let label, let other { return NotebookCourses.subjectKey(other) == label }
             return subjectId == course.subjectId
@@ -152,8 +180,8 @@ enum RevisionSession {
         for other in courses where other.id != course.id {
             let date = other.source?.date ?? other.date
             guard sameSubject(label: other.source?.subjectLabel, subjectId: other.subjectId), let difference = inWindow(date) else { continue }
-            for document in other.documents ?? [] where !own.contains(document.name) && fileExists(document) {
-                guard seen.insert("\(date)|\(document.name)").inserted else { continue }
+            for document in other.documents ?? [] where !alreadyAttached(document.name, key: documentSourceKey(document, course: other)) && fileExists(document) {
+                guard seen.insert("\(documentSourceKey(document, course: other) ?? date)|\(document.name)").inserted else { continue }
                 found.append((NearbyDocument(origin: .course(courseId: other.id, document: document), name: document.name,
                                              extractedTitle: document.extractedTitle, date: date), difference))
             }
@@ -162,9 +190,9 @@ enum RevisionSession {
         for session in snapshot?.sessions ?? [] where session != ownSession {
             let subjectId = SubjectMatcher.match(session.subject, subjects: subjects)?.id
             guard sameSubject(label: session.subject, subjectId: subjectId), let difference = inWindow(session.date) else { continue }
-            for attachment in NotebookCourses.fileAttachments(of: session) where !own.contains(attachment.name) {
-                guard seen.insert("\(session.date)|\(attachment.name)").inserted else { continue }
-                found.append((NearbyDocument(origin: .notebook(attachment), name: attachment.name, extractedTitle: nil, date: session.date),
+            for attachment in NotebookCourses.fileAttachments(of: session) where !alreadyAttached(attachment.name, key: NotebookCourses.sessionKey(session)) {
+                guard seen.insert("\(NotebookCourses.sessionKey(session))|\(attachment.name)").inserted else { continue }
+                found.append((NearbyDocument(origin: .notebook(attachment), name: attachment.name, extractedTitle: nil, sourceSessionKey: NotebookCourses.sessionKey(session), date: session.date),
                               difference))
             }
         }

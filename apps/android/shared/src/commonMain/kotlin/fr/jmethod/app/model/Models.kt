@@ -73,6 +73,8 @@ data class CourseDocument(
     /** Chemin relatif au stockage privé : `documents/<courseId>/<docId>.<ext>`. */
     val file: String,
     val extractedTitle: String? = null,
+    /** Séance Pronote du fichier, indépendante des autres ressources de la feuille. */
+    val sourceSessionKey: String? = null,
 )
 
 /** Séance déjà traitée : `created` (cours existant) ou `dismissed` (cours supprimé, jamais recréé automatiquement). */

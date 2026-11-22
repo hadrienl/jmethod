@@ -474,7 +474,7 @@ private fun AppContent(container: AppContainer, createConnection: (CoroutineScop
                 },
                 documents = documents,
                 onOpenDocument = openDocument,
-                onRedownload = if (course.source != null) {
+                onRedownload = if (course.source != null || course.documents.orEmpty().any { it.sourceSessionKey != null }) {
                     { document -> notebookViewModel.redownload(course, document) }
                 } else {
                     null
@@ -751,7 +751,7 @@ private fun SessionSheetHost(
         settings = document.settings.copy(adaptiveEnabled = document.programmes.firstOrNull { it.id == model.revision.programmeId }?.let { it.adaptiveEnabled && !it.needsReview } ?: true),
         today = state.model.today,
         documents = documents,
-        notebookPart = RevisionSession.notebookPart(course, notebook?.state?.snapshot),
+        notebookParts = RevisionSession.notebookParts(model.members, notebook?.state?.snapshot),
         notebookLoading = notebook?.state?.loading == true,
         downloadingId = notebook?.state?.downloadingId,
         nextLabel = next?.let { RevisionSession.nextLabel(it, document.courses, document.subjects) },
@@ -762,7 +762,7 @@ private fun SessionSheetHost(
         onAttachNearby = { item -> attachNearby(course.id, item, coursesViewModel, notebookViewModel) },
         onOpenDocument = onOpenDocument,
         onCloseViewer = onCloseViewer,
-        onRedownload = if (model.members.any { it.source != null }) {
+        onRedownload = if (model.members.any { it.source != null || it.documents.orEmpty().any { doc -> doc.sourceSessionKey != null } }) {
             { doc -> notebookViewModel.redownload(model.members.firstOrNull { leaf -> leaf.documents.orEmpty().any { it.id == doc.id } } ?: course, doc) }
         } else {
             null

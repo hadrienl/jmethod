@@ -112,7 +112,7 @@ class CourseCreator(private val repository: AppRepository, private val clock: Ap
         val now = clock.now()
         val courseId = "course-${java.util.UUID.randomUUID()}"
         val stored = documents.filter { it.selected && it.file.isFile }.take(fr.jmethod.app.domain.NotebookCourses.MAX_DOCUMENTS).mapNotNull {
-            runCatching { files.store(courseId, it.file, it.name, it.type, it.extractedTitle) }.getOrNull()
+            runCatching { files.store(courseId, it.file, it.name, it.type, it.extractedTitle).copy(sourceSessionKey = source?.sessionKey) }.getOrNull()
         }
         var created: CourseEditing.Created? = null
         var refused = false
@@ -149,18 +149,22 @@ class CourseCreator(private val repository: AppRepository, private val clock: Ap
         val source = draft.source
         val initial = requireNotNull(repository.current().courses.firstOrNull { it.id == courseId }) { "La feuille n’existe plus." }
         require(initial.subjectId == draft.subjectId) { "Choisis une feuille de la même matière." }
-        val names = initial.documents.orEmpty().map { it.name }.toMutableSet()
-        val selected = documents.filter { it.selected && names.add(it.name) }
+        val requested = documents.filter { it.selected }
+        require(requested.map { it.name }.distinct().size == requested.size) { "Plusieurs fichiers de cette séance portent le même nom. Sélectionne-en un seul à la fois." }
+        require(requested.none { candidate -> initial.documents.orEmpty().any { it.name == candidate.name && fr.jmethod.app.domain.RevisionSession.documentSourceKey(initial, it) == null } }) { "Un ancien fichier de même nom a une provenance ambiguë. Les ressources restent accessibles dans le cahier de textes." }
+        val selected = requested.filterNot { fr.jmethod.app.domain.RevisionSession.hasDocumentFrom(initial, it.name, source.sessionKey) }
         require(initial.documents.orEmpty().size + selected.size <= fr.jmethod.app.domain.NotebookCourses.MAX_DOCUMENTS) { "Une feuille peut contenir au plus 10 documents." }
         val stored = mutableListOf<CourseDocument>()
         try {
-            selected.forEach { stored += files.store(courseId, it.file, it.name, it.type, it.extractedTitle) }
+            selected.forEach { stored += files.store(courseId, it.file, it.name, it.type, it.extractedTitle).copy(sourceSessionKey = source.sessionKey) }
             repository.update { document ->
                 val course = requireNotNull(document.courses.firstOrNull { it.id == courseId }) { "La feuille n’existe plus." }
                 require(course.subjectId == draft.subjectId)
                 require(allowed(document, source, Expectation.Manual(draft.seenImport))) { "Cette séance a été traitée entre-temps. Rouvre-la avant de l’associer." }
-                val docs = course.documents.orEmpty()
-                require(docs.size + stored.size <= fr.jmethod.app.domain.NotebookCourses.MAX_DOCUMENTS && stored.none { added -> docs.any { it.name == added.name } }) { "Les documents de la feuille ont changé. Réessaie." }
+                val docs = course.documents.orEmpty().map { existing ->
+                    existing.copy(sourceSessionKey = fr.jmethod.app.domain.RevisionSession.documentSourceKey(course, existing))
+                }
+                require(docs.size + stored.size <= fr.jmethod.app.domain.NotebookCourses.MAX_DOCUMENTS && stored.none { added -> docs.any { it.name == added.name && (fr.jmethod.app.domain.RevisionSession.documentSourceKey(course, it) == added.sourceSessionKey || fr.jmethod.app.domain.RevisionSession.documentSourceKey(course, it) == null) } }) { "Les documents de la feuille ont changé. Réessaie." }
                 val sources = (course.sources ?: listOfNotNull(course.source)) + source
                 document.copy(courses = document.courses.map { if (it.id == courseId) it.copy(source = it.source ?: source,
                     sources = sources.distinctBy { it.sessionKey }, documents = (docs + stored).takeIf { it.isNotEmpty() }) else it },
@@ -177,15 +181,15 @@ class CourseCreator(private val repository: AppRepository, private val clock: Ap
      * nom, [extractedTitle] conservé), sans toucher au cours d’origine ni au titre. `null` si le cours a
      * disparu, a déjà un document de ce nom ou en a déjà 10.
      */
-    suspend fun attach(courseId: String, source: File, name: String, type: DocType, extractedTitle: String?, mime: String? = null): CourseDocument? {
+    suspend fun attach(courseId: String, source: File, name: String, type: DocType, extractedTitle: String?, mime: String? = null, sourceSessionKey: String? = null): CourseDocument? {
         val current = repository.current().courses.firstOrNull { it.id == courseId } ?: return null
-        if (!source.isFile || current.documents.orEmpty().let { docs -> docs.size >= fr.jmethod.app.domain.NotebookCourses.MAX_DOCUMENTS || docs.any { it.name == name } }) return null
-        val stored = files.store(courseId, source, name, type, extractedTitle).let { if (mime != null) it.copy(mime = mime) else it }
+        if (!source.isFile || current.documents.orEmpty().let { docs -> docs.size >= fr.jmethod.app.domain.NotebookCourses.MAX_DOCUMENTS || docs.any { it.name == name && (sourceSessionKey == null || fr.jmethod.app.domain.RevisionSession.documentSourceKey(current, it) == sourceSessionKey || fr.jmethod.app.domain.RevisionSession.documentSourceKey(current, it) == null) } }) return null
+        val stored = files.store(courseId, source, name, type, extractedTitle).copy(sourceSessionKey = sourceSessionKey).let { if (mime != null) it.copy(mime = mime) else it }
         var attached = false
         repository.update { document ->
             val course = document.courses.firstOrNull { it.id == courseId }
             val docs = course?.documents.orEmpty()
-            if (course == null || docs.size >= fr.jmethod.app.domain.NotebookCourses.MAX_DOCUMENTS || docs.any { it.name == name }) return@update document
+            if (course == null || docs.size >= fr.jmethod.app.domain.NotebookCourses.MAX_DOCUMENTS || docs.any { it.name == name && (sourceSessionKey == null || fr.jmethod.app.domain.RevisionSession.documentSourceKey(course, it) == sourceSessionKey || fr.jmethod.app.domain.RevisionSession.documentSourceKey(course, it) == null) }) return@update document
             attached = true
             document.copy(courses = document.courses.map { if (it.id == courseId) it.copy(documents = docs + stored) else it })
         }

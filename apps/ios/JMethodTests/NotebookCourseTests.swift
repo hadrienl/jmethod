@@ -284,6 +284,68 @@ final class NotebookCourseTests: XCTestCase {
         XCTAssertEqual(NotebookCourses.migratingKeys(app.document), app.document)
     }
 
+    func testSameNamedDocumentsKeepTheirOwnSourceAndBytes() async throws {
+        let (app, root) = try await makeModel()
+        let a = session("a", date: "2026-11-18", files: ["cours.txt"])
+        let b = session("b", date: "2026-11-19", files: ["cours.txt"])
+        let sourceA = NotebookCourses.source(for: a), sourceB = NotebookCourses.source(for: b)
+        let fileA = try stagedFile("cours.txt", contents: "contenu A", in: root.appendingPathComponent("source-a"))
+        let fileB = try stagedFile("cours.txt", contents: "contenu B", in: root.appendingPathComponent("source-b"))
+        let id = try XCTUnwrap(app.createCourseFromNotebook(NotebookCourseDraft(form: CourseDraft(subjectId: "maths", date: a.date), source: sourceA, documents: [fileA])))
+        var legacy = try XCTUnwrap(app.course(id: id)); legacy.documents = legacy.documents?.map { original in var copy = original; copy.sourceSessionKey = nil; return copy }
+        app.restore(Backup.Accepted(courses: [legacy], revisions: [], subjects: nil, settings: nil, notebookImports: app.document.notebookImports))
+        app.notebookDraft = NotebookCourseDraft(form: CourseDraft(subjectId: "maths", date: b.date), source: sourceB, documents: [fileB])
+        XCTAssertTrue(app.associateNotebook(to: id))
+        let leaf = try XCTUnwrap(app.course(id: id)); let docs = try XCTUnwrap(leaf.documents)
+        XCTAssertEqual(docs.map(\.sourceSessionKey), [sourceA.sessionKey, sourceB.sessionKey])
+        XCTAssertEqual(try docs.map { try String(contentsOf: XCTUnwrap(app.documentURL($0)), encoding: .utf8) }, ["contenu A", "contenu B"])
+        let snapshot = NotebookSnapshot(from: a.date, to: b.date, sessions: [a,b], homework: [], skippedEntries: 0, attachmentCount: 2)
+        XCTAssertEqual(RevisionSession.notebookDocumentCandidates(docs[1], course: leaf, snapshot: snapshot).map { $0.1.id }, ["pj-b-0"])
+        XCTAssertTrue(try XCTUnwrap(RevisionSession.notebookPart(for: leaf, snapshot: snapshot)?.contents).allSatisfy { $0.attachments.isEmpty })
+        guard case .accepted(let accepted) = Backup.parse(Data(app.exportText().utf8)) else { return XCTFail("Export refusé") }
+        XCTAssertEqual(accepted.apply(to: app.document).courses.first?.documents, docs)
+    }
+
+    func testUncheckedFirstSourceIsNotHiddenOrMistakenForSecondSource() async throws {
+        let (app, root) = try await makeModel()
+        let a = session("a", date: "2026-11-18", files: ["cours.txt"])
+        let b = session("b", date: "2026-11-19", files: ["cours.txt"])
+        let id = try XCTUnwrap(app.createCourseFromNotebook(NotebookCourseDraft(form: CourseDraft(subjectId: "maths", date: a.date), source: NotebookCourses.source(for: a), documents: [])))
+        let fileB = try stagedFile("cours.txt", contents: "contenu B", in: root.appendingPathComponent("source-b"))
+        app.notebookDraft = NotebookCourseDraft(form: CourseDraft(subjectId: "maths", date: b.date), source: NotebookCourses.source(for: b), documents: [fileB])
+        XCTAssertTrue(app.associateNotebook(to: id))
+        let leaf = try XCTUnwrap(app.course(id: id)); let saved = try XCTUnwrap(leaf.documents?.first)
+        let snapshot = NotebookSnapshot(from: a.date, to: b.date, sessions: [a,b], homework: [], skippedEntries: 0, attachmentCount: 2)
+        let contents = try XCTUnwrap(RevisionSession.notebookPart(for: leaf, snapshot: snapshot)?.contents)
+        XCTAssertEqual(contents.flatMap(\.attachments).map(\.id), ["pj-a-0"])
+        XCTAssertEqual(RevisionSession.notebookDocumentCandidates(saved, course: leaf, snapshot: snapshot).map { $0.1.id }, ["pj-b-0"])
+        var ambiguous = saved; ambiguous.sourceSessionKey = nil
+        XCTAssertTrue(RevisionSession.notebookDocumentCandidates(ambiguous, course: leaf, snapshot: snapshot).isEmpty)
+        var partial = snapshot; partial.sessions = [b]
+        XCTAssertTrue(RevisionSession.notebookDocumentCandidates(ambiguous, course: leaf, snapshot: partial).isEmpty)
+    }
+
+    func testAddingAnEmptySourcePreservesLegacyDocumentsKnownOrigin() async throws {
+        let (app, root) = try await makeModel()
+        let a = session("a", date: "2026-11-18", files: ["cours.txt"])
+        let b = session("b", date: "2026-11-19")
+        let sourceA = NotebookCourses.source(for: a)
+        let fileA = try stagedFile("cours.txt", contents: "contenu A", in: root.appendingPathComponent("legacy-a"))
+        let id = try XCTUnwrap(app.createCourseFromNotebook(NotebookCourseDraft(form: CourseDraft(subjectId: "maths", date: a.date), source: sourceA, documents: [fileA])))
+        var legacy = try XCTUnwrap(app.course(id: id))
+        legacy.documents = legacy.documents?.map { original in var copy = original; copy.sourceSessionKey = nil; return copy }
+        let original = try XCTUnwrap(legacy.documents?.first)
+        app.restore(Backup.Accepted(courses: [legacy], revisions: [], subjects: nil, settings: nil, notebookImports: app.document.notebookImports))
+        app.notebookDraft = NotebookCourseDraft(form: CourseDraft(subjectId: "maths", date: b.date), source: NotebookCourses.source(for: b), documents: [])
+        XCTAssertTrue(app.associateNotebook(to: id))
+        let leaf = try XCTUnwrap(app.course(id: id)); let saved = try XCTUnwrap(leaf.documents?.first)
+        XCTAssertEqual(saved.id, original.id); XCTAssertEqual(saved.file, original.file)
+        XCTAssertEqual(saved.sourceSessionKey, sourceA.sessionKey)
+        XCTAssertEqual(RevisionSession.documentSourceKey(saved, course: leaf), sourceA.sessionKey)
+        XCTAssertEqual(leaf.sources?.count, 2)
+        XCTAssertTrue(app.documentExists(saved))
+    }
+
     func testCancelledFormRemovesStagedFiles() async throws {
         let (app, root) = try await makeModel()
         let staging = root.appendingPathComponent("staging-cancel", isDirectory: true)

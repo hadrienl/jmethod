@@ -97,6 +97,72 @@ class CourseCreatorTest {
     }
 
     @Test
+    fun sameNamedDocumentsKeepTheirOwnSourceAndBytes() = runBlocking {
+        val f = fixture()
+        fun session(id: String, day: String) = fr.jmethod.app.pronote.SessionEntry(id, "lesson-$id", java.time.LocalDate.parse(day), "ANGLAIS LV1",
+            listOf(fr.jmethod.app.pronote.NotebookContent("Cours $id", "", emptyList(), "Cours", listOf(fr.jmethod.app.pronote.NotebookAttachment(fr.jmethod.app.pronote.NotebookAttachment.Kind.FILE, "file-$id", "fiche.odt")))))
+        val a = session("a", "2026-11-18"); val b = session("b", "2026-11-19")
+        val originA = source.copy(sessionKey = a.key, date = a.date.toString(), ordinal = 1)
+        val originB = source.copy(sessionKey = b.key, date = b.date.toString(), ordinal = 1)
+        val fileA = document().also { it.file.writeText("contenu A") }
+        val fileB = document().also { it.file.writeText("contenu B") }
+        val created = f.creator.create(form, originA, listOf(fileA))!!
+        f.repository.update { state -> state.copy(courses = state.courses.map { leaf -> leaf.copy(documents = leaf.documents!!.map { it.copy(sourceSessionKey = null) }) }) }
+        val draft = fr.jmethod.app.documents.NotebookCourseDraft(sessionKey = originB.sessionKey, ordinal = 1, subjectId = "anglais", subjectLabel = originB.subjectLabel,
+            date = originB.date, chapter = "Sans chapitre", title = "B", description = "", documents = emptyList(), notice = null)
+        f.creator.associate(created.course.id, draft, listOf(fileB))
+        val state = f.repository.current(); val leaf = state.courses.single(); val docs = leaf.documents!!
+        assertEquals(listOf(originA.sessionKey, originB.sessionKey), docs.map { it.sourceSessionKey })
+        assertEquals(listOf("contenu A", "contenu B"), docs.map { f.files.fileOf(it)!!.readText() })
+        val snapshot = fr.jmethod.app.pronote.NotebookSnapshot(a.date, b.date, listOf(a,b), emptyList(), 0, 2)
+        assertEquals(listOf("file-b"), fr.jmethod.app.domain.RevisionSession.notebookDocumentCandidates(leaf, docs[1], snapshot).map { it.id })
+        assertTrue(fr.jmethod.app.domain.RevisionSession.notebookPart(leaf, snapshot)!!.contents!!.all { it.attachments.isEmpty() })
+        val text = fr.jmethod.app.domain.ImportExport.export(state, clock.now())
+        val accepted = fr.jmethod.app.domain.ImportExport.parse(text) as fr.jmethod.app.domain.ImportExport.Result.Accepted
+        assertEquals(docs, accepted.applyTo(fr.jmethod.app.data.DataMigrations.emptyDocument()).courses.single().documents)
+    }
+
+    @Test
+    fun uncheckedFirstSourceIsNotHiddenOrMistakenForSecondSourcesDocument() = runBlocking {
+        val f = fixture()
+        fun session(id: String, day: String) = fr.jmethod.app.pronote.SessionEntry(id, "lesson-$id", java.time.LocalDate.parse(day), "ANGLAIS LV1",
+            listOf(fr.jmethod.app.pronote.NotebookContent("Cours $id", "", emptyList(), "Cours", listOf(fr.jmethod.app.pronote.NotebookAttachment(fr.jmethod.app.pronote.NotebookAttachment.Kind.FILE, "file-$id", "fiche.odt")))))
+        val a = session("a", "2026-11-18"); val b = session("b", "2026-11-19")
+        val created = f.creator.create(form, source.copy(sessionKey = a.key, date = a.date.toString(), ordinal = 1), emptyList())!!
+        val draft = fr.jmethod.app.documents.NotebookCourseDraft(sessionKey = b.key, ordinal = 1, subjectId = "anglais", subjectLabel = b.subject,
+            date = b.date.toString(), chapter = "Sans chapitre", title = "B", description = "", documents = emptyList(), notice = null)
+        f.creator.associate(created.course.id, draft, listOf(document()))
+        val leaf = f.repository.current().courses.single(); val saved = leaf.documents!!.single()
+        val snapshot = fr.jmethod.app.pronote.NotebookSnapshot(a.date, b.date, listOf(a,b), emptyList(), 0, 2)
+        val part = fr.jmethod.app.domain.RevisionSession.notebookPart(leaf, snapshot)!!
+        assertEquals(listOf("file-a"), part.contents!!.flatMap { it.attachments }.map { it.id })
+        assertEquals("file-b", fr.jmethod.app.domain.RevisionSession.notebookDocumentCandidates(leaf, saved, snapshot).single().id)
+        val ambiguous = fr.jmethod.app.domain.RevisionSession.notebookDocumentCandidates(leaf, saved.copy(sourceSessionKey = null), snapshot)
+        assertTrue(ambiguous.isEmpty())
+        assertTrue(fr.jmethod.app.domain.RevisionSession.notebookDocumentCandidates(leaf, saved.copy(sourceSessionKey = null), snapshot.copy(sessions = listOf(b))).isEmpty())
+        assertNull(ambiguous.singleOrNull())
+    }
+
+    @Test
+    fun addingAnEmptySourcePreservesLegacyDocumentsKnownOrigin() = runBlocking {
+        val f = fixture()
+        val a = source.copy(sessionKey = "pn1:2026-11-18|anglais lv1|1", ordinal = 1)
+        val created = f.creator.create(form, a, listOf(document()))!!
+        f.repository.update { state -> state.copy(courses = state.courses.map { leaf -> leaf.copy(documents = leaf.documents!!.map { it.copy(sourceSessionKey = null) }) }) }
+        val original = f.repository.current().courses.single().documents!!.single()
+        val draft = fr.jmethod.app.documents.NotebookCourseDraft(sessionKey = "pn1:2026-11-19|anglais lv1|1", ordinal = 1, subjectId = "anglais", subjectLabel = "ANGLAIS LV1",
+            date = "2026-11-19", chapter = "Sans chapitre", title = "B", description = "", documents = emptyList(), notice = null)
+        f.creator.associate(created.course.id, draft, emptyList())
+        val leaf = f.repository.current().courses.single(); val saved = leaf.documents!!.single()
+        assertEquals(original.id, saved.id)
+        assertEquals(original.file, saved.file)
+        assertEquals(a.sessionKey, saved.sourceSessionKey)
+        assertEquals(a.sessionKey, fr.jmethod.app.domain.RevisionSession.documentSourceKey(leaf, saved))
+        assertEquals(2, leaf.sources!!.size)
+        assertTrue(f.files.exists(saved))
+    }
+
+    @Test
     fun deletionDuringPreparationIsNeverUndone() = runBlocking {
         val f = fixture()
         // Le formulaire est préparé alors que la séance n’a jamais été importée…

@@ -236,10 +236,12 @@ class CoursesViewModel(
     fun attachFromCourse(courseId: String, document: fr.jmethod.app.model.CourseDocument) {
         val file = files.fileOf(document)?.takeIf { it.isFile } ?: return
         viewModelScope.launch {
+            val owner = repository.current().courses.firstOrNull { leaf -> leaf.documents.orEmpty().any { it.id == document.id } }
+            val sourceKey = document.sourceSessionKey ?: owner?.let { fr.jmethod.app.domain.RevisionSession.documentSourceKey(it, document) }
             val attached = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 creator.attach(
                     courseId, file, document.name, fr.jmethod.app.documents.DocType.displayTypeOf(document.name),
-                    document.extractedTitle, document.mime,
+                    document.extractedTitle, document.mime, sourceKey,
                 )
             }
             events.send(

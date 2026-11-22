@@ -57,6 +57,8 @@ struct CourseDocument: Codable, Hashable, Sendable, Identifiable {
     /// `documents/<courseId>/<docId>.<ext>`
     var file: String
     var extractedTitle: String?
+    /// Séance Pronote de ce fichier : deux séances peuvent employer le même nom.
+    var sourceSessionKey: String? = nil
 }
 
 /// Suivi des séances du cahier de textes déjà transformées en cours (ou refusées) : jamais recréées automatiquement.

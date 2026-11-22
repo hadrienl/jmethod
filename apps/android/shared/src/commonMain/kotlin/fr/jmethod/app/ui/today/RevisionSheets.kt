@@ -267,7 +267,7 @@ fun SessionSheet(
     settings: AppSettings,
     today: String,
     documents: List<Pair<CourseDocument, Boolean>>,
-    notebookPart: RevisionSession.NotebookPart?,
+    notebookParts: List<RevisionSession.CourseNotebookPart>,
     notebookLoading: Boolean,
     downloadingId: String?,
     nextLabel: String?,
@@ -306,7 +306,7 @@ fun SessionSheet(
             )
             page is SessionPage.Result -> ResultPage(page, nextLabel, remainingLabel, onNext = { onNext(page.nextRevisionId) }, onBackToToday = onBackToToday, onClose = onDismiss)
             else -> MainPage(
-                model, today, documents, notebookPart, notebookLoading, downloadingId,
+                model, today, documents, notebookParts, notebookLoading, downloadingId,
                 onOpenDocument, onRedownload, onDownloadAttachment, onLink, nearby, onOpenNearby, onAttachNearby,
                 onScore = { onPage(SessionPage.Score) }, onClose = onDismiss,
             )
@@ -319,7 +319,7 @@ private fun MainPage(
     model: RevisionDetailModel,
     today: String,
     documents: List<Pair<CourseDocument, Boolean>>,
-    notebookPart: RevisionSession.NotebookPart?,
+    notebookParts: List<RevisionSession.CourseNotebookPart>,
     notebookLoading: Boolean,
     downloadingId: String?,
     onOpenDocument: (CourseDocument) -> Unit,
@@ -381,7 +381,10 @@ private fun MainPage(
             // Documents proches de la même matière (section 8.5).
             NearbyDocumentsSection(model.subjectName, nearby, downloadingId, onOpenNearby, onAttachNearby)
             // 3. Dans le cahier de textes.
-            notebookPart?.let { NotebookPartSection(it, notebookLoading, downloadingId, onDownloadAttachment, onLink) }
+            notebookParts.forEach { leaf ->
+                NotebookPartSection(leaf.part.copy(sourceLine = "${leaf.reference} · ${leaf.part.sourceLine}"),
+                    notebookLoading, downloadingId, onDownloadAttachment, onLink)
+            }
             // 4. Séances précédentes (repliable).
             Column(Modifier.fillMaxWidth().clip(JShapes.inner).border(1.dp, JColors.Slate200, JShapes.inner)) {
                 Row(

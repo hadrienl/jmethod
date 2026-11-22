@@ -169,6 +169,30 @@ class RevisionSessionTest {
     }
 
     @Test
+    fun groupedSessionIncludesSecondSheetsUnimportedNotebookResources() {
+        val manual = course("c1", "maths").copy(reference = "C1")
+        val source = CourseSource("pronote-notebook", "pn1:2026-12-01|mathematiques|1", "MATHEMATIQUES", "2026-12-01", 1)
+        val imported = course("c2", "maths", source = source, documents = listOf(doc("fiche.pdf"))).copy(reference = "C2")
+        val content = NotebookContent("Fractions", "Ressources de C2", emptyList(), "Cours", listOf(
+            NotebookAttachment(NotebookAttachment.Kind.FILE, "stored", "fiche.pdf"),
+            NotebookAttachment(NotebookAttachment.Kind.FILE, "extra", "complement.pdf"),
+            NotebookAttachment(NotebookAttachment.Kind.LINK, "video", "Vidéo", url = "https://example.org/c2")))
+        val snapshot = NotebookSnapshot(LocalDate.parse("2026-11-20"), LocalDate.parse("2026-12-10"),
+            listOf(SessionEntry("session", "lesson", LocalDate.parse("2026-12-01"), "MATHEMATIQUES", listOf(content))), emptyList(), 0, 3)
+        val parts = RevisionSession.notebookParts(listOf(manual, imported), snapshot)
+        assertEquals(listOf("c2"), parts.map { it.courseId })
+        assertEquals("C2", parts.single().reference)
+        val attachments = parts.single().part.contents!!.single().attachments
+        assertEquals(listOf("complement.pdf", "Vidéo"), attachments.map { it.name })
+        assertEquals("https://example.org/c2", attachments.last().url)
+        val outside = RevisionSession.notebookParts(listOf(manual, imported), snapshot.copy(sessions = emptyList()))
+        assertEquals("C2", outside.single().reference)
+        assertNull(outside.single().part.contents)
+        val both = RevisionSession.notebookParts(listOf(manual.copy(source = source), imported), snapshot)
+        assertEquals(listOf("C1", "C2"), both.map { it.reference })
+    }
+
+    @Test
     fun lateness() {
         assertNull(RevisionSession.lateLabel(revision("r", "a", 1, tomorrow), today))
         assertEquals("En retard de 1 jour", RevisionSession.lateLabel(revision("r", "a", 1, today), today))

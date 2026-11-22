@@ -17,6 +17,8 @@ Depuis le schéma 2 (ticket #6), un `Course` représente une feuille personnelle
 - Une feuille utilisée dans un programme ne peut pas être supprimée : l’app conserve son historique et ses documents et l’explique à l’utilisateur.
 - Le schéma 2 et les exports 2.0 conservent tous ces champs. Les exports 2.0 utilisent une enveloppe `{version, schemaVersion, exportDate, data}` : les anciennes apps, qui exigent `courses` à la racine, les refusent plutôt que perdre les programmes. La migration crée un programme historique par ancien cours, sans changer les identifiants, dates, phases, scores ou documents. Les rythmes ambigus portent `needsReview` et ne sont pas adaptés automatiquement. La migration est idempotente et ne regroupe pas les feuilles.
 - Le nouveau document est écrit atomiquement dans `jmethod-data-v2.json` (ou le même suffixe pour un chemin personnalisé). Le fichier d’origine reste intact comme sauvegarde avant conversion. Une ancienne app conserve ainsi ses données v1 et ne peut pas écraser les programmes v2. Les données créées dans une ancienne app après retour en arrière ne sont pas fusionnées automatiquement.
+- Chaque nouveau fichier importé conserve son `sourceSessionKey` propre, y compris après association ou copie vers une autre feuille. Deux séances peuvent fournir des fichiers de même nom : ils sont distingués par provenance, leur date est affichée et le retéléchargement ne cherche que dans la séance du fichier. Une recherche ambiguë est refusée plutôt que télécharger le premier homonyme. Les anciens documents sans provenance explicite gardent la compatibilité historique lorsqu’une seule origine est connue ; cette origine est matérialisée avant l’association d’une nouvelle séance, sans modifier les identifiants ni les fichiers. Plusieurs origines possibles sans provenance enregistrée interdisent le retéléchargement automatique, même si un seul homonyme reste dans la fenêtre lue.
+- La fiche de séance Compose affiche les contenus, liens et pièces jointes non importées de **chaque** feuille du groupe, comme iOS.
 - Vecteurs calendaires partagés : `domain/programme-vectors.json`, exécutés par les tests Swift et Kotlin.
 
 Les règles de clé stable et de téléchargement ci-dessous restent applicables. Les mentions historiques « une séance = un cours » ou « génération initiale » sont remplacées par les règles ci-dessus.
@@ -44,7 +46,8 @@ Champs facultatifs, ignorés par une ancienne sauvegarde web, conservés par l�
 "source": { "kind": "pronote-notebook", "sessionKey": "pn1:2026-11-18|mathematiques|1", "subjectLabel": "MATHEMATIQUES", "date": "2026-11-18", "ordinal": 1 },
 "documents": [
   { "id": "doc-<uuid>", "name": "Chapitre 3.pdf", "mime": "application/pdf", "size": 48213,
-    "file": "documents/<courseId>/<docId>.pdf", "extractedTitle": "Les fonctions affines" }
+    "file": "documents/<courseId>/<docId>.pdf", "extractedTitle": "Les fonctions affines",
+    "sourceSessionKey": "pn1:2026-11-18|mathematiques|1" }
 ]
 // Racine du document
 "notebookImports": {
