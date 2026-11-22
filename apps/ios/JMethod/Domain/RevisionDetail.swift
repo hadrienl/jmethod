@@ -32,9 +32,9 @@ struct RevisionDetail: Equatable {
         self.revision = revision
         self.course = course
         self.subject = subject
-        title = "C\(course.courseNumber) · \(course.title)"
+        title = "\(RevisionProgrammes.references(revision, courses: courses)) · \(course.title)"
         chapterLine = "Chapitre : \(course.chapter)"
-        phaseLabel = Constants.phaseConfig(revision.phase).label
+        phaseLabel = revision.phaseLabel
         plannedLine = "Prévue le \(FrenchDate.format(revision.scheduledDate, "d MMMM yyyy"))"
         description = course.description
         let items = Self.history(of: revision, courseId: course.id, in: revisions)
@@ -42,7 +42,7 @@ struct RevisionDetail: Equatable {
         history = items.map { item in
             HistoryItem(
                 revision: item,
-                label: "\(item.stepLabel) · \(Constants.phaseConfig(item.phase).label)",
+                label: "\(item.stepLabel) · \(item.phaseLabel)",
                 detail: "\(FrenchDate.format(item.completedDate ?? item.scheduledDate, "dd/MM/yyyy")) · \(item.score.map { "\($0)/100" } ?? "Sans note")"
             )
         }
@@ -62,7 +62,7 @@ struct RevisionDetail: Equatable {
         let reference = revision.completedDate ?? revision.scheduledDate
         return revisions.enumerated()
             .filter { _, item in
-                item.courseId == courseId && item.id != revision.id && item.status == .completed
+                (revision.programmeId == nil ? item.courseId == courseId : item.programmeId == revision.programmeId) && item.id != revision.id && item.status == .completed
                     && (revision.status != .completed || (item.completedDate ?? item.scheduledDate) <= reference)
             }
             .sorted { lhs, rhs in

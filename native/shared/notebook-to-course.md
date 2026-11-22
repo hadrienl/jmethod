@@ -2,7 +2,27 @@
 
 Spécification commune iOS / Android. Le cahier de textes Pronote (voir `notebook-reference.md`) alimente la création des cours J-Method : manuellement par un bouton, ou automatiquement si l’utilisateur l’active. Rien n’est jamais écrit dans Pronote.
 
-## 1. Unité : une séance = un cours
+## 1. Unité : une feuille personnelle et ses ressources
+
+Depuis le schéma 2 (ticket #6), un `Course` représente une feuille personnelle. Sa `reference` (par exemple C1) est modifiable et unique dans la matière pour les nouvelles créations. Le titre et le chapitre sont facultatifs à la saisie. La feuille est enregistrée **sans révision**.
+
+- Une séance Pronote fournit des ressources : le formulaire permet de créer une nouvelle feuille ou de les associer à une feuille existante. « Autre feuille » permet de réutiliser explicitement une même séance. `sources[]` conserve ces origines ; `source` reste la première origine pour la compatibilité.
+- Le suivi `notebookImports` protège toujours contre une réimportation automatique. Seule une action manuelle volontaire peut produire une autre feuille depuis une séance déjà traitée.
+- La création automatique, lorsqu’elle est activée, enregistre uniquement des feuilles sans programme. Les devoirs ne créent ni feuille ni programme.
+- « Démarrer un programme » choisit des feuilles existantes d’une même matière et une date J0 (demain par défaut). Un programme actif bloque le démarrage d’un autre programme pour les mêmes feuilles. Une feuille ajoutée ultérieurement ne reçoit aucun historique rétroactif.
+- `RevisionProgramme` conserve `courseIds`, `startDate`, `rhythmSnapshot`, `adaptiveEnabled` et un éventuel `needsReview`. Chaque révision conserve également sa sélection immuable `courseIds` et son `programmeId` ; `courseId` est la première feuille pour la compatibilité des vues historiques.
+- Le préréglage est J0/J1/J3 (encodage), J7/J14/J25 (consolidation), J45/J60/J100 (récupération). Chaque étape stocke sa phase explicitement. L’adaptation aux scores est activée par défaut ; le mode fixe ne déplace aucune date et ne crée pas de rattrapage.
+- En mode adaptatif, les écarts utilisent les jours nominaux du snapshot du programme, même après un changement des réglages globaux. Les rattrapages gardent le groupe et la phase de la séance d’origine et portent `originRevisionId`. La validation reste idempotente et le calcul conserve le jour préparé le soir.
+- Un rythme peut comporter un ou plusieurs jours, commencer à J0, puis suivre des jours uniques strictement croissants jusqu’à la borne technique de 3650. L’édition des jours/phases est enregistrée pour les futurs programmes ; l’application aux programmes actifs nécessite un aperçu et une confirmation. Les séances réalisées et rattrapages sont conservés ; une nouvelle date passée devient due.
+- Une feuille utilisée dans un programme ne peut pas être supprimée : l’app conserve son historique et ses documents et l’explique à l’utilisateur.
+- Le schéma 2 et les exports 2.0 conservent tous ces champs. Les exports 2.0 utilisent une enveloppe `{version, schemaVersion, exportDate, data}` : les anciennes apps, qui exigent `courses` à la racine, les refusent plutôt que perdre les programmes. La migration crée un programme historique par ancien cours, sans changer les identifiants, dates, phases, scores ou documents. Les rythmes ambigus portent `needsReview` et ne sont pas adaptés automatiquement. La migration est idempotente et ne regroupe pas les feuilles.
+- Le nouveau document est écrit atomiquement dans `jmethod-data-v2.json` (ou le même suffixe pour un chemin personnalisé). Le fichier d’origine reste intact comme sauvegarde avant conversion. Une ancienne app conserve ainsi ses données v1 et ne peut pas écraser les programmes v2. Les données créées dans une ancienne app après retour en arrière ne sont pas fusionnées automatiquement.
+- Chaque nouveau fichier importé conserve son `sourceSessionKey` propre, y compris après association ou copie vers une autre feuille. Deux séances peuvent fournir des fichiers de même nom : ils sont distingués par provenance, leur date est affichée et le retéléchargement ne cherche que dans la séance du fichier. Une recherche ambiguë est refusée plutôt que télécharger le premier homonyme. Les anciens documents sans provenance explicite gardent la compatibilité historique lorsqu’une seule origine est connue ; cette origine est matérialisée avant l’association d’une nouvelle séance, sans modifier les identifiants ni les fichiers. Plusieurs origines possibles sans provenance enregistrée interdisent le retéléchargement automatique, même si un seul homonyme reste dans la fenêtre lue.
+- La fiche de séance Compose affiche les contenus, liens et pièces jointes non importées de **chaque** feuille du groupe, comme iOS.
+- Vecteurs calendaires partagés : `domain/programme-vectors.json`, exécutés par les tests Swift et Kotlin.
+
+Les règles de clé stable et de téléchargement ci-dessous restent applicables. Les mentions historiques « une séance = un cours » ou « génération initiale » sont remplacées par les règles ci-dessus.
+
 
 - Source : une `SessionEntry` (contenus de séance, réponse 89). Les devoirs (88) ne créent jamais de cours.
 - Clé de dédoublonnage **stable entre sessions Pronote** (corrigé le 18/11/2026 : les `N` du cahier et `cours.V.N` changent à chaque session et ne doivent jamais servir de clé) :
@@ -14,7 +34,7 @@ Spécification commune iOS / Android. Le cahier de textes Pronote (voir `noteboo
 - Ceinture et bretelles : une séance est aussi considérée comme déjà importée si un cours existe avec `source.kind == "pronote-notebook"`, la même `source.date`, la même matière normalisée (`source.subjectLabel`) et le même `source.ordinal`.
 - Précisions (normalisation Unicode, rang compté sur tout l’instantané, ordre de migration, doublons dus à l’ancien bug ramenés au même rang s’ils ont même titre et même chapitre, fusion des entrées) : règles 33 à 40 de `documents/README.md`, qui font foi.
 - **Migration** (une fois, idempotente) des données créées avec l’ancienne clé : pour chaque cours ayant une `source`, recalculer sa clé à partir de `source.date`, `source.subjectLabel` et d’un rang = son ordre de création (`createdAt`) parmi les cours de même date et matière ; réécrire `notebookImports` avec la nouvelle clé (statut et `courseId` conservés) ; si deux cours obtiennent la même clé, la clé désigne le plus ancien et rien n’est supprimé ; supprimer les entrées dont la clé n’est pas au format `pn1:` et qui ne désignent aucun cours existant (anciens `dismissed`, impossibles à rattacher).
-- J0 du cours = date de la séance (`SessionEntry.date`). Les révisions initiales sont générées comme pour une création manuelle (`generateInitialRevisions`).
+- La date de la feuille peut reprendre celle de la séance (`SessionEntry.date`). La date J0 du programme est choisie séparément ; aucune révision n’est générée à l’import.
 - Matière : `matchSubject(SessionEntry.subject, subjects)`. Pas de correspondance → pas de création automatique ; la séance reste proposée avec le bouton (l’utilisateur choisit la matière dans le formulaire).
 
 ## 2. Données ajoutées au document
@@ -26,7 +46,8 @@ Champs facultatifs, ignorés par une ancienne sauvegarde web, conservés par l�
 "source": { "kind": "pronote-notebook", "sessionKey": "pn1:2026-11-18|mathematiques|1", "subjectLabel": "MATHEMATIQUES", "date": "2026-11-18", "ordinal": 1 },
 "documents": [
   { "id": "doc-<uuid>", "name": "Chapitre 3.pdf", "mime": "application/pdf", "size": 48213,
-    "file": "documents/<courseId>/<docId>.pdf", "extractedTitle": "Les fonctions affines" }
+    "file": "documents/<courseId>/<docId>.pdf", "extractedTitle": "Les fonctions affines",
+    "sourceSessionKey": "pn1:2026-11-18|mathematiques|1" }
 ]
 // Racine du document
 "notebookImports": {
@@ -36,7 +57,7 @@ Champs facultatifs, ignorés par une ancienne sauvegarde web, conservés par l�
 ```
 
 - Les fichiers sont copiés dans le stockage privé **non cache** de l’app (`Application Support` / `filesDir`), exclus des sauvegardes système et d’iCloud. L’export JSON contient leurs métadonnées, pas leur contenu ; une restauration sans fichier affiche le document comme « à retélécharger » (bouton qui relit le cahier et retélécharge si la séance est encore dans la fenêtre).
-- Supprimer un cours supprime ses fichiers et passe son `notebookImports[sessionKey].status` à `dismissed` : il n’est plus jamais recréé automatiquement (le bouton manuel reste possible).
+- Supprimer une feuille sans programme supprime ses fichiers et passe son `notebookImports[sessionKey].status` à `dismissed` : il n’est plus jamais recréé automatiquement (le bouton manuel reste possible).
 - La déconnexion Pronote ne supprime ni les cours ni leurs documents.
 - Limites : 20 Mo par fichier (règle existante), 10 fichiers par cours ; au-delà, les suivants restent consultables dans le cahier de textes.
 

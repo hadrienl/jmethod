@@ -22,6 +22,8 @@ class AppRepository(
     scope: CoroutineScope,
     private val io: CoroutineDispatcher,
 ) {
+    private val failure = MutableStateFlow<String?>(null)
+    val loadError: StateFlow<String?> = failure.asStateFlow()
     private val mutex = Mutex()
     private val state = MutableStateFlow<AppDocument?>(null)
 
@@ -30,8 +32,10 @@ class AppRepository(
 
     init {
         scope.launch(io) {
-            mutex.withLock {
-                val loaded = (store.read() as? AppDocumentStore.ReadResult.Loaded)?.document
+            try { mutex.withLock {
+                val read = store.read()
+                if (read is AppDocumentStore.ReadResult.Corrupted) throw IllegalStateException("Le fichier de données est illisible. Il a été conservé dans ${read.keptAs.absolutePath} et n’a pas été remplacé.")
+                val loaded = (read as? AppDocumentStore.ReadResult.Loaded)?.document
                 val document = if (loaded == null || !loaded.initialized) {
                     // Premier lancement : aucune donnée fictive, seulement la configuration par défaut.
                     DataMigrations.emptyDocument().also { store.write(it) }
@@ -39,7 +43,8 @@ class AppRepository(
                     DataMigrations.migrate(loaded).also { if (it != loaded) store.write(it) }
                 }
                 state.value = document
-            }
+            } } catch (error: kotlinx.coroutines.CancellationException) { throw error }
+            catch (error: Exception) { failure.value = error.message ?: "Les données enregistrées ne peuvent pas être ouvertes." }
         }
     }
 

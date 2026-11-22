@@ -27,7 +27,7 @@ struct ScoreForm: View {
         let value = Int(score)
         let settings = app.document.settings
         let preview = ScorePreview(score: value, sensitivity: settings.sensitivity, emergencyThreshold: settings.emergencyThreshold)
-        let phase = Constants.phaseConfig(revision.phase)
+        let adaptive = app.document.programmes.first { $0.id == revision.programmeId }.map { $0.adaptiveEnabled && !$0.needsReview } ?? true
         let phaseColors = Theme.phase(revision.phase)
         let toneColors = Theme.previewColors(preview.tone)
 
@@ -45,9 +45,9 @@ struct ScoreForm: View {
                         .padding(.vertical, Spacing.xxs)
                         .background(Theme.background, in: RoundedRectangle(cornerRadius: Radius.tag, style: .continuous))
                         .accessibilityElement(children: .combine)
-                        Tag(text: "\(phase.label) · \(revision.stepLabel)", foreground: phaseColors.text, background: phaseColors.background)
+                        Tag(text: "\(revision.phaseLabel) · \(revision.stepLabel)", foreground: phaseColors.text, background: phaseColors.background)
                     }
-                    Text("C\(course.courseNumber) : \(course.title)").font(.title2.weight(.bold)).foregroundStyle(Theme.text)
+                    Text("\(RevisionProgrammes.references(revision, courses: app.document.courses)) : \(course.title)").font(.title2.weight(.bold)).foregroundStyle(Theme.text)
                         .accessibilityAddTraits(.isHeader)
                     Text("Chapitre : \(course.chapter)").font(.subheadline).foregroundStyle(Theme.textSecondary)
                 }
@@ -55,7 +55,7 @@ struct ScoreForm: View {
                 VStack(spacing: Spacing.m) {
                     VStack(spacing: Spacing.xxs) {
                         Text("De quoi te souviens-tu sans regarder ton cours ?").font(.headline).foregroundStyle(Theme.text)
-                        (Text("Avec ") + Text("50/100").bold() + Text(" on garde ton rythme actuel."))
+                        Text(adaptive ? "Avec 50/100 on garde ton rythme actuel." : "Mode fixe : ton score ne modifie pas les prochaines dates.")
                             .font(.footnote).foregroundStyle(Theme.textSecondary)
                     }
                     .multilineTextAlignment(.center)
@@ -100,8 +100,8 @@ struct ScoreForm: View {
                 HStack(alignment: .top, spacing: Spacing.s) {
                     Image(systemName: icon(preview.tone)).font(.body.weight(.semibold)).foregroundStyle(toneColors.text).accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: Spacing.xxs) {
-                        Text(preview.title).font(.subheadline.weight(.semibold))
-                        Text(preview.description).font(.footnote)
+                        Text(adaptive ? preview.title : "Dates conservées").font(.subheadline.weight(.semibold))
+                        Text(adaptive ? preview.description : "La séance sera validée avec ce score, sans déplacer les suivantes ni ajouter de rattrapage.").font(.footnote)
                     }
                     .foregroundStyle(toneColors.text)
                 }

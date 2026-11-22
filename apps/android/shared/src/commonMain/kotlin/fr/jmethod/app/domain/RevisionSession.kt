@@ -47,8 +47,15 @@ object RevisionSession {
         displayOrder(revisions, courses, subjects, today).firstOrNull { it.status != RevisionStatus.COMPLETED && it.id != excluding }
 
     /** Prochaine séance due d’un cours (section 8.4) : la première non faite dans l’ordre des J. */
-    fun nextOfCourse(courseId: String, revisions: List<Revision>): Revision? =
-        revisions.filter { it.courseId == courseId && it.status != RevisionStatus.COMPLETED }.minByOrNull { it.stepIndex }
+    fun nextOfCourse(courseId: String, revisions: List<Revision>): Revision? {
+        val pending = revisions.filter { it.appliesTo(courseId) && it.status != RevisionStatus.COMPLETED }
+        if (pending.none { it.programmeId != null }) return pending.minByOrNull { it.stepIndex }
+        // Une réapplication réindexe les nouvelles étapes, pas les rattrapages historiques.
+        // Le J nominal reste comparable ; un historique ambigu suit ses dates sans inventer de J.
+        val knownDays = pending.all { it.nominalOffsetDays != null }
+        return pending.minWithOrNull(compareBy<Revision> { if (knownDays) it.nominalOffsetDays!! else 0 }
+            .thenBy { it.scheduledDate }.thenBy { it.stepIndex })
+    }
 
     /** Libellé du bouton d’enchaînement : « Séance suivante · <matière> — <titre> ». */
     fun nextLabel(revision: Revision, courses: List<Course>, subjects: List<Subject>): String? {
@@ -89,10 +96,36 @@ object RevisionSession {
         val contents: List<NotebookContent>?,
     )
 
+    data class CourseNotebookPart(val courseId: String, val reference: String, val part: NotebookPart)
+
+    /** Toutes les feuilles du J gardent leurs liens et ressources non copiées dans les documents locaux. */
+    fun notebookParts(courses: List<Course>, snapshot: NotebookSnapshot?): List<CourseNotebookPart> =
+        courses.mapNotNull { course -> notebookPart(course, snapshot)?.let { CourseNotebookPart(course.id, course.displayReference, it) } }
+
     fun sessionLine(date: String): String {
         val parsed = FrenchDates.parse(date) ?: return "Séance · Pronote"
         val day = if (parsed.dayOfMonth == 1) "1er" else parsed.dayOfMonth.toString()
         return "Séance du $day ${FrenchDates.monthName(parsed)} · Pronote"
+    }
+
+    fun documentSourceKey(course: Course, document: CourseDocument): String? = document.sourceSessionKey
+        ?: (course.sources ?: listOfNotNull(course.source)).distinctBy { it.sessionKey }.singleOrNull()?.sessionKey
+
+    fun documentSourceLine(document: CourseDocument): String? {
+        val key = document.sourceSessionKey?.takeIf { it.startsWith("pn1:") } ?: return null
+        val date = key.removePrefix("pn1:").substringBefore('|')
+        return FrenchDates.parse(date)?.let { sessionLine(date) }
+    }
+
+    fun hasDocumentFrom(course: Course, name: String, sessionKey: String): Boolean = course.documents.orEmpty()
+        .any { it.name == name && documentSourceKey(course, it) == sessionKey }
+
+    /** Refuse un ancien document ambigu plutôt que télécharger un homonyme d’une autre séance. */
+    fun notebookDocumentCandidates(course: Course, document: CourseDocument, snapshot: NotebookSnapshot): List<NotebookAttachment> {
+        val key = documentSourceKey(course, document) ?: return emptyList()
+        val keys = setOf(key)
+        return snapshot.sessions.filter { it.key in keys }.flatMap { session -> session.contents.flatMap { it.attachments } }
+            .filter { it.kind == NotebookAttachment.Kind.FILE && it.name == document.name }
     }
 
     /**
@@ -100,14 +133,13 @@ object RevisionSession {
      * sont retirées : elles s’ouvrent depuis « Le cours ».
      */
     fun notebookPart(course: Course, snapshot: NotebookSnapshot?): NotebookPart? {
-        val source = course.source ?: return null
-        // Séance d’origine retrouvée par sa clé stable (date, matière, rang), jamais par le `N` de session.
-        val session = snapshot?.sessions?.firstOrNull { it.key == source.sessionKey }
-        val imported = course.documents.orEmpty().mapTo(HashSet()) { it.name }
-        val contents = session?.contents?.map { content ->
-            content.copy(attachments = content.attachments.filter { it.kind != NotebookAttachment.Kind.FILE || it.name !in imported })
-        }
-        return NotebookPart(sessionLine(source.date), contents)
+        val sources = (course.sources ?: listOfNotNull(course.source)).distinctBy { it.sessionKey }
+        if (sources.isEmpty()) return null
+        val sessions = sources.mapNotNull { source -> snapshot?.sessions?.firstOrNull { it.key == source.sessionKey } }
+        val contents = if (sessions.isEmpty()) null else sessions.flatMap { session -> session.contents.map { content ->
+            content.copy(attachments = content.attachments.filter { it.kind != NotebookAttachment.Kind.FILE || !hasDocumentFrom(course, it.name, session.key) })
+        } }
+        return NotebookPart(sources.joinToString(" · ") { sessionLine(it.date) }, contents)
     }
 
     // region Documents proches (section 8.5)
@@ -173,7 +205,9 @@ object RevisionSession {
             val delta = ChronoUnit.DAYS.between(origin, parsed)
             return delta.takeIf { kotlin.math.abs(it) <= NEARBY_DAYS }
         }
-        val own = course.documents.orEmpty().mapTo(HashSet()) { it.name }
+        fun alreadyAttached(name: String, key: String?): Boolean = course.documents.orEmpty().any {
+            it.name == name && (it.sourceSessionKey == null || key == null || it.sourceSessionKey == key)
+        }
         val candidates = mutableListOf<Pair<Long, Nearby>>()
         val stored = HashSet<Pair<String, String>>()
         for (other in courses) {
@@ -181,19 +215,19 @@ object RevisionSession {
             val date = courseDate(other)
             val delta = near(date) ?: continue
             other.documents.orEmpty().forEach { document ->
-                other.source?.sessionKey?.let { stored += it to document.name }
-                if (document.name !in own && available(document)) candidates += delta to Nearby.FromCourse(other.id, document, date)
+                documentSourceKey(other, document)?.let { stored += it to document.name }
+                if (!alreadyAttached(document.name, documentSourceKey(other, document)) && available(document)) candidates += delta to Nearby.FromCourse(other.id, document, date)
             }
         }
         snapshot?.sessions.orEmpty().forEach { session ->
-            if (session.key == course.source?.sessionKey || !sameSubjectSession(session.subject)) return@forEach
+            if (session.key in (course.sources ?: listOfNotNull(course.source)).map { it.sessionKey } || !sameSubjectSession(session.subject)) return@forEach
             val date = session.date.toString()
             val delta = near(date) ?: return@forEach
             session.contents.flatMap { it.attachments }
                 .filter { it.kind == NotebookAttachment.Kind.FILE }
                 .distinctBy { it.id }
                 .forEach { attachment ->
-                    if (attachment.name !in own && (session.key to attachment.name) !in stored) {
+                    if (!alreadyAttached(attachment.name, session.key) && (session.key to attachment.name) !in stored) {
                         candidates += delta to Nearby.FromNotebook(session.key, attachment, date)
                     }
                 }

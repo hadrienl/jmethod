@@ -170,6 +170,7 @@ private fun ScorePage(
     onBack: () -> Unit,
     onClose: () -> Unit,
     onSubmit: (Int) -> Unit,
+    referenceLine: String,
 ) {
     var score by rememberSaveable(revision.id) { mutableIntStateOf(SCORE_INITIAL) }
     val preview = ScorePreview.of(score, settings.sensitivity, settings.emergencyThreshold)
@@ -177,12 +178,12 @@ private fun ScorePage(
         Modifier.verticalScroll(rememberScrollState()).padding(horizontal = JSpacing.xl).padding(bottom = JSpacing.xl).navigationBarsPadding(),
     ) {
         SheetHeader(
-            subject, revision.phase, "${revision.phase.info.label} · ${revision.stepLabel}", "C${course.courseNumber} · ${course.title}",
+            subject, revision.phase, "${revision.phaseLabel} · ${revision.stepLabel}", "$referenceLine · ${course.title}",
             course.chapter, "Fermer la fiche", onClose,
         )
         Spacer(Modifier.height(JSpacing.xl))
         Text("De quoi te souviens-tu sans regarder ton cours ?", style = MaterialTheme.typography.titleMedium)
-        Text("Avec 50/100 on garde ton rythme actuel.", style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
+        Text(if (settings.adaptiveEnabled) "Avec 50/100 on garde ton rythme actuel." else "Mode fixe : ton score ne modifie pas les prochaines dates.", style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
         Spacer(Modifier.height(16.dp))
         Column(
             Modifier.fillMaxWidth().clip(JShapes.inner).background(JColors.Slate50)
@@ -231,9 +232,9 @@ private fun ScorePage(
             Modifier.fillMaxWidth().clip(JShapes.inner).background(background).padding(JSpacing.l)
                 .semantics(mergeDescendants = true) {},
         ) {
-            Text(preview.title, color = foreground, style = MaterialTheme.typography.titleSmall)
+            Text(if (settings.adaptiveEnabled) preview.title else "Dates conservées", color = foreground, style = MaterialTheme.typography.titleSmall)
             Spacer(Modifier.height(4.dp))
-            Text(preview.description, color = foreground, style = MaterialTheme.typography.bodySmall)
+            Text(if (settings.adaptiveEnabled) preview.description else "La séance sera validée avec ce score, sans déplacer les suivantes ni ajouter de rattrapage.", color = foreground, style = MaterialTheme.typography.bodySmall)
         }
         Spacer(Modifier.height(JSpacing.xl))
         Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -266,7 +267,7 @@ fun SessionSheet(
     settings: AppSettings,
     today: String,
     documents: List<Pair<CourseDocument, Boolean>>,
-    notebookPart: RevisionSession.NotebookPart?,
+    notebookParts: List<RevisionSession.CourseNotebookPart>,
     notebookLoading: Boolean,
     downloadingId: String?,
     nextLabel: String?,
@@ -301,10 +302,11 @@ fun SessionSheet(
             page is SessionPage.Score -> ScorePage(
                 model.revision, model.course, model.subject, settings, state.submitting,
                 onBack = { onPage(SessionPage.Main) }, onClose = onDismiss, onSubmit = onSubmit,
+                referenceLine = model.members.joinToString(" + ") { it.displayReference },
             )
             page is SessionPage.Result -> ResultPage(page, nextLabel, remainingLabel, onNext = { onNext(page.nextRevisionId) }, onBackToToday = onBackToToday, onClose = onDismiss)
             else -> MainPage(
-                model, today, documents, notebookPart, notebookLoading, downloadingId,
+                model, today, documents, notebookParts, notebookLoading, downloadingId,
                 onOpenDocument, onRedownload, onDownloadAttachment, onLink, nearby, onOpenNearby, onAttachNearby,
                 onScore = { onPage(SessionPage.Score) }, onClose = onDismiss,
             )
@@ -317,7 +319,7 @@ private fun MainPage(
     model: RevisionDetailModel,
     today: String,
     documents: List<Pair<CourseDocument, Boolean>>,
-    notebookPart: RevisionSession.NotebookPart?,
+    notebookParts: List<RevisionSession.CourseNotebookPart>,
     notebookLoading: Boolean,
     downloadingId: String?,
     onOpenDocument: (CourseDocument) -> Unit,
@@ -356,7 +358,7 @@ private fun MainPage(
                     Spacer(Modifier.height(JSpacing.s))
                     Text(course.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, modifier = Modifier.semantics { heading() })
                     Spacer(Modifier.height(JSpacing.xs))
-                    Text("${course.chapter} · C${course.courseNumber}", style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
+                    Text(model.members.joinToString(" + ") { it.displayReference }, style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
                     Text(model.plannedLine, style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
                 }
                 IconButton(onClick = onClose, modifier = Modifier.size(48.dp)) {
@@ -366,7 +368,10 @@ private fun MainPage(
             // 2. Le cours : description puis documents.
             Column(verticalArrangement = Arrangement.spacedBy(JSpacing.s)) {
                 SheetSectionTitle("Le cours")
-                model.description?.let { CollapsibleDescription(it) }
+                model.members.forEach { leaf ->
+                    Text("${leaf.displayReference} · ${leaf.title}", style = MaterialTheme.typography.titleSmall)
+                    leaf.description?.takeIf { it.isNotBlank() }?.let { CollapsibleDescription(it) }
+                }
                 if (documents.isNotEmpty()) {
                     CourseDocumentsList(documents, onOpenDocument, onRedownload)
                 } else {
@@ -376,7 +381,10 @@ private fun MainPage(
             // Documents proches de la même matière (section 8.5).
             NearbyDocumentsSection(model.subjectName, nearby, downloadingId, onOpenNearby, onAttachNearby)
             // 3. Dans le cahier de textes.
-            notebookPart?.let { NotebookPartSection(it, notebookLoading, downloadingId, onDownloadAttachment, onLink) }
+            notebookParts.forEach { leaf ->
+                NotebookPartSection(leaf.part.copy(sourceLine = "${leaf.reference} · ${leaf.part.sourceLine}"),
+                    notebookLoading, downloadingId, onDownloadAttachment, onLink)
+            }
             // 4. Séances précédentes (repliable).
             Column(Modifier.fillMaxWidth().clip(JShapes.inner).border(1.dp, JColors.Slate200, JShapes.inner)) {
                 Row(

@@ -7,7 +7,7 @@ object DataMigrations {
     const val CURRENT_VERSION = 1
 
     /** Document d’un premier lancement : réglages et matières par défaut, aucune donnée. */
-    fun emptyDocument(): AppDocument = AppDocument(initialized = true, dataVersion = CURRENT_VERSION)
+    fun emptyDocument(): AppDocument = fr.jmethod.app.domain.RevisionProgrammes.migrate(AppDocument(initialized = true, dataVersion = CURRENT_VERSION))
 
     /**
      * Cours du jeu de démonstration livré avec le jalon 1 (ids fixes, aussi utilisés par la démo web).
@@ -25,11 +25,12 @@ object DataMigrations {
         var current = document
         if (current.dataVersion < 1) current = removeLegacyDemo(current).copy(dataVersion = 1)
         current = migrateNotebookKeys(current)
-        return current
+        return fr.jmethod.app.domain.RevisionProgrammes.migrate(current)
     }
 
     /** Clés de séance du cahier de textes : anciennes clés `N` vers `pn1:` (idempotent, aussi après un import). */
     fun migrateNotebookKeys(document: AppDocument): AppDocument {
+        if (document.schemaVersion >= 2) return document
         val migration = fr.jmethod.app.domain.NotebookCourses.migrateKeys(document.courses, document.notebookImports)
         if (migration.courses == document.courses && migration.imports == document.notebookImports) return document
         return document.copy(courses = migration.courses, notebookImports = migration.imports)

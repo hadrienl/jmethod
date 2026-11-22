@@ -41,6 +41,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -266,6 +267,7 @@ private fun CourseAction(
             Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = JColors.Emerald700, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(6.dp))
             Text("Cours créé", style = MaterialTheme.typography.bodySmall, color = JColors.Emerald800, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            TextButton(onClick = onCreate, enabled = !busy) { Text("Autre feuille") }
             OutlinedButton(onClick = { onView(importState.courseId) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Voir le cours") }
         }
         else -> Button(

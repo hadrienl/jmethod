@@ -109,7 +109,7 @@ class TodayViewModel(
             var next: String? = null
             repository.update { document ->
                 val result = ScoreSubmission.submit(
-                    document.courses, document.revisions, document.settings, revisionId, score, clock.now(), AppClock.ZONE,
+                    document.courses, document.revisions, document.settings, revisionId, score, clock.now(), AppClock.ZONE, document.programmes,
                 )
                 outcome = result
                 if (!result.ignored) {

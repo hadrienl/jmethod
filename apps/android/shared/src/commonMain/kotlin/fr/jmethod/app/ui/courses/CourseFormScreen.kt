@@ -117,7 +117,7 @@ fun CourseFormScreen(state: CoursesUiState, viewModel: CoursesViewModel, modifie
             ) {
                 val count = state.intervalCount
                 Text(
-                    if (count > 1) "Génère automatiquement les $count échéances de révision." else "Génère automatiquement l’échéance de révision.",
+                    "Enregistre ta feuille, puis démarre son programme depuis Mes cours.",
                     style = MaterialTheme.typography.bodyMedium, color = JColors.Slate600,
                 )
 
@@ -141,20 +141,35 @@ fun CourseFormScreen(state: CoursesUiState, viewModel: CoursesViewModel, modifie
                     }
                 }
 
+                if (form.notebook != null) {
+                    Column {
+                        Text("Destination des ressources", style = MaterialTheme.typography.titleSmall)
+                        androidx.compose.material3.FilterChip(selected = form.existingTargetId == null,
+                            onClick = { viewModel.setExistingTarget(null) }, label = { Text("Nouvelle feuille") })
+                        state.courses.filter { it.subjectId == state.formSubjectId }.forEach { leaf ->
+                            androidx.compose.material3.FilterChip(selected = form.existingTargetId == leaf.id,
+                                onClick = { viewModel.setExistingTarget(leaf.id) }, label = { Text("Associer à ${leaf.displayReference} · ${leaf.title}") })
+                        }
+                        if (form.existingTargetId != null) Text("La référence, les notes et les révisions de cette feuille seront conservées.")
+                    }
+                }
+                OutlinedTextField(
+                    value = form.reference, onValueChange = viewModel::setReference,
+                    label = { Text("Référence personnelle") }, placeholder = { Text("C${state.formCourseNumber}") },
+                    singleLine = true, isError = form.reference.length > 24,
+                    supportingText = { Text("Ton numéro de feuille, unique dans cette matière. Vide : attribution automatique.") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
                 Column {
                     Row(verticalAlignment = Alignment.Top) {
                         OutlinedTextField(
                             value = form.chapter,
                             onValueChange = viewModel::setChapter,
-                            label = { Text("Chapitre") },
+                            label = { Text("Chapitre (facultatif)") },
                             placeholder = { Text("ex. : Arithmétique, Guerre froide…") },
                             singleLine = true,
-                            isError = form.showErrors && form.chapter.isBlank(),
-                            supportingText = if (form.showErrors && form.chapter.isBlank()) {
-                                { Text("Indique le chapitre du cours.") }
-                            } else {
-                                null
-                            },
+                            isError = false,
+
                             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                             colors = fieldColors,
                             modifier = Modifier.weight(1f),
@@ -167,11 +182,11 @@ fun CourseFormScreen(state: CoursesUiState, viewModel: CoursesViewModel, modifie
                             modifier = Modifier.padding(top = JSpacing.s).height(56.dp).widthIn(min = 72.dp).clip(JShapes.control).background(JColors.Violet50)
                                 .padding(horizontal = JSpacing.m)
                                 .semantics(mergeDescendants = true) {
-                                    contentDescription = "Numéro attribué automatiquement : C${state.formCourseNumber}"
+                                    contentDescription = "Référence : ${form.reference.ifBlank { "C${state.formCourseNumber}" }}"
                                 },
                         ) {
-                            Text("C${state.formCourseNumber}", style = MaterialTheme.typography.titleMedium.tabular(), color = JColors.Violet800)
-                            Text("auto", style = MaterialTheme.typography.labelSmall, color = JColors.Violet800)
+                            Text(form.reference.ifBlank { "C${state.formCourseNumber}" }, maxLines = 1, style = MaterialTheme.typography.titleMedium.tabular(), color = JColors.Violet800)
+                            Text(if (form.reference.isBlank()) "auto" else "référence", style = MaterialTheme.typography.labelSmall, color = JColors.Violet800)
                         }
                     }
                     if (state.formSuggestions.isNotEmpty()) {
@@ -191,15 +206,11 @@ fun CourseFormScreen(state: CoursesUiState, viewModel: CoursesViewModel, modifie
                 OutlinedTextField(
                     value = form.title,
                     onValueChange = viewModel::setTitle,
-                    label = { Text("Titre de la leçon") },
+                    label = { Text("Titre de la leçon (facultatif)") },
                     placeholder = { Text("ex. : Algorithme d’Euclide et PGCD") },
                     singleLine = true,
-                    isError = form.showErrors && form.title.isBlank(),
-                    supportingText = if (form.showErrors && form.title.isBlank()) {
-                        { Text("Indique le titre de la leçon.") }
-                    } else {
-                        null
-                    },
+                    isError = false,
+
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                     colors = fieldColors,
                     modifier = Modifier.fillMaxWidth(),
@@ -207,7 +218,7 @@ fun CourseFormScreen(state: CoursesUiState, viewModel: CoursesViewModel, modifie
 
                 Column {
                     val dateLabel = FrenchDates.format(form.date, FrenchDates::weekdayDayMonthYear).sentenceCase()
-                    SectionLabel("Date du cours (J0)")
+                    SectionLabel("Date de la feuille")
                     TextButton(
                         onClick = { pickingDate = true },
                         shape = JShapes.control,
@@ -223,7 +234,7 @@ fun CourseFormScreen(state: CoursesUiState, viewModel: CoursesViewModel, modifie
                     }
                     Spacer(Modifier.height(JSpacing.xs))
                     Text(
-                        "La première révision (Découvrir, J0) est programmée ce jour-là.",
+                        "Les révisions seront créées lorsque tu démarreras un programme.",
                         style = MaterialTheme.typography.bodySmall, color = JColors.Slate600,
                     )
                 }
@@ -250,7 +261,7 @@ fun CourseFormScreen(state: CoursesUiState, viewModel: CoursesViewModel, modifie
                     Button(onClick = viewModel::submitCreate, shape = JShapes.control, modifier = Modifier.heightIn(min = 48.dp)) {
                         Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(JSpacing.s))
-                        Text(CourseEditing.submitLabel(state.formCourseNumber), fontWeight = FontWeight.SemiBold)
+                        Text(if (form.existingTargetId == null) "Enregistrer la feuille" else "Associer les ressources", fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
@@ -272,7 +283,7 @@ fun CourseFormScreen(state: CoursesUiState, viewModel: CoursesViewModel, modifie
             },
             dismissButton = { TextButton(onClick = { pickingDate = false }) { Text("Annuler") } },
         ) {
-            DatePicker(state = pickerState, title = { Text("Date du cours (J0)", modifier = Modifier.padding(start = 24.dp, top = 16.dp)) })
+            DatePicker(state = pickerState, title = { Text("Date de la feuille", modifier = Modifier.padding(start = 24.dp, top = 16.dp)) })
         }
     }
 }

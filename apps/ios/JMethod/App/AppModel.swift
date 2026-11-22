@@ -128,15 +128,18 @@ final class AppModel {
                 document = saved
                 await migrateDemoDataIfNeeded(store: store)
                 // Clés du cahier de textes stables entre sessions Pronote (migration unique, idempotente).
-                let migrated = NotebookCourses.migratingKeys(document)
+                let migrated = RevisionProgrammes.migrate(NotebookCourses.migratingKeys(document))
                 if migrated != document {
+                    version += 1
+                    try await store.save(migrated, version: version)
                     document = migrated
-                    persist()
                 }
                 await repairHTMLDocuments()
             } else {
-                document = Self.emptyDocument
-                persist()
+                let fresh = RevisionProgrammes.migrate(Self.emptyDocument)
+                version += 1
+                try await store.save(fresh, version: version)
+                document = fresh
                 preferences.set(true, forKey: Self.demoMigrationKey)
             }
             loadState = .ready
@@ -230,7 +233,7 @@ final class AppModel {
         do {
             outcome = try ScoreSubmission.submit(
                 revisions: document.revisions, courses: document.courses, settings: document.settings,
-                revisionId: revisionId, score: max(0, min(100, score)), now: now()
+                revisionId: revisionId, score: max(0, min(100, score)), now: now(), programmes: document.programmes
             )
         } catch {
             toast = .init(title: "Séance non enregistrée", message: "Les dates de ce cours sont invalides.", kind: .warning)
@@ -276,6 +279,7 @@ final class AppModel {
         } else {
             courseDraft.title = ""
         }
+        courseDraft.reference = nil
         courseDraft.description = ""
         if courseDraft.subjectId.map({ id in !document.subjects.contains { $0.id == id } }) ?? true {
             courseDraft.subjectId = document.subjects.first?.id
@@ -297,7 +301,7 @@ final class AppModel {
         }
         guard let created else { return false }
         if pending != nil { discardNotebookDraft() }
-        toast = .init(title: created.outcome.toast.title, message: created.outcome.toast.message, kind: .success)
+        toast = .init(title: "Feuille enregistrée", message: "\(created.course.displayReference) est disponible. Démarre son programme pour créer les J.", kind: .success)
         return true
     }
 
@@ -309,14 +313,31 @@ final class AppModel {
         while document.courses.contains(where: { $0.id == "course-\(AdaptiveAlgorithm.epochMilliseconds(at))" }) {
             at = at.addingTimeInterval(0.001)
         }
-        guard var outcome = try CourseCreation.create(draft, courses: document.courses, revisions: document.revisions,
-                                                      settings: document.settings, now: at) else { return nil }
+        var personal = draft
+        let next = (document.courses.filter { $0.subjectId == draft.subjectId }.map(\.courseNumber).max() ?? 0) + 1
+        let reference = draft.reference.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0.trimmingCharacters(in: .whitespacesAndNewlines) } ?? "C\(next)"
+        guard reference.count <= 24, !document.courses.contains(where: { $0.subjectId == draft.subjectId && $0.displayReference.lowercased() == reference.lowercased() }) else {
+            toast = .init(title: "Feuille non créée", message: "Cette référence existe déjà dans la matière, ou dépasse 24 caractères.", kind: .warning)
+            return nil
+        }
+        personal.title = personal.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? reference : personal.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        personal.chapter = personal.chapter.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Sans chapitre" : personal.chapter.trimmingCharacters(in: .whitespacesAndNewlines)
+        var creationSettings = document.settings
+        creationSettings.intervals = []
+        guard var outcome = try CourseCreation.create(personal, courses: document.courses, revisions: document.revisions,
+                                                      settings: creationSettings, now: at) else { return nil }
         var course = outcome.course
+        course.reference = reference
+        course.courseNumber = Int(reference.drop(while: { !$0.isNumber })) ?? next
+        course.sources = notebook.map { [$0.source] }
+        outcome.course = course
+        outcome.courses[0] = course
         if let notebook {
             course.source = notebook.source
             var stored: [CourseDocument] = []
             for item in staged.prefix(CourseDocumentStore.maximumDocuments) {
-                if let document = try? documentStore.store(item.url, name: item.name, mime: item.mime, courseId: course.id, extractedTitle: item.extractedTitle) {
+                if var document = try? documentStore.store(item.url, name: item.name, mime: item.mime, courseId: course.id, extractedTitle: item.extractedTitle) {
+                    document.sourceSessionKey = notebook.source.sessionKey
                     stored.append(document)
                 }
             }
@@ -360,6 +381,10 @@ final class AppModel {
     /// Supprime le cours, toutes ses révisions et ses fichiers ; une séance du cahier n'est plus jamais recréée
     /// automatiquement (`dismissed`). Les créneaux Pronote ne changent pas.
     func deleteCourse(id: String) {
+        guard !document.programmes.contains(where: { $0.courseIds.contains(id) }) else {
+            toast = .init(title: "Feuille conservée", message: "Cette feuille appartient à un programme. Son historique et ses documents sont conservés.", kind: .info)
+            return
+        }
         let removed = course(id: id)
         let result = CourseDeletion.apply(courseId: id, courses: document.courses, revisions: document.revisions)
         document.courses = result.courses
@@ -372,6 +397,84 @@ final class AppModel {
         }
         persist()
         toast = .init(title: CourseDeletion.toastTitle, message: CourseDeletion.toastMessage, kind: .info)
+    }
+
+    @discardableResult
+    func associateNotebook(to courseId: String) -> Bool {
+        guard let draft = notebookDraft, let index = document.courses.firstIndex(where: { $0.id == courseId }),
+              document.courses[index].subjectId == draft.form.subjectId else { return false }
+        let course = document.courses[index]
+        let requested = draft.documents.filter(\.selected)
+        guard Set(requested.map(\.name)).count == requested.count else {
+            showToast("Association impossible", "Plusieurs fichiers de cette séance portent le même nom. Sélectionne-en un seul à la fois.", warning: true); return false
+        }
+        guard !requested.contains(where: { candidate in (course.documents ?? []).contains { $0.name == candidate.name && RevisionSession.documentSourceKey($0, course: course) == nil } }) else {
+            showToast("Association impossible", "Un ancien fichier de même nom a une provenance ambiguë. Les ressources restent accessibles dans le cahier de textes.", warning: true); return false
+        }
+        let selected = requested.filter { !RevisionSession.hasDocument(from: draft.source.sessionKey, name: $0.name, course: course) }
+        guard (course.documents ?? []).count + selected.count <= CourseDocumentStore.maximumDocuments else {
+            showToast("Association impossible", "Une feuille peut contenir au plus 10 documents.", warning: true); return false
+        }
+        var stored: [CourseDocument] = []
+        do {
+            for item in selected {
+                var saved = try documentStore.store(item.url, name: item.name, mime: item.mime, courseId: courseId, extractedTitle: item.extractedTitle)
+                saved.sourceSessionKey = draft.source.sessionKey
+                stored.append(saved)
+            }
+        } catch {
+            stored.forEach { if let url = documentStore.url(for: $0) { try? FileManager.default.removeItem(at: url) } }
+            showToast("Association impossible", error.localizedDescription, warning: true); return false
+        }
+        var sources = course.sources ?? course.source.map { [$0] } ?? []
+        if !sources.contains(where: { $0.sessionKey == draft.source.sessionKey }) { sources.append(draft.source) }
+        document.courses[index].source = course.source ?? draft.source
+        document.courses[index].sources = sources
+        let existing = (course.documents ?? []).map { original -> CourseDocument in
+            var copy = original
+            copy.sourceSessionKey = RevisionSession.documentSourceKey(original, course: course)
+            return copy
+        }
+        let docs = existing + stored
+        document.courses[index].documents = docs.isEmpty ? nil : docs
+        document.notebookImports[draft.source.sessionKey] = NotebookImport(status: .created, courseId: courseId, at: Self.isoString(now()))
+        persist(); discardNotebookDraft()
+        showToast("Ressource associée", "La feuille conserve sa référence et son programme.")
+        return true
+    }
+
+    func saveRhythm(_ rhythm: RevisionRhythm, adaptive: Bool, applyToOngoing: Bool) {
+        do {
+            try RevisionProgrammes.validate(rhythm)
+            var updated = document
+            updated.settings.rhythm = rhythm
+            updated.settings.intervals = rhythm.steps.map(\.offsetDays)
+            updated.settings.adaptiveEnabled = adaptive
+            if applyToOngoing { updated = try RevisionProgrammes.reapply(updated, programmeIds: Set(updated.programmes.map(\.id)), rhythm: rhythm) }
+            document = updated
+            persist()
+            showToast("Rythme enregistré", applyToOngoing ? "Les séances terminées et les rattrapages ont été conservés." : "Les programmes existants gardent leur rythme et leur mode.")
+        } catch { showToast("Rythme non enregistré", error.localizedDescription, warning: true) }
+    }
+
+    func startProgramme(courseIds: [String], startDate: String) -> Bool {
+        do {
+            document = try RevisionProgrammes.start(document, courseIds: courseIds, startDate: startDate)
+            persist()
+            showToast("Programme créé", "Les feuilles sélectionnées ont leur propre rythme de révision.")
+            return true
+        } catch { showToast("Programme non créé", error.localizedDescription, warning: true); return false }
+    }
+
+    func renameReference(courseId: String, value: String) {
+        let reference = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let index = document.courses.firstIndex(where: { $0.id == courseId }), !reference.isEmpty, reference.count <= 24 else { return }
+        let subject = document.courses[index].subjectId
+        guard !document.courses.contains(where: { $0.id != courseId && $0.subjectId == subject && $0.displayReference.lowercased() == reference.lowercased() }) else {
+            showToast("Référence inchangée", "Cette référence existe déjà dans cette matière.", warning: true); return
+        }
+        document.courses[index].reference = reference
+        persist()
     }
 
     // MARK: Cahier de textes et documents
@@ -402,12 +505,13 @@ final class AppModel {
 
     /// « Joindre à ce cours » (§8.5) : copie le fichier dans les documents du cours (nouvel identifiant, même nom,
     /// titre lu conservé). L'autre cours et le titre de ce cours ne changent pas.
-    func attachDocument(from source: URL, name: String, mime: String?, extractedTitle: String?, to courseId: String) throws {
+    func attachDocument(from source: URL, name: String, mime: String?, extractedTitle: String?, to courseId: String, sourceSessionKey: String? = nil) throws {
         guard let index = document.courses.firstIndex(where: { $0.id == courseId }) else { throw AttachFailure.courseMissing }
         let existing = document.courses[index].documents ?? []
-        guard !existing.contains(where: { $0.name == name }) else { throw AttachFailure.alreadyAttached }
+        guard !existing.contains(where: { $0.name == name && (sourceSessionKey == nil || RevisionSession.documentSourceKey($0, course: document.courses[index]) == sourceSessionKey || RevisionSession.documentSourceKey($0, course: document.courses[index]) == nil) }) else { throw AttachFailure.alreadyAttached }
         guard existing.count < CourseDocumentStore.maximumDocuments else { throw AttachFailure.full }
-        let stored = try documentStore.store(source, name: name, mime: mime, courseId: courseId, extractedTitle: extractedTitle)
+        var stored = try documentStore.store(source, name: name, mime: mime, courseId: courseId, extractedTitle: extractedTitle)
+        stored.sourceSessionKey = sourceSessionKey
         document.courses[index].documents = existing + [stored]
         persist()
         toast = .init(title: "Document joint", message: "« \(name) » est maintenant dans ce cours.", kind: .success)

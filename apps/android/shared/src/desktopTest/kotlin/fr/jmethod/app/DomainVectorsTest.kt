@@ -254,7 +254,11 @@ class DomainVectorsTest {
             assertEquals(name(case), settings(expected.getValue("settings")), imported.settings)
             assertEquals(name(case), exported, json.parseToJsonElement(AppDocumentCodec.export(imported, now(case))))
             // Un import explicite est conservé tel quel : il est déjà à la version courante.
-            assertEquals(imported, DataMigrations.migrate(imported))
+            val importedV2 = DataMigrations.migrate(imported)
+            assertEquals(imported.courses, importedV2.courses)
+            assertEquals(imported.revisions.map { it.id }, importedV2.revisions.map { it.id })
+            assertEquals(2, importedV2.schemaVersion)
+            assertEquals(importedV2, DataMigrations.migrate(importedV2))
 
             // Installation du jalon 1 : démo modifiée par des validations, plus de vrais créneaux synchronisés.
             val realEvent = PronoteEvent(

@@ -318,6 +318,13 @@ private fun AppContent(container: AppContainer, createConnection: (CoroutineScop
         factory = viewModelFactory { initializer { NotebookViewModel(pronoteViewModel.controller, container.repository, container.cacheDir, container.courseCreator, container.courseFiles, container.clock) } },
     )
 
+    val loadError by container.repository.loadError.collectAsStateWithLifecycle()
+    if (loadError != null) {
+        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(32.dp), contentAlignment = Alignment.Center) {
+            Column { Text("Données indisponibles", style = MaterialTheme.typography.headlineSmall); Text(loadError!!) }
+        }
+        return
+    }
     val today by todayViewModel.uiState.collectAsStateWithLifecycle()
     val pronote by pronoteViewModel.controller.uiState.collectAsStateWithLifecycle()
     val syncInfo by pronoteViewModel.syncInfo.collectAsStateWithLifecycle()
@@ -458,6 +465,7 @@ private fun AppContent(container: AppContainer, createConnection: (CoroutineScop
                     todayViewModel.openSession(revisionId)
                 },
                 onDelete = { coursesViewModel.delete(course.id) },
+                onRenameReference = { coursesViewModel.renameReference(course.id, it) },
                 onOpenNotebook = detail.subject?.let { subject ->
                     {
                         coursesViewModel.closeDetail()
@@ -466,7 +474,7 @@ private fun AppContent(container: AppContainer, createConnection: (CoroutineScop
                 },
                 documents = documents,
                 onOpenDocument = openDocument,
-                onRedownload = if (course.source != null) {
+                onRedownload = if (course.source != null || course.documents.orEmpty().any { it.sourceSessionKey != null }) {
                     { document -> notebookViewModel.redownload(course, document) }
                 } else {
                     null
@@ -733,17 +741,17 @@ private fun SessionSheetHost(
     LaunchedEffect(course.id, course.source != null) {
         if (pronote.access == AccessPhase.CONNECTED) notebookViewModel.ensureRead() // cahier (8.1) et documents proches (8.5)
     }
-    val documents = remember(course.documents) { course.documents.orEmpty().map { it to courseFiles.exists(it) } }
+    val documents = model.members.flatMap { it.documents.orEmpty() }.map { it to courseFiles.exists(it) }
     val page = session.page
     val next = (page as? SessionPage.Result)?.let { result -> document.revisions.firstOrNull { it.id == result.nextRevisionId } }
     val remaining = state.model.due.size
     SessionSheet(
         state = session,
         model = model,
-        settings = document.settings,
+        settings = document.settings.copy(adaptiveEnabled = document.programmes.firstOrNull { it.id == model.revision.programmeId }?.let { it.adaptiveEnabled && !it.needsReview } ?: true),
         today = state.model.today,
         documents = documents,
-        notebookPart = RevisionSession.notebookPart(course, notebook?.state?.snapshot),
+        notebookParts = RevisionSession.notebookParts(model.members, notebook?.state?.snapshot),
         notebookLoading = notebook?.state?.loading == true,
         downloadingId = notebook?.state?.downloadingId,
         nextLabel = next?.let { RevisionSession.nextLabel(it, document.courses, document.subjects) },
@@ -754,8 +762,8 @@ private fun SessionSheetHost(
         onAttachNearby = { item -> attachNearby(course.id, item, coursesViewModel, notebookViewModel) },
         onOpenDocument = onOpenDocument,
         onCloseViewer = onCloseViewer,
-        onRedownload = if (course.source != null) {
-            { doc -> notebookViewModel.redownload(course, doc) }
+        onRedownload = if (model.members.any { it.source != null || it.documents.orEmpty().any { doc -> doc.sourceSessionKey != null } }) {
+            { doc -> notebookViewModel.redownload(model.members.firstOrNull { leaf -> leaf.documents.orEmpty().any { it.id == doc.id } } ?: course, doc) }
         } else {
             null
         },

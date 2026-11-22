@@ -16,6 +16,8 @@ actor DocumentStore {
     }
 
     nonisolated let url: URL
+    private var v2URL: URL { url.deletingLastPathComponent().appendingPathComponent(url.deletingPathExtension().lastPathComponent + "-v2.json") }
+    private var readableURL: URL { FileManager.default.fileExists(atPath: v2URL.path) ? v2URL : url }
     private var lastWrittenVersion = 0
 
     init(url: URL) { self.url = url }
@@ -28,9 +30,10 @@ actor DocumentStore {
     /// Retourne nil si aucun document n'existe encore. Toute autre erreur est remontée : le fichier n'est jamais écrasé
     /// par des données de démonstration lorsqu'il est seulement illisible (appareil verrouillé, fichier abîmé).
     func load() throws -> AppDocument? {
-        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        let selected = readableURL
+        guard FileManager.default.fileExists(atPath: selected.path) else { return nil }
         let data: Data
-        do { data = try Data(contentsOf: url) } catch { throw Failure.unreadable }
+        do { data = try Data(contentsOf: selected) } catch { throw Failure.unreadable }
         do { return try Self.decode(data) } catch { throw Failure.unreadable }
     }
 
@@ -38,7 +41,7 @@ actor DocumentStore {
         guard version > lastWrittenVersion else { return }
         do {
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try Self.encode(document).write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            try Self.encode(document).write(to: document.schemaVersion >= 2 ? v2URL : url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
             lastWrittenVersion = version
         } catch {
             throw Failure.unwritable
@@ -47,10 +50,11 @@ actor DocumentStore {
 
     /// Met de côté un fichier illisible pour repartir d'un document neuf sans le détruire.
     func archiveUnreadable() throws {
-        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        let selected = readableURL
+        guard FileManager.default.fileExists(atPath: selected.path) else { return }
         let stamp = Int(Date().timeIntervalSince1970)
         let destination = url.deletingLastPathComponent().appendingPathComponent("jmethod-data-illisible-\(stamp).json")
-        try FileManager.default.moveItem(at: url, to: destination)
+        try FileManager.default.moveItem(at: selected, to: destination)
     }
 
     static func encode(_ document: AppDocument) throws -> Data {

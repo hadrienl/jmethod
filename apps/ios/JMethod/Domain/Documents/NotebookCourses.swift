@@ -55,8 +55,9 @@ enum NotebookCourses {
     static func matchingCourse(_ session: NotebookSession, courses: [Course]) -> Course? {
         let subject = subjectKey(session.subject)
         return courses.first { course in
-            guard let source = course.source, source.kind == CourseSource.notebookKind else { return false }
-            return source.date == session.date && source.ordinal == session.ordinal && subjectKey(source.subjectLabel) == subject
+            (course.sources ?? course.source.map { [$0] } ?? []).contains { source in
+                source.kind == CourseSource.notebookKind && source.date == session.date && source.ordinal == session.ordinal && subjectKey(source.subjectLabel) == subject
+            }
         }
     }
 
@@ -233,6 +234,7 @@ enum NotebookCourses {
     /// Migration idempotente des données créées avec l'ancienne clé (`N` Pronote, `cours:<lessonId>@<date>`).
     /// Aucun cours n'est supprimé ; un document déjà migré ressort inchangé.
     static func migratingKeys(_ document: AppDocument) -> AppDocument {
+        guard document.schemaVersion < 2 else { return document }
         var result = document
         let ids = Set(document.courses.map(\.id))
         let position = Dictionary(document.courses.enumerated().map { ($0.element.id, $0.offset) }, uniquingKeysWith: { first, _ in first })

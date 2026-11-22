@@ -218,6 +218,13 @@ final class PronoteSession {
         }
     }
 
+    /// Les feuilles et leurs programmes restent utilisables sans compte Pronote.
+    func useLocally() {
+        guard access == .signedOut, !isWorking, !webActive else { return }
+        resumed = true
+        access = .offline
+    }
+
     #if DEBUG
     /// Vérification visuelle sur simulateur (argument de lancement `-JMethodOfflinePreview`, builds Debug seulement) :
     /// ouvre l'app hors ligne sur les données locales, sans connexion ni requête Pronote.

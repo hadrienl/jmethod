@@ -71,7 +71,16 @@ enum AdaptiveAlgorithm {
         let emergencyTimestamp = epochMilliseconds(now)
         // Tri stable par étape, comme Array.prototype.sort.
         var revisions = courseRevisions.enumerated()
-            .sorted { $0.element.stepIndex != $1.element.stepIndex ? $0.element.stepIndex < $1.element.stepIndex : $0.offset < $1.offset }
+            .sorted { lhs, rhs in
+                if lhs.element.programmeId != nil {
+                    let a = lhs.element.nominalOffsetDays ?? 0, b = rhs.element.nominalOffsetDays ?? 0
+                    if a != b { return a < b }
+                    let emergencyA = lhs.element.isEmergencySession == true, emergencyB = rhs.element.isEmergencySession == true
+                    if emergencyA != emergencyB { return !emergencyA }
+                    return lhs.offset < rhs.offset
+                }
+                return lhs.element.stepIndex != rhs.element.stepIndex ? lhs.element.stepIndex < rhs.element.stepIndex : lhs.offset < rhs.offset
+            }
             .map(\.element)
         guard let targetIndex = revisions.firstIndex(where: { $0.id == revisionId }) else { throw Failure.revisionNotFound(revisionId) }
 
@@ -97,22 +106,23 @@ enum AdaptiveAlgorithm {
             guard let emergencyDate = SchoolDay.adding(1, to: reference) else { throw Failure.invalidDate(reference) }
             nextDate = emergencyDate
             let emergency = Revision(
-                id: "\(current.courseId)-emerg-\(emergencyTimestamp)",
+                id: current.programmeId == nil ? "\(current.courseId)-emerg-\(emergencyTimestamp)" : "\(current.id)-emerg-\(emergencyTimestamp)",
                 courseId: current.courseId,
                 stepIndex: current.stepIndex,
                 stepLabel: "\(current.stepLabel)* (Rattrapage)",
                 scheduledDate: emergencyDate,
                 status: .pending,
-                phase: .consolidation,
+                phase: current.programmeId == nil ? .consolidation : current.phase,
                 adjustedIntervalDays: 1,
-                isEmergencySession: true
+                isEmergencySession: true, programmeId: current.programmeId, courseIds: current.courseIds,
+                rhythmStepId: current.rhythmStepId, nominalOffsetDays: current.nominalOffsetDays, originRevisionId: current.programmeId == nil ? nil : current.id
             )
             revisions.insert(emergency, at: targetIndex + 1)
             message = "Score difficile (\(score)/100) : Une session de rattrapage immédiate est programmée pour demain afin de consolider l'ancrage."
         } else if let nextPendingIndex {
             var next = revisions[nextPendingIndex]
-            let currentInterval = interval(current.stepIndex) ?? 0
-            let nextInterval = interval(next.stepIndex) ?? currentInterval + 1
+            let currentInterval = current.nominalOffsetDays ?? interval(current.stepIndex) ?? 0
+            let nextInterval = next.nominalOffsetDays ?? interval(next.stepIndex) ?? currentInterval + 1
             let defaultStepGap = max(1, nextInterval - currentInterval)
             let adaptedGap = max(1, jsRound(Double(defaultStepGap) * factor))
             guard let scheduled = SchoolDay.adding(adaptedGap, to: reference) else { throw Failure.invalidDate(reference) }
@@ -122,9 +132,14 @@ enum AdaptiveAlgorithm {
             revisions[nextPendingIndex] = next
 
             var lastDate = scheduled
+            var previousNominal = nextInterval
             var index = nextPendingIndex + 1
             while index < revisions.count {
-                let stepGap = max(1, (interval(revisions[index].stepIndex) ?? 0) - (interval(revisions[index - 1].stepIndex) ?? 0))
+                if current.programmeId != nil && (revisions[index].status == .completed || revisions[index].isEmergencySession == true) { index += 1; continue }
+                let nominal = revisions[index].nominalOffsetDays ?? interval(revisions[index].stepIndex) ?? 0
+                let preceding = current.programmeId == nil ? (interval(revisions[index - 1].stepIndex) ?? 0) : previousNominal
+                let stepGap = max(1, nominal - preceding)
+                previousNominal = nominal
                 let scaled = max(1, jsRound(Double(stepGap) * factor))
                 guard let date = SchoolDay.adding(scaled, to: lastDate) else { throw Failure.invalidDate(lastDate) }
                 lastDate = date

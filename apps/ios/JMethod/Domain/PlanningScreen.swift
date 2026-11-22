@@ -115,8 +115,8 @@ struct PlanningScreen: Equatable {
                 },
                 tiles: dayItems.map { item in
                     let done = item.revision.status == .completed
-                    let phaseLabel = Constants.phaseConfig(item.revision.phase).label
-                    let number = "C\(item.course.courseNumber)"
+                    let phaseLabel = item.revision.phaseLabel
+                    let number = RevisionProgrammes.references(item.revision, courses: courses)
                     return Tile(
                         revision: item.revision,
                         course: item.course,

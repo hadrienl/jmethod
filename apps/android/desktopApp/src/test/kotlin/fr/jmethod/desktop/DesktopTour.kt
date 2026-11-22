@@ -243,7 +243,10 @@ class DesktopTour {
         courses.forEachIndexed { index, (course, daysAgo) ->
             val form = CourseEditing.Form(course.first, course.second, course.third, today.minusDays(daysAgo).toString(), "Exemple de cours pour la visite guidée.")
             val documents = if (index == 0) listOf(PendingDocument("fiche-fractions.pdf", pdf, DocType.PDF, "Fiche : additionner des fractions")) else emptyList()
-            container.courseCreator.create(form, null, documents)
+            val created = container.courseCreator.create(form, null, documents)
+            if (created != null) container.repository.update { document ->
+                fr.jmethod.app.domain.RevisionProgrammes.start(document, listOf(created.course.id), form.date)
+            }
             delay(5)
         }
     }

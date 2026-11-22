@@ -126,12 +126,9 @@ final class NotebookCourseImporter {
 
     /// Document restauré sans son fichier : relit le cahier et le retélécharge si la séance est encore dans la fenêtre.
     func redownload(_ document: CourseDocument, of course: Course) async throws {
-        guard let key = course.source?.sessionKey else { throw Failure.notInNotebook }
         let read = try await pronote.readNotebook()
-        let session = read.snapshot.sessions.first { NotebookCourses.sessionKey($0) == key }
-            ?? read.snapshot.sessions.first { NotebookCourses.matchingCourse($0, courses: [course]) != nil }
-        guard let session,
-              let attachment = NotebookCourses.fileAttachments(of: session).first(where: { $0.name == document.name }) else { throw Failure.notInNotebook }
+        let candidates = RevisionSession.notebookDocumentCandidates(document, course: course, snapshot: read.snapshot)
+        guard candidates.count == 1, let (session, attachment) = candidates.first else { throw Failure.notInNotebook }
         let directory = NotebookCourseDraft.newStagingDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let destination = directory.appendingPathComponent(NotebookRules.saveAsName(attachment.name))
@@ -149,7 +146,7 @@ final class NotebookCourseImporter {
 
     enum Failure: LocalizedError {
         case notInNotebook
-        var errorDescription: String? { "Cette séance n’est plus dans le cahier de textes (28 jours) : le document ne peut pas être retéléchargé." }
+        var errorDescription: String? { "Ce document n’a pas été retrouvé de façon unique dans ses séances Pronote. Ouvre le cahier de textes pour le récupérer." }
     }
 
     // MARK: Préparation

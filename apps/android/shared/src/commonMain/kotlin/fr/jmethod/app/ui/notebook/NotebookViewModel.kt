@@ -454,7 +454,7 @@ class NotebookViewModel(
                 val analysis = withContext(Dispatchers.Default) { DocumentAnalyzer.analyze(file, attachment.name) }
                 val title = if (analysis.type != null) NotebookCourses.extractedTitle(analysis.extraction, attachment.name, names) else null
                 val attached = withContext(Dispatchers.IO) {
-                    creator.attach(courseId, file, attachment.name, analysis.type ?: DocType.displayTypeOf(attachment.name), title)
+                    creator.attach(courseId, file, attachment.name, analysis.type ?: DocType.displayTypeOf(attachment.name), title, sourceSessionKey = sessionKey)
                 }
                 events.send(NotebookEvent.Message(if (attached != null) "Document joint au cours." else "Ce document n’a pas pu être joint au cours."))
             } catch (_: CancellationException) {
@@ -469,14 +469,12 @@ class NotebookViewModel(
 
     /** Document absent (restauration) : relit le cahier et le retélécharge si la séance est encore dans la fenêtre. */
     fun redownload(course: Course, document: CourseDocument) {
-        val key = course.source?.sessionKey ?: return
         viewModelScope.launch {
             try {
                 val snapshot = readForCourses()
-                val session = snapshot.sessions.firstOrNull { it.key == key }
-                val attachment = session?.contents?.flatMap { it.attachments }?.firstOrNull { it.kind == NotebookAttachment.Kind.FILE && it.name == document.name }
+                val attachment = fr.jmethod.app.domain.RevisionSession.notebookDocumentCandidates(course, document, snapshot).singleOrNull()
                 if (attachment == null) {
-                    events.send(NotebookEvent.Message("Ce document n’est plus dans le cahier de textes (28 derniers jours) : il ne peut pas être retéléchargé."))
+                    events.send(NotebookEvent.Message("Ce document n’a pas été retrouvé de façon unique dans ses séances Pronote. Ouvre le cahier de textes pour le récupérer."))
                     return@launch
                 }
                 val target = withContext(Dispatchers.IO) {
@@ -490,7 +488,7 @@ class NotebookViewModel(
                     if (updated != null) {
                         repository.update { doc ->
                             doc.copy(courses = doc.courses.map { c ->
-                                if (c.id != course.id) c else c.copy(documents = c.documents?.map { if (it.id == updated.id) updated else it })
+                                if (c.id != course.id) c else c.copy(documents = c.documents?.map { if (it.id == updated.id) it.copy(size = updated.size, extractedTitle = updated.extractedTitle) else it })
                             })
                         }
                     }

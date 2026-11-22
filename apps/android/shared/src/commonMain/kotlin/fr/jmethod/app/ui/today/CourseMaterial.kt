@@ -115,6 +115,7 @@ internal fun CourseDocumentsList(
                 Spacer(Modifier.width(JSpacing.m))
                 Column(Modifier.weight(1f).semantics(mergeDescendants = true) {}) {
                     Text(document.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    RevisionSession.documentSourceLine(document)?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = JColors.Slate600) }
                     val title = document.extractedTitle?.takeIf { it.isNotBlank() && it != document.name }
                     when {
                         !present -> Text("À retélécharger", style = MaterialTheme.typography.bodySmall, color = JColors.Amber900)

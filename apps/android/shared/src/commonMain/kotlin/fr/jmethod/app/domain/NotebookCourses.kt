@@ -44,9 +44,10 @@ object NotebookCourses {
     fun courseFor(date: String, subjectLabel: String, ordinal: Int, courses: List<Course>): Course? {
         val subject = NotebookRules.normalizeSubject(subjectLabel)
         return courses.firstOrNull { course ->
-            val source = course.source
-            source != null && source.kind == SOURCE_KIND && source.date == date && source.ordinal == ordinal &&
-                NotebookRules.normalizeSubject(source.subjectLabel) == subject
+            (course.sources ?: listOfNotNull(course.source)).any { source ->
+                source.kind == SOURCE_KIND && source.date == date && source.ordinal == ordinal &&
+                    NotebookRules.normalizeSubject(source.subjectLabel) == subject
+            }
         }
     }
 

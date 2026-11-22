@@ -301,6 +301,7 @@ fun LoginScreen(viewModel: PronoteViewModel, state: PronoteUiState) {
                             Text("Se connecter", fontWeight = FontWeight.Bold)
                         }
                     }
+                    OutlinedButton(onClick = controller::useLocally, enabled = !working, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Continuer sans Pronote") }
                     val feedback = if (working) state.message else state.formError
                     if (feedback != null) {
                         Text(

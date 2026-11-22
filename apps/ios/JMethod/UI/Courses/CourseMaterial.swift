@@ -109,17 +109,18 @@ struct CourseMaterialSections: View {
     @ViewBuilder
     private func documentRow(_ document: CourseDocument) -> some View {
         let kind = DocumentKind.detect(name: document.name, data: nil)
+        let origin = RevisionSession.documentSourceLine(document)
         if app.documentExists(document) {
             Button { open(.document(document)) } label: {
                 row(icon: Self.icon(kind), name: document.name, detail: document.extractedTitle,
-                    footnote: "\(kind.label) · \(ByteCountFormatter.string(fromByteCount: Int64(document.size), countStyle: .file))", chevron: true)
+                    footnote: ["\(kind.label) · \(ByteCountFormatter.string(fromByteCount: Int64(document.size), countStyle: .file))", origin].compactMap { $0 }.joined(separator: " · "), chevron: true)
             }
             .buttonStyle(.plain)
             .accessibilityElement(children: .combine)
             .accessibilityHint("Ouvre le document")
         } else {
             HStack(spacing: Spacing.s) {
-                row(icon: Self.icon(kind), name: document.name, detail: nil, footnote: "À retélécharger", chevron: false, warning: true)
+                row(icon: Self.icon(kind), name: document.name, detail: nil, footnote: ["À retélécharger", origin].compactMap { $0 }.joined(separator: " · "), chevron: false, warning: true)
                 if busy == document.id {
                     ProgressView().padding(.trailing, Spacing.s)
                 } else {
@@ -292,9 +293,9 @@ struct CourseMaterialSections: View {
         Task {
             do {
                 switch item.origin {
-                case .course(_, let document):
+                case .course(let ownerId, let document):
                     guard let url = app.documentURL(document), app.documentExists(document) else { throw CocoaError(.fileNoSuchFile) }
-                    try app.attachDocument(from: url, name: document.name, mime: document.mime, extractedTitle: document.extractedTitle, to: courseId)
+                    try app.attachDocument(from: url, name: document.name, mime: document.mime, extractedTitle: document.extractedTitle, to: courseId, sourceSessionKey: document.sourceSessionKey ?? app.course(id: ownerId).flatMap { RevisionSession.documentSourceKey(document, course: $0) })
                 case .notebook(let attachment):
                     let url = try await notebook.fetch(attachment)
                     defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
@@ -303,7 +304,7 @@ struct CourseMaterialSections: View {
                         let extraction = DocumentText.extract(name: attachment.name, data: data)
                         return extraction.kind == nil ? nil : CourseTitleRules.extractedTitle(extraction, name: attachment.name, subjectNames: names)
                     }.value
-                    try app.attachDocument(from: url, name: attachment.name, mime: nil, extractedTitle: title, to: courseId)
+                    try app.attachDocument(from: url, name: attachment.name, mime: nil, extractedTitle: title, to: courseId, sourceSessionKey: item.sourceSessionKey)
                 }
             } catch is CancellationError {
             } catch {
