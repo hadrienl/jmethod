@@ -1,7 +1,16 @@
 package fr.jmethod.app.ui.today
 
+import fr.jmethod.app.ui.components.LocalContentWidth
+import fr.jmethod.app.ui.components.TwoColumnWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.runtime.CompositionLocalProvider
+import fr.jmethod.app.ui.components.LocalScreenGutter
 import fr.jmethod.app.ui.components.ScrollbarBox
 import fr.jmethod.app.ui.platform.LocalPlatform
 import androidx.compose.foundation.BorderStroke
@@ -109,42 +118,63 @@ fun TodayScreen(
     val model = state.model
     var programmeOpen by rememberSaveable { mutableStateOf(false) }
     val listState = rememberLazyListState()
-    ScrollbarBox(listState, Modifier.fillMaxSize(), barPadding = contentPadding) {
-        LazyColumn(
-            state = listState,
-            contentPadding = screenPadding(contentPadding, 24.dp),
-            verticalArrangement = Arrangement.spacedBy(JSpacing.l),
-        ) {
-            item(key = "header") { Header(model) }
-            val hasCourses = state.document.courses.isNotEmpty()
-            item(key = "flame") { RevisionFlame(fr.jmethod.app.domain.RevisionStreak.summary(state.document.streakState, state.model.today)) }
-            item(key = "hero") { Hero(model, hasCourses, onScore, onReview) }
-            // Aujourd’hui montre seulement la carte pour démarrer et enchaîner, puis l’emploi du temps de demain ;
-            // le détail du programme est replié par défaut.
-            item(key = "tomorrow") {
-                TomorrowClasses(model, onViewCourse) { id -> state.document.pronoteEvents.firstOrNull { it.id == id }?.let(onAddCourse) }
-            }
-            item(key = "programme") {
-                ProgrammeHeader(model, expanded = programmeOpen, onToggle = { programmeOpen = !programmeOpen })
-            }
-            if (programmeOpen) {
-                if (model.allDoneBanner) item(key = "done") { AllDoneBanner() }
-                if (hasCourses) item(key = "progress") { Progress(model) }
-                item(key = "phases") { PhaseLegend() }
-                if (model.overdueBanner != null) {
-                    item(key = "overdue") {
-                        Text(
-                            model.overdueBanner,
-                            color = JColors.Amber900,
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.fillMaxWidth().clip(JShapes.inner).background(JColors.Amber50).padding(JSpacing.l),
-                        )
+    val timetableScroll = rememberScrollState()
+    val twoColumns = LocalContentWidth.current >= TwoColumnWidth && LocalDensity.current.fontScale <= 1.3f
+    val padding = screenPadding(contentPadding, 24.dp)
+    val tomorrow: @Composable () -> Unit = {
+        TomorrowClasses(model, onViewCourse) { id ->
+            state.document.pronoteEvents.firstOrNull { it.id == id }?.let(onAddCourse)
+        }
+    }
+    Row(
+        Modifier.fillMaxSize().padding(horizontal = LocalScreenGutter.current),
+        horizontalArrangement = Arrangement.spacedBy(if (twoColumns) JSpacing.l else 0.dp),
+    ) {
+        CompositionLocalProvider(LocalScreenGutter provides 0.dp) {
+            ScrollbarBox(listState, Modifier.weight(1f).fillMaxHeight(), barPadding = contentPadding) {
+                LazyColumn(
+                    state = listState,
+                    contentPadding = screenPadding(contentPadding, 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(JSpacing.l),
+                ) {
+                    item(key = "header") { Header(model) }
+                    val hasCourses = state.document.courses.isNotEmpty()
+                    item(key = "flame") { RevisionFlame(fr.jmethod.app.domain.RevisionStreak.summary(state.document.streakState, state.model.today)) }
+                    item(key = "hero") { Hero(model, hasCourses, onScore, onReview) }
+                    // Aujourd’hui montre seulement la carte pour démarrer et enchaîner, puis l’emploi du temps de demain ;
+                    // le détail du programme est replié par défaut.
+                    if (!twoColumns) item(key = "tomorrow") { tomorrow() }
+                    item(key = "programme") {
+                        ProgrammeHeader(model, expanded = programmeOpen, onToggle = { programmeOpen = !programmeOpen })
+                    }
+                    if (programmeOpen) {
+                        if (model.allDoneBanner) item(key = "done") { AllDoneBanner() }
+                        if (hasCourses) item(key = "progress") { Progress(model) }
+                        item(key = "phases") { PhaseLegend() }
+                        if (model.overdueBanner != null) {
+                            item(key = "overdue") {
+                                Text(
+                                    model.overdueBanner,
+                                    color = JColors.Amber900,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.fillMaxWidth().clip(JShapes.inner).background(JColors.Amber50).padding(JSpacing.l),
+                                )
+                            }
+                        }
+                        if (model.emptyProgramme) {
+                            item(key = "empty") { EmptyProgramme(hasCourses) }
+                        } else {
+                            items(model.groups, key = { "group-" + it.subject.id }) { group -> SubjectGroup(group, onScore, onDetail) }
+                        }
                     }
                 }
-                if (model.emptyProgramme) {
-                    item(key = "empty") { EmptyProgramme(hasCourses) }
-                } else {
-                    items(model.groups, key = { "group-" + it.subject.id }) { group -> SubjectGroup(group, onScore, onDetail) }
+            }
+        }
+        if (twoColumns) {
+            ScrollbarBox(timetableScroll, Modifier.weight(0.7f).widthIn(max = 620.dp).fillMaxHeight(), barPadding = contentPadding) {
+                Column(Modifier.fillMaxWidth().verticalScroll(timetableScroll)
+                    .padding(top = padding.calculateTopPadding(), end = JSpacing.l, bottom = padding.calculateBottomPadding())) {
+                    tomorrow()
                 }
             }
         }

@@ -1,5 +1,7 @@
 package fr.jmethod.app.ui.courses
 
+import fr.jmethod.app.ui.components.LocalContentWidth
+import fr.jmethod.app.ui.components.TwoColumnWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.rememberLazyListState
 import fr.jmethod.app.ui.components.ScrollbarBox
@@ -9,6 +11,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -215,6 +218,7 @@ private fun SubjectChips(state: CoursesUiState, onSelect: (String?) -> Unit) {
 
 @Composable
 private fun SubjectGroup(group: CoursesListModel.SubjectGroup, onOpen: (String) -> Unit) {
+    val columns = if (LocalContentWidth.current >= TwoColumnWidth && LocalDensity.current.fontScale <= 1.3f) 2 else 1
     SurfaceCard {
         Column(Modifier.padding(JSpacing.l)) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.semantics(mergeDescendants = true) { heading() }) {
@@ -233,9 +237,14 @@ private fun SubjectGroup(group: CoursesListModel.SubjectGroup, onOpen: (String) 
                     color = JColors.Slate700,
                     modifier = Modifier.semantics { heading() },
                 )
-                chapter.courses.forEach { card ->
+                chapter.courses.chunked(columns).forEach { cards ->
                     Spacer(Modifier.height(JSpacing.s))
-                    CourseCard(card, onOpen)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(JSpacing.m)) {
+                        cards.forEach { card ->
+                            Box(Modifier.weight(1f)) { CourseCard(card, onOpen) }
+                        }
+                        if (cards.size < columns) Spacer(Modifier.weight(1f))
+                    }
                 }
             }
         }

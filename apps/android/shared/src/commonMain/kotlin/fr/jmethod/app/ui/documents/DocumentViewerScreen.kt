@@ -1,7 +1,7 @@
 package fr.jmethod.app.ui.documents
 
 import fr.jmethod.app.ui.components.DesktopSelection
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListState
 import fr.jmethod.app.ui.components.ScrollbarBox
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -57,7 +56,6 @@ import fr.jmethod.app.documents.DocumentAnalyzer
 import fr.jmethod.app.documents.ReadingBlock
 import fr.jmethod.app.model.CourseDocument
 import fr.jmethod.app.ui.platform.LocalPlatform
-import fr.jmethod.app.ui.platform.SystemBackHandler
 import fr.jmethod.app.ui.platform.decodeImage
 import fr.jmethod.app.ui.platform.openPdf
 import androidx.compose.ui.graphics.ImageBitmap
@@ -69,41 +67,45 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 /** Document affiché dans une feuille (fiche de séance ou de cours) : fichier local déjà vérifié. */
-data class SheetDocument(val document: CourseDocument, val file: File)
+data class SheetDocument(val document: CourseDocument, val file: File) {
+    internal var scale by mutableFloatStateOf(1f)
+    internal var offset by mutableStateOf(Offset.Zero)
+    internal val pages = LazyListState()
+}
 
 /**
  * Visionneuse dans l’app : PDF (PdfRenderer), images, ou vue « Lecture » pour les autres formats.
- * @param embedded vrai dans une feuille : pas de marges système, le retour est géré par la feuille.
+ * Intégrée à une fiche, qui gère le retour et les marges système.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DocumentViewerScreen(document: CourseDocument, file: File, onClose: () -> Unit, modifier: Modifier = Modifier, embedded: Boolean = false) {
+internal fun DocumentViewerScreen(viewer: SheetDocument, onClose: () -> Unit) {
+    val (document, file) = viewer
     val platform = LocalPlatform.current
-    if (!embedded) SystemBackHandler(onBack = onClose)
     val type = remember(file) { DocumentAnalyzer.detect(file, document.name) }
     Scaffold(
-        modifier = modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize(),
         containerColor = if (type == DocType.PDF || type.isImage) JColors.Slate100 else Color.White,
-        contentWindowInsets = if (embedded) WindowInsets(0) else ScaffoldDefaults.contentWindowInsets,
+        contentWindowInsets = WindowInsets(0),
         topBar = {
             TopAppBar(
                 title = { Text(document.name, maxLines = 1, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onClose) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = if (embedded) "Revenir à la fiche" else "Fermer le document")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Revenir à la fiche")
                     }
                 },
                 actions = { TextButton(onClick = { platform.openWith(file, document.name) }) { Text("Ouvrir avec…") } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White),
-                windowInsets = if (embedded) WindowInsets(0) else TopAppBarDefaults.windowInsets,
+                windowInsets = WindowInsets(0),
             )
         },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) {
             when {
-                type == DocType.PDF -> PdfPages(file)
-                type.isImage -> ZoomableImage(file)
-                else -> ReadingView(file, document.name)
+                type == DocType.PDF -> PdfPages(viewer)
+                type.isImage -> ZoomableImage(viewer)
+                else -> ReadingView(viewer)
             }
         }
     }
@@ -111,26 +113,25 @@ fun DocumentViewerScreen(document: CourseDocument, file: File, onClose: () -> Un
 
 /** Zoom à deux doigts et déplacement, communs au PDF et aux images. */
 @Composable
-private fun Zoomable(content: @Composable (Modifier) -> Unit) {
-    var scale by remember { mutableFloatStateOf(1f) }
-    var offset by remember { mutableStateOf(Offset.Zero) }
+private fun Zoomable(viewer: SheetDocument, content: @Composable (Modifier) -> Unit) {
     val state = rememberTransformableState { zoom, pan, _ ->
-        scale = (scale * zoom).coerceIn(1f, 5f)
-        offset = if (scale == 1f) Offset.Zero else offset + pan
+        viewer.scale = (viewer.scale * zoom).coerceIn(1f, 5f)
+        viewer.offset = if (viewer.scale == 1f) Offset.Zero else viewer.offset + pan
     }
     content(
         // Défilement libre tant que le document n’est pas agrandi ; déplacement ensuite.
-        Modifier.fillMaxSize().transformable(state, canPan = { scale > 1f }).graphicsLayer {
-            scaleX = scale
-            scaleY = scale
-            translationX = offset.x
-            translationY = offset.y
+        Modifier.fillMaxSize().transformable(state, canPan = { viewer.scale > 1f }).graphicsLayer {
+            scaleX = viewer.scale
+            scaleY = viewer.scale
+            translationX = viewer.offset.x
+            translationY = viewer.offset.y
         },
     )
 }
 
 @Composable
-private fun PdfPages(file: File) {
+private fun PdfPages(viewer: SheetDocument) {
+    val file = viewer.file
     val lock = remember { Mutex() }
     val pdf = remember(file) { openPdf(file) }
     DisposableEffect(pdf) { onDispose { pdf?.close() } }
@@ -139,8 +140,8 @@ private fun PdfPages(file: File) {
         return
     }
     val count = pdf.pageCount
-    Zoomable { zoom ->
-        LazyColumn(zoom, contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Zoomable(viewer) { zoom ->
+        LazyColumn(zoom, state = viewer.pages, contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             items((0 until count).toList()) { index ->
                 val bitmap by produceState<ImageBitmap?>(null, index) {
                     value = withContext(Dispatchers.IO) { lock.withLock { pdf.render(index, 1400) } }
@@ -164,7 +165,8 @@ private fun PdfPages(file: File) {
 }
 
 @Composable
-private fun ZoomableImage(file: File) {
+private fun ZoomableImage(viewer: SheetDocument) {
+    val file = viewer.file
     val bitmap by produceState<ImageBitmap?>(null, file) {
         value = withContext(Dispatchers.IO) { decodeImage(file, 3000) }
     }
@@ -173,14 +175,16 @@ private fun ZoomableImage(file: File) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         return
     }
-    Zoomable { zoom ->
+    Zoomable(viewer) { zoom ->
         Image(image, contentDescription = "Image du document", contentScale = ContentScale.Fit, modifier = zoom)
     }
 }
 
 /** Vue « Lecture » : texte structuré extrait (titres, paragraphes, listes), aperçu simplifié. */
 @Composable
-private fun ReadingView(file: File, name: String) {
+private fun ReadingView(viewer: SheetDocument) {
+    val (document, file) = viewer
+    val name = document.name
     val blocks by produceState<List<ReadingBlock>?>(null, file) {
         value = withContext(Dispatchers.Default) {
             runCatching {
@@ -201,7 +205,7 @@ private fun ReadingView(file: File, name: String) {
         ReadingFallback("Aperçu indisponible pour ce document. Utilise « Ouvrir avec… ».")
         return
     }
-    val listState = rememberLazyListState()
+    val listState = viewer.pages
     ScrollbarBox(listState, Modifier.fillMaxSize()) {
     DesktopSelection {
 LazyColumn(

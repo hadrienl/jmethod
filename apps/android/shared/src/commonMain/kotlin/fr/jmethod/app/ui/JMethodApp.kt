@@ -1,6 +1,28 @@
 package fr.jmethod.app.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.PlainTooltip
+import androidx.compose.material3.TooltipAnchorPosition
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
+import androidx.compose.material3.rememberTooltipState
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import fr.jmethod.app.ui.components.LocalContentWidth
+import fr.jmethod.app.ui.components.NavigationMode
+import fr.jmethod.app.ui.components.TwoColumnWidth
+import fr.jmethod.app.ui.components.ScrollbarBox
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -71,6 +93,8 @@ import fr.jmethod.app.model.CourseDocument
 import fr.jmethod.app.ui.documents.SheetDocument
 import fr.jmethod.app.ui.notebook.NotebookUiState
 import fr.jmethod.app.ui.today.SessionPage
+import fr.jmethod.app.ui.today.SessionPagePresentation
+import fr.jmethod.app.ui.courses.CourseDetailPresentation
 import fr.jmethod.app.ui.today.SessionSheet
 import fr.jmethod.app.ui.today.SessionSheetState
 import fr.jmethod.app.ui.courses.CourseDetailSheet
@@ -228,6 +252,7 @@ private fun AppNavigationBar(current: Tab, badge: Int, onSelect: (Tab) -> Unit) 
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AppNavigationRail(current: Tab, badge: Int, showBrand: Boolean = false, onSelect: (Tab) -> Unit) {
     val colors = NavigationRailItemDefaults.colors(
@@ -237,7 +262,7 @@ private fun AppNavigationRail(current: Tab, badge: Int, showBrand: Boolean = fal
         unselectedIconColor = JColors.Slate600,
         unselectedTextColor = JColors.Slate600,
     )
-    Row {
+    Row(Modifier.width(NavigationMode.RAIL.width)) {
         // En-tête seulement sur une fenêtre assez haute : les cinq destinations doivent tenir dans la
         // hauteur d’un téléphone en paysage.
         NavigationRail(
@@ -248,18 +273,70 @@ private fun AppNavigationRail(current: Tab, badge: Int, showBrand: Boolean = fal
                 null
             },
         ) {
-            Spacer(Modifier.weight(1f))
-            Destinations.forEach { destination ->
-                NavigationRailItem(
-                    selected = current == destination.tab,
-                    onClick = { onSelect(destination.tab) },
-                    icon = { NavIcon(destination, badge) },
-                    label = { NavLabel(destination.label) },
-                    colors = colors,
-                    modifier = Modifier.semantics { contentDescription = spokenLabel(destination, badge) },
-                )
+            Column(Modifier.verticalScroll(rememberScrollState()).padding(top = JSpacing.s), horizontalAlignment = Alignment.CenterHorizontally) {
+                Destinations.forEach { destination ->
+                    TooltipBox(
+                        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.End),
+                        tooltip = { PlainTooltip { Text(spokenLabel(destination, badge)) } },
+                        state = rememberTooltipState(),
+                    ) {
+                        NavigationRailItem(
+                            selected = current == destination.tab,
+                            onClick = { onSelect(destination.tab) },
+                            icon = { NavIcon(destination, badge) },
+                            label = { NavLabel(destination.label) },
+                            colors = colors,
+                            modifier = Modifier.semantics { contentDescription = spokenLabel(destination, badge) },
+                        )
+                    }
+                }
             }
-            Spacer(Modifier.weight(1f))
+        }
+        VerticalDivider(color = JColors.Slate200)
+    }
+}
+
+@Composable
+private fun AppNavigationSidebar(current: Tab, badge: Int, onSelect: (Tab) -> Unit) {
+    Row(Modifier.width(NavigationMode.SIDEBAR.width).fillMaxHeight().background(Color.White)) {
+        val scroll = rememberScrollState()
+        ScrollbarBox(scroll, Modifier.weight(1f).fillMaxHeight()) {
+            Column(
+                Modifier.fillMaxWidth().verticalScroll(scroll).padding(JSpacing.m).selectableGroup(),
+                verticalArrangement = Arrangement.spacedBy(JSpacing.s),
+            ) {
+                Row(
+                    Modifier.padding(JSpacing.s),
+                    horizontalArrangement = Arrangement.spacedBy(JSpacing.m),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    BrandMark(36.dp)
+                    Text("J-Method", style = MaterialTheme.typography.titleMedium)
+                }
+                Destinations.forEach { destination ->
+                    val selected = current == destination.tab
+                    var focused by remember { mutableStateOf(false) }
+                    val color = if (selected) JColors.Violet800 else JColors.Slate700
+                    Row(
+                        Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(JShapes.control)
+                            .background(if (selected) JColors.Violet100 else Color.Transparent)
+                            .border(2.dp, if (focused) JColors.Violet700 else Color.Transparent, JShapes.control)
+                            .onFocusChanged { focused = it.isFocused }
+                            .selectable(selected, role = Role.Tab, onClick = { onSelect(destination.tab) })
+                            .semantics { contentDescription = spokenLabel(destination, badge) }
+                            .padding(horizontal = JSpacing.m, vertical = JSpacing.s),
+                        horizontalArrangement = Arrangement.spacedBy(JSpacing.m),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(destination.icon, contentDescription = null, tint = color)
+                        Text(destination.spoken, Modifier.weight(1f).clearAndSetSemantics {}, color = color,
+                            style = MaterialTheme.typography.labelLarge)
+                        if (destination.tab == Tab.TODAY && badge > 0) {
+                            Badge(Modifier.clearAndSetSemantics {}, containerColor = JColors.Violet700) { Text("$badge") }
+                        }
+                    }
+                }
+            }
         }
         VerticalDivider(color = JColors.Slate200)
     }
@@ -446,12 +523,23 @@ private fun AppContent(container: AppContainer, createConnection: (CoroutineScop
         container.courseFiles.fileOf(document)?.takeIf { it.isFile }?.let { sheetViewer = SheetDocument(document, it) }
     }
 
+    val activeCourse = courses?.detail?.course
+    val activeSession = today?.session
+    // Le contenu peut quitter le volet pour un dialogue pendant un redimensionnement.
+    // Les brouillons et défilements restent à la racine de l’écran pendant cette transition.
+    val coursePresentation = rememberSaveable(activeCourse?.id, activeCourse?.displayReference, saver = CourseDetailPresentation.Saver) {
+        CourseDetailPresentation(activeCourse?.displayReference.orEmpty())
+    }
+    val sessionPresentation = rememberSaveable(activeSession?.revisionId, activeSession?.page, saver = SessionPagePresentation.Saver) {
+        SessionPagePresentation()
+    }
+
     /** Fiche de séance (section 8), ouverte depuis Aujourd’hui, le Planning ou la fiche d’un cours. */
     val sessionSheet: @Composable () -> Unit = {
         today?.let { state ->
             state.session?.let { session ->
                 SessionSheetHost(
-                    session, state, notebook, pronote, container.courseFiles, sheetViewer,
+                    session, sessionPresentation, state, notebook, pronote, container.courseFiles, sheetViewer,
                     todayViewModel, notebookViewModel, coursesViewModel,
                     onOpenDocument = openDocument,
                     onCloseViewer = { sheetViewer = null },
@@ -479,6 +567,7 @@ private fun AppContent(container: AppContainer, createConnection: (CoroutineScop
             val documents = remember(course.documents) { course.documents.orEmpty().map { it to container.courseFiles.exists(it) } }
             CourseDetailSheet(
                 detail,
+                coursePresentation,
                 onDismiss = {
                     sheetViewer = null
                     coursesViewModel.closeDetail()
@@ -529,18 +618,19 @@ private fun AppContent(container: AppContainer, createConnection: (CoroutineScop
         when (pronote.access) {
             AccessPhase.CHECKING -> LoadingScreen(onSkip = pronoteViewModel.controller::skipResume)
             AccessPhase.SIGNED_OUT -> LoginScreen(pronoteViewModel, pronote)
-            AccessPhase.CONNECTED, AccessPhase.OFFLINE -> BoxWithConstraints(Modifier.fillMaxSize()) {
-                // Fenêtre moyenne ou étendue (paysage, tablette, ordinateur) : rail latéral et colonne de
-                // lecture centrée. Fenêtre étendue : la fiche ouverte se place à côté de la liste (deux volets).
-                val rail = maxWidth >= 600.dp
-                val twoPane = WindowLayout(maxWidth, maxHeight).twoPane
+            AccessPhase.CONNECTED, AccessPhase.OFFLINE -> {
+                val layout = LocalWindowLayout.current
+                val navigation = layout.navigationMode
+                val sideNavigation = navigation != NavigationMode.BOTTOM
+                val twoPane = layout.twoPane
                 val dockCourse = twoPane && tab == Tab.COURSES && courses?.detail != null
                 val dockSession = twoPane && !dockCourse && (tab == Tab.TODAY || tab == Tab.PLANNING) && today?.session != null
-                val pane = if (dockCourse || dockSession) DetailPaneWidth + 1.dp else 0.dp
-                val available = maxWidth - (if (rail) 81.dp else 0.dp) - pane
-                val gutter = ((available - ReadingWidth) / 2).coerceAtLeast(0.dp)
+                val docked = dockCourse || dockSession
+                val pane = if (docked) layout.detailWidth else 0.dp
+                val available = layout.listWidth(docked)
+                val tabs = rememberSaveableStateHolder()
                 val badge = today?.model?.badgeCount ?: 0
-                val tall = maxHeight >= 560.dp
+                val tall = layout.height >= 560.dp
                 // Changer d’onglet ferme la fiche ancrée qui n’y a plus sa place (comme une feuille sur téléphone,
                 // qui masque la barre d’onglets tant qu’elle est ouverte).
                 val selectTab: (Tab) -> Unit = { next ->
@@ -556,12 +646,16 @@ private fun AppContent(container: AppContainer, createConnection: (CoroutineScop
                 }
                 Row(Modifier.fillMaxSize()) {
                     // Marque en tête du rail seulement si la hauteur le permet (téléphone en paysage : non).
-                    if (rail) AppNavigationRail(tab, badge, showBrand = tall, onSelect = selectTab)
-                    CompositionLocalProvider(LocalScreenGutter provides gutter) {
+                    when (navigation) {
+                        NavigationMode.BOTTOM -> Unit
+                        NavigationMode.RAIL -> AppNavigationRail(tab, badge, showBrand = tall, onSelect = selectTab)
+                        NavigationMode.SIDEBAR -> AppNavigationSidebar(tab, badge, onSelect = selectTab)
+                    }
+                    CompositionLocalProvider(LocalContentWidth provides available) {
                         Scaffold(
                             modifier = Modifier.weight(1f),
                             containerColor = MaterialTheme.colorScheme.background,
-                            contentWindowInsets = if (rail) {
+                            contentWindowInsets = if (sideNavigation) {
                                 ScaffoldDefaults.contentWindowInsets.only(WindowInsetsSides.Vertical + WindowInsetsSides.End)
                             } else {
                                 ScaffoldDefaults.contentWindowInsets
@@ -570,7 +664,7 @@ private fun AppContent(container: AppContainer, createConnection: (CoroutineScop
                                 if (pronote.access == AccessPhase.OFFLINE || pronote.reconnecting) OfflineBanner(pronote, pronoteViewModel.controller::retry)
                             },
                             snackbarHost = { SnackbarHost(snackbar) { data -> ToastSnackbar(data) } },
-                            bottomBar = { if (!rail) AppNavigationBar(tab, badge, onSelect = selectTab) },
+                            bottomBar = { if (!sideNavigation) AppNavigationBar(tab, badge, onSelect = selectTab) },
                             floatingActionButton = {
                                 AnimatedVisibility(
                                     visible = tab == Tab.COURSES && courses?.hasCourses == true,
@@ -593,36 +687,51 @@ private fun AppContent(container: AppContainer, createConnection: (CoroutineScop
                         ) { padding ->
                             // Changement d’onglet : fondu court (coupé si les animations du système sont désactivées).
                             Row(Modifier.fillMaxSize()) {
-                            AnimatedContent(
-                                targetState = tab,
-                                transitionSpec = { fadeIn(motion(200)) togetherWith fadeOut(motion(90)) },
-                                label = "onglet",
-                                modifier = Modifier.weight(1f),
-                            ) { current ->
-                                TabContent(
-                                    current, padding, today, planning, courses, stats, settings, pronote, syncInfo,
-                                    todayViewModel, planningViewModel, coursesViewModel, settingsViewModel, pronoteViewModel, notebookViewModel,
-                                    onSelectTab = { tab = it },
-                                    onReview = { revisionId ->
-                                        todayViewModel.openSession(revisionId)
-                                        val document = today?.document
-                                        val course = document?.revisions?.firstOrNull { it.id == revisionId }
-                                            ?.let { r -> document.courses.firstOrNull { it.id == r.courseId } }
-                                        sheetViewer = RevisionSession.principalDocument(course)?.let { principal ->
-                                            container.courseFiles.fileOf(principal)?.takeIf { it.isFile }?.let { SheetDocument(principal, it) }
+                                AnimatedContent(
+                                    targetState = tab,
+                                    transitionSpec = { fadeIn(motion(200)) togetherWith fadeOut(motion(90)) },
+                                    label = "onglet",
+                                    modifier = Modifier.weight(1f),
+                                ) { current ->
+                                    val multiColumn = available >= TwoColumnWidth && LocalDensity.current.fontScale <= 1.3f
+                                    val capacity = when (current) {
+                                        Tab.PLANNING -> 1440.dp
+                                        Tab.COURSES -> if (multiColumn) 1320.dp else ReadingWidth
+                                        Tab.TODAY, Tab.STATS, Tab.SETTINGS -> if (multiColumn) 1480.dp else ReadingWidth
+                                    }
+                                    val gutter = ((available - capacity) / 2).coerceAtLeast(0.dp)
+                                    tabs.SaveableStateProvider(current.name) {
+                                        CompositionLocalProvider(LocalScreenGutter provides gutter) {
+                                            TabContent(
+                                                current, padding, today, planning, courses, stats, settings, pronote, syncInfo,
+                                                todayViewModel, planningViewModel, coursesViewModel, settingsViewModel, pronoteViewModel, notebookViewModel,
+                                                onSelectTab = { tab = it },
+                                                onReview = { revisionId ->
+                                                    todayViewModel.openSession(revisionId)
+                                                    val document = today?.document
+                                                    val course = document?.revisions?.firstOrNull { it.id == revisionId }
+                                                        ?.let { r -> document.courses.firstOrNull { it.id == r.courseId } }
+                                                    sheetViewer = RevisionSession.principalDocument(course)?.let { principal ->
+                                                        container.courseFiles.fileOf(principal)?.takeIf { it.isFile }?.let { SheetDocument(principal, it) }
+                                                    }
+                                                },
+                                            )
                                         }
-                                    },
-                                )
-                            }
-                            if (pane > 0.dp) {
-                                VerticalDivider(color = JColors.Slate200)
-                                // Volet de détail : la fiche ouverte, à côté de la liste qui reste utilisable.
-                                Box(Modifier.width(DetailPaneWidth).fillMaxHeight().padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())) {
-                                    CompositionLocalProvider(LocalSheetMode provides SheetMode.PANE) {
-                                        if (dockCourse) courseSheet() else sessionSheet()
                                     }
                                 }
-                            }
+                                if (pane > 0.dp) {
+                                    VerticalDivider(color = JColors.Slate200)
+                                    // Volet de détail : la fiche ouverte, à côté de la liste qui reste utilisable.
+                                    Box(Modifier.width(DetailPaneWidth).fillMaxHeight().padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())) {
+                                        CompositionLocalProvider(LocalSheetMode provides SheetMode.PANE) {
+                                            if (dockCourse) {
+                                                courseSheet()
+                                            } else {
+                                                sessionSheet()
+                                            }
+                                        }
+                                    }
+                                }
                             }
 
                             // Fond opaque de la barre d’état : le contenu qui défile ne transparaît pas sous l’heure.
@@ -633,8 +742,8 @@ private fun AppContent(container: AppContainer, createConnection: (CoroutineScop
 
                             // Fiches ouvertes depuis n’importe quel onglet, sans changer d’onglet (section 8) ;
                             // feuilles sur téléphone, panneau latéral ou volet de détail sur grande fenêtre.
-                            if (!dockSession) sessionSheet()
-                            if (!dockCourse) courseSheet()
+                            if (!dockSession && today?.session != null) sessionSheet()
+                            if (!dockCourse && courses?.detail != null) courseSheet()
                         }
                     }
                 }
@@ -741,6 +850,7 @@ private fun TabContent(
 @Composable
 private fun SessionSheetHost(
     session: SessionSheetState,
+    presentation: SessionPagePresentation,
     state: TodayUiState,
     notebook: NotebookUiState?,
     pronote: PronoteUiState,
@@ -772,6 +882,7 @@ private fun SessionSheetHost(
     val remaining = state.model.due.size
     SessionSheet(
         state = session,
+        presentation = presentation,
         model = model,
         settings = document.settings.copy(adaptiveEnabled = document.programmes.firstOrNull { it.id == model.revision.programmeId }?.let { it.adaptiveEnabled && !it.needsReview } ?: true),
         today = state.model.today,

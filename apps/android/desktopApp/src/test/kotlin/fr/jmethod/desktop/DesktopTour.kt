@@ -1,6 +1,13 @@
 package fr.jmethod.desktop
 
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.DesktopComposeUiTest
 import androidx.compose.ui.test.isRoot
@@ -14,6 +21,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.compose.ui.graphics.toAwtImage
@@ -48,6 +56,7 @@ import org.apache.pdfbox.pdmodel.font.PDType1Font
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.io.File
@@ -98,7 +107,8 @@ class DesktopTour {
                 runBlocking { container.storeLessons(sampleLessons()) }
             }
             val owners = Owners()
-            scene(wideW, wideH, container, owners) {
+            val viewportWidth = mutableIntStateOf(wideW)
+            scene(wideW, wideH, container, owners, { viewportWidth.intValue }) {
                 if (demo) {
                     waitForText("Se connecter")
                     shot(dir, "wide-$wideW-login")
@@ -120,6 +130,20 @@ class DesktopTour {
                 tab("Mes cours"); shot(dir, "wide-$wideW-courses")
                 onAllNodesWithText("Additionner des fractions").onFirst().performClick()
                 waitForIdle(); shot(dir, "wide-$wideW-courses-two-pane")
+                if (wideW >= 1200) {
+                    onAllNodesWithContentDescription("Mes cours").onFirst().assertIsSelected()
+                    onNodeWithText("Référence personnelle").performTextReplacement("C42")
+                    for (width in listOf(599, 600, 1199, 1200, 1599, 1600).filter { it <= wideW }) {
+                        runOnUiThread { viewportWidth.intValue = width }
+                        waitForIdle()
+                        waitForText("C42")
+                        waitForText("fiche-fractions.pdf")
+                        assertEquals(1, onAllNodesWithText("fiche-fractions.pdf").fetchSemanticsNodes().size)
+                        shot(dir, "resize-$width-course")
+                    }
+                    runOnUiThread { viewportWidth.intValue = wideW }
+                    waitForIdle()
+                }
                 // « Valider » J0 : la fiche de séance s’ouvre en panneau latéral, le PDF du cours s’y affiche.
                 onAllNodesWithText("Valider").onFirst().performClick()
                 waitForIdle(); shot(dir, "wide-$wideW-session-panel")
@@ -133,7 +157,10 @@ class DesktopTour {
                 tab("Aujourd’hui", substring = true)
             }
             scene(720, 900, container, owners) {
-                waitForIdle(); shot(dir, "medium-720-today")
+                waitForIdle()
+                val planning = onAllNodesWithContentDescription("Planning").onFirst().getUnclippedBoundsInRoot()
+                assertTrue("Le rail commence en haut de la fenêtre", planning.top < 200.dp)
+                shot(dir, "medium-720-today")
             }
             scene(390, 844, container, owners) {
                 waitForIdle(); shot(dir, "compact-390-today")
@@ -175,7 +202,14 @@ class DesktopTour {
         secrets.delete("pronote-child")
     }
 
-    private fun scene(width: Int, height: Int, container: AppContainer, owners: Owners, block: DesktopComposeUiTest.() -> Unit) =
+    private fun scene(
+        width: Int,
+        height: Int,
+        container: AppContainer,
+        owners: Owners,
+        viewportWidth: () -> Int = { width },
+        block: DesktopComposeUiTest.() -> Unit,
+    ) =
         runDesktopComposeUiTest(width, height) {
             setContent {
                 CompositionLocalProvider(
@@ -183,7 +217,9 @@ class DesktopTour {
                     LocalViewModelStoreOwner provides owners,
                     LocalLifecycleOwner provides owners,
                 ) {
-                    JMethodTheme { JMethodApp(container) { scope -> desktopConnection(container, scope) } }
+                    Box(Modifier.width(viewportWidth().dp)) {
+                        JMethodTheme { JMethodApp(container) { scope -> desktopConnection(container, scope) } }
+                    }
                 }
             }
             block()

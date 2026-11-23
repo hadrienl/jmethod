@@ -16,7 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -40,8 +40,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -82,11 +82,25 @@ import androidx.compose.ui.text.style.TextAlign
 import fr.jmethod.app.ui.components.phaseColors
 import fr.jmethod.app.ui.components.subjectColor
 
+internal class CourseDetailPresentation(reference: String, confirming: Boolean = false, scrollOffset: Int = 0) {
+    var editedReference by mutableStateOf(reference)
+    var confirmDelete by mutableStateOf(confirming)
+    val scroll = ScrollState(scrollOffset)
+
+    companion object {
+        val Saver = listSaver<CourseDetailPresentation, Any>(
+            save = { listOf(it.editedReference, it.confirmDelete, it.scroll.value) },
+            restore = { CourseDetailPresentation(it[0] as String, it[1] as Boolean, it[2] as Int) },
+        )
+    }
+}
+
 /** Fiche d’un cours (`CourseDetailModal`) : historique des J, validation, suppression confirmée. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CourseDetailSheet(
+internal fun CourseDetailSheet(
     model: CourseDetailModel,
+    presentation: CourseDetailPresentation,
     onDismiss: () -> Unit,
     onValidate: (String) -> Unit,
     onDelete: () -> Unit,
@@ -111,21 +125,20 @@ fun CourseDetailSheet(
     onAttachNearby: (RevisionSession.Nearby) -> Unit = {},
     onRenameReference: (String) -> Unit = {},
 ) {
-    var editedReference by rememberSaveable(model.course.id, model.course.displayReference) { mutableStateOf(model.course.displayReference) }
-    var confirmDelete by rememberSaveable(model.course.id) { mutableStateOf(false) }
+    val editedReference = presentation.editedReference
+    val scroll = presentation.scroll
     AdaptiveSheet(onDismissRequest = onDismiss, gesturesEnabled = viewer == null, dismissOnBack = viewer == null) {
         SystemBackHandler(enabled = viewer != null, onBack = onCloseViewer)
         if (viewer != null) {
-            Box(Modifier.fillMaxSize()) { DocumentViewerScreen(viewer.document, viewer.file, onClose = onCloseViewer, embedded = true) }
+            Box(Modifier.fillMaxSize()) { DocumentViewerScreen(viewer, onClose = onCloseViewer) }
             return@AdaptiveSheet
         }
-        val scroll = rememberScrollState()
         ScrollbarBox(scroll) { Column(
             Modifier.verticalScroll(scroll).padding(horizontal = JSpacing.xl).padding(bottom = JSpacing.xl).navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(JSpacing.l),
         ) {
             Header(model, onDismiss)
-            androidx.compose.material3.OutlinedTextField(value = editedReference, onValueChange = { editedReference = it },
+            androidx.compose.material3.OutlinedTextField(value = editedReference, onValueChange = { presentation.editedReference = it },
                 label = { Text("Référence personnelle") }, singleLine = true, modifier = Modifier.fillMaxWidth())
             TextButton(enabled = editedReference.trim().isNotEmpty() && editedReference.length <= 24 && editedReference.trim() != model.course.displayReference,
                 onClick = { onRenameReference(editedReference) }) { Text("Enregistrer la référence") }
@@ -175,7 +188,7 @@ fun CourseDetailSheet(
             }
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 TextButton(
-                    onClick = { confirmDelete = true },
+                    onClick = { presentation.confirmDelete = true },
                     colors = ButtonDefaults.textButtonColors(contentColor = JColors.Rose700),
                     modifier = Modifier.heightIn(min = 48.dp),
                 ) {
@@ -188,15 +201,15 @@ fun CourseDetailSheet(
             }
         } }
     }
-    if (confirmDelete) {
+    if (presentation.confirmDelete) {
         AlertDialog(
-            onDismissRequest = { confirmDelete = false },
+            onDismissRequest = { presentation.confirmDelete = false },
             title = { Text("Supprimer ce cours ?") },
             text = { Text("${model.deleteConfirm}\n\nToutes ses séances de révision seront supprimées.") },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        confirmDelete = false
+                        presentation.confirmDelete = false
                         onDelete()
                     },
                     colors = ButtonDefaults.textButtonColors(contentColor = JColors.Rose700),
@@ -204,7 +217,7 @@ fun CourseDetailSheet(
                 ) { Text("Supprimer", fontWeight = FontWeight.Bold) }
             },
             dismissButton = {
-                TextButton(onClick = { confirmDelete = false }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Annuler") }
+                TextButton(onClick = { presentation.confirmDelete = false }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Annuler") }
             },
             containerColor = Color.White,
         )

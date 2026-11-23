@@ -1,5 +1,7 @@
 package fr.jmethod.app.ui.stats
 
+import fr.jmethod.app.ui.components.LocalContentWidth
+import fr.jmethod.app.ui.components.TwoColumnWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.rememberLazyListState
 import fr.jmethod.app.ui.components.ScrollbarBox
@@ -8,8 +10,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -51,7 +54,6 @@ import fr.jmethod.app.ui.components.EmptyState
 import fr.jmethod.app.ui.components.ScreenHeader
 import fr.jmethod.app.ui.components.SectionTitle
 import fr.jmethod.app.ui.components.SubjectDot
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import fr.jmethod.app.ui.components.SurfaceCard
 import fr.jmethod.app.ui.components.screenPadding
@@ -80,26 +82,24 @@ fun StatsScreen(model: StatsModel, contentPadding: PaddingValues) {
                 ScreenHeader("Mes progrès", "Ta régularité, tes scores et ce qui reste à consolider.")
             }
             item(key = "metrics") {
-                // Deux rangées de deux indicateurs de même hauteur, même avec un grand texte.
-                Column(verticalArrangement = Arrangement.spacedBy(JSpacing.m)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(JSpacing.m), modifier = Modifier.height(IntrinsicSize.Min)) {
-                        Metric("Taux de réalisation", "${model.completionRate} %", model.completionLine, JColors.Slate900, Modifier.weight(1f))
-                        Metric(
-                            "Score moyen",
-                            if (model.overallAvgScore == null) "—" else "${model.overallAvgScore}/100",
-                            model.balanceLabel,
-                            JColors.Slate900,
-                            Modifier.weight(1f),
-                            spoken = if (model.overallAvgScore == null) "Score moyen : pas encore de note" else null,
-                        )
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(JSpacing.m), modifier = Modifier.height(IntrinsicSize.Min)) {
-                        Metric(
-                            "Journées de révision", model.streakLabel, model.streakLine, JColors.Slate900, Modifier.weight(1f),
-                            spoken = "${fr.jmethod.app.domain.RevisionStreak.days(model.streakDays)} de révision. ${model.streakLine}",
-                        )
-                        Metric("Cours suivis", "${model.coursesCount}", model.subjectsLine, JColors.Slate900, Modifier.weight(1f))
-                    }
+                val columns = if (LocalContentWidth.current >= TwoColumnWidth && LocalDensity.current.fontScale <= 1.3f) 4 else 2
+                FlowRow(
+                    maxItemsInEachRow = columns,
+                    horizontalArrangement = Arrangement.spacedBy(JSpacing.m),
+                    verticalArrangement = Arrangement.spacedBy(JSpacing.m),
+                ) {
+                    Metric("Taux de réalisation", "${model.completionRate} %", model.completionLine, JColors.Slate900, Modifier.weight(1f).fillMaxRowHeight())
+                    Metric(
+                        "Score moyen", model.overallAvgScore?.let { "$it/100" } ?: "—", model.balanceLabel,
+                        JColors.Slate900, Modifier.weight(1f).fillMaxRowHeight(),
+                        spoken = if (model.overallAvgScore == null) "Score moyen : pas encore de note" else null,
+                    )
+                    Metric(
+                        "Journées de révision", model.streakLabel, model.streakLine, JColors.Slate900,
+                        Modifier.weight(1f).fillMaxRowHeight(),
+                        spoken = "${fr.jmethod.app.domain.RevisionStreak.days(model.streakDays)} de révision. ${model.streakLine}",
+                    )
+                    Metric("Cours suivis", "${model.coursesCount}", model.subjectsLine, JColors.Slate900, Modifier.weight(1f).fillMaxRowHeight())
                 }
             }
             if (model.weakSubjects.isNotEmpty()) {
@@ -153,7 +153,7 @@ fun StatsScreen(model: StatsModel, contentPadding: PaddingValues) {
 @Composable
 private fun Metric(title: String, value: String, line: String, color: Color, modifier: Modifier, spoken: String? = null) {
     Column(
-        modifier.fillMaxHeight().clip(JShapes.inner).background(Color.White).border(1.dp, JColors.Slate200, JShapes.inner).padding(JSpacing.l)
+        modifier.clip(JShapes.inner).background(Color.White).border(1.dp, JColors.Slate200, JShapes.inner).padding(JSpacing.l)
             .semantics(mergeDescendants = true) { if (spoken != null) contentDescription = "$spoken. $line" },
     ) {
         Text(title, style = MaterialTheme.typography.labelMedium, color = JColors.Slate600)

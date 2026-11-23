@@ -65,6 +65,11 @@ val ReadingWidth = 720.dp
 /** Classe de largeur de fenêtre (Material 3) : compacte (téléphone), moyenne, étendue. */
 enum class WidthClass { COMPACT, MEDIUM, EXPANDED }
 
+enum class NavigationMode(val width: Dp) { BOTTOM(0.dp), RAIL(81.dp), SIDEBAR(240.dp) }
+
+internal val LocalContentWidth = compositionLocalOf { 400.dp }
+internal val TwoColumnWidth = 960.dp
+
 /** Taille de la fenêtre de l’app, mesurée à la racine par `JMethodApp`. */
 data class WindowLayout(val width: Dp, val height: Dp) {
     val widthClass: WidthClass
@@ -86,8 +91,17 @@ data class WindowLayout(val width: Dp, val height: Dp) {
     /** Les feuilles du bas deviennent un panneau latéral ou un dialogue. */
     val sidePanels: Boolean get() = wide && tall
 
-    /** Deux volets côte à côte (liste et détail) : fenêtre étendue et assez haute. */
-    val twoPane: Boolean get() = widthClass == WidthClass.EXPANDED && tall
+    val navigationMode: NavigationMode
+        get() = when {
+            width >= 1200.dp -> NavigationMode.SIDEBAR
+            wide -> NavigationMode.RAIL
+            else -> NavigationMode.BOTTOM
+        }
+    val contentWidth: Dp get() = width - navigationMode.width
+    val detailWidth: Dp get() = DetailPaneWidth + 1.dp
+    val twoPane: Boolean get() = tall && contentWidth >= 480.dp + detailWidth
+
+    fun listWidth(docked: Boolean): Dp = contentWidth - if (docked) detailWidth else 0.dp
 }
 
 val LocalWindowLayout = compositionLocalOf { WindowLayout(400.dp, 800.dp) }
