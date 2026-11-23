@@ -363,7 +363,7 @@ private fun WheelControls(draft: SubjectColorDraft, onEdit: ((SubjectColorDraft)
                             contentDescription = "Saturation"
                             stateDescription = "${percent(saturation)}, $name"
                             progressBarRangeInfo = ProgressBarRangeInfo((saturation * 100).toFloat(), 0f..100f, steps = PERCENT_STEPS)
-                            setProgress { target -> edit { it.withSquare(target / 100.0, it.value) }; true }
+                            setProgress { target -> edit { it.stepSaturation(if (target / 100.0 >= it.saturation) 0.05 else -0.05) }; true }
                         },
                     )
                     Box(
@@ -371,7 +371,7 @@ private fun WheelControls(draft: SubjectColorDraft, onEdit: ((SubjectColorDraft)
                             contentDescription = "Luminosité"
                             stateDescription = "${percent(value)}, $name"
                             progressBarRangeInfo = ProgressBarRangeInfo((value * 100).toFloat(), 0f..100f, steps = PERCENT_STEPS)
-                            setProgress { target -> edit { it.withSquare(it.saturation, target / 100.0) }; true }
+                            setProgress { target -> edit { it.stepValue(if (target / 100.0 >= it.value) 0.05 else -0.05) }; true }
                         },
                     )
                 }

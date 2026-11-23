@@ -45,9 +45,9 @@ data class SubjectColorDraft(
     /** Clavier et lecteur d’écran : la teinte fait le tour, saturation et luminosité sont bornées. */
     fun stepHue(degrees: Double) = withHue(hue + degrees)
 
-    fun stepSaturation(delta: Double) = withSquare((saturation + delta).coerceIn(0.0, 1.0), value)
+    fun stepSaturation(delta: Double) = withSquare(ColorWheel.step(saturation, delta), value)
 
-    fun stepValue(delta: Double) = withSquare(saturation, (value + delta).coerceIn(0.0, 1.0))
+    fun stepValue(delta: Double) = withSquare(saturation, ColorWheel.step(value, delta))
 
     /** Geste ou touche sur la roue : le champ reprend le code de la nouvelle couleur. */
     private fun fromWheel(color: ColorWheel.HSV): SubjectColorDraft {

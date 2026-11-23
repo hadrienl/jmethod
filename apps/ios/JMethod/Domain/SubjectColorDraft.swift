@@ -48,8 +48,8 @@ struct SubjectColorDraft: Equatable, Sendable {
 
     /// Flèches et VoiceOver : la teinte boucle (359 ↔ 0), saturation et luminosité sont bornées à [0, 1].
     mutating func adjustHue(by degrees: Double) { setHue(color.hue + degrees) }
-    mutating func adjustSaturation(by delta: Double) { setSaturation(Self.snapped(color.saturation, delta), value: color.value) }
-    mutating func adjustValue(by delta: Double) { setSaturation(color.saturation, value: Self.snapped(color.value, delta)) }
+    mutating func adjustSaturation(by delta: Double) { setSaturation(ColorWheel.step(color.saturation, by: delta), value: color.value) }
+    mutating func adjustValue(by delta: Double) { setSaturation(color.saturation, value: ColorWheel.step(color.value, by: delta)) }
 
     /// Pas d'une flèche du clavier, multiplié par 10 avec Maj.
     static func keyStep(_ base: Double, shift: Bool) -> Double { shift ? base * shiftMultiplier : base }
@@ -58,14 +58,6 @@ struct SubjectColorDraft: Equatable, Sendable {
         color = next
         hex = ColorWheel.hex(next)
         text = hex
-    }
-
-    /// Valeur ramenée sur la grille du pas avant l'ajout, pour que l'annonce tombe sur une valeur ronde.
-    private static func snapped(_ level: Double, _ delta: Double) -> Double {
-        let step = abs(delta)
-        guard step > 0 else { return level }
-        let grid = (level / step).rounded() * step
-        return min(1, max(0, ((grid + delta) * 1e6).rounded() / 1e6))
     }
 
     // MARK: Champ hexadécimal

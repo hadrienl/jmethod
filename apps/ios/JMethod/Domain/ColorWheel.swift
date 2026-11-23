@@ -97,6 +97,15 @@ enum ColorWheel {
         (min(1, max(0, saturation)) * width, (1 - min(1, max(0, value))) * height)
     }
 
+    /// Pas de saturation ou de luminosité (clavier, lecteur d'écran) : la valeur est ramenée sur la grille du pas
+    /// avant l'ajout, pour tomber sur des valeurs rondes ; résultat borné et arrondi à 1e-6.
+    static func step(_ level: Double, by delta: Double) -> Double {
+        let size = abs(delta)
+        guard size > 0 else { return level }
+        let grid = (level / size).rounded() * size
+        return min(1, max(0, ((grid + delta) * 1e6).rounded() / 1e6))
+    }
+
     /// Nom approximatif annoncé par VoiceOver et TalkBack, identique sur les deux plateformes.
     static func name(_ color: HSV) -> String {
         if color.value < 0.1 { return "noir" }

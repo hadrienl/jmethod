@@ -531,5 +531,52 @@
    ],
    "name": "gris"
   }
+ ],
+ "step": [
+  {
+   "level": 0.774,
+   "delta": 0.01,
+   "result": 0.78
+  },
+  {
+   "level": 0.774,
+   "delta": -0.01,
+   "result": 0.76
+  },
+  {
+   "level": 0.774,
+   "delta": 0.05,
+   "result": 0.8
+  },
+  {
+   "level": 0.774,
+   "delta": -0.05,
+   "result": 0.7
+  },
+  {
+   "level": 0.774,
+   "delta": 0.1,
+   "result": 0.9
+  },
+  {
+   "level": 0.98,
+   "delta": 0.05,
+   "result": 1.0
+  },
+  {
+   "level": 0.02,
+   "delta": -0.05,
+   "result": 0.0
+  },
+  {
+   "level": 0.5,
+   "delta": 0.05,
+   "result": 0.55
+  },
+  {
+   "level": 0.333,
+   "delta": 0,
+   "result": 0.333
+  }
  ]
 }

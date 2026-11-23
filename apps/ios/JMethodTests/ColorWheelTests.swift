@@ -48,6 +48,10 @@ final class ColorWheelTests: XCTestCase {
             let ratio = try XCTUnwrap(ColorWheel.contrast(try XCTUnwrap(item["a"] as? String), try XCTUnwrap(item["b"] as? String)))
             XCTAssertEqual(ratio, try XCTUnwrap((item["ratio"] as? NSNumber)?.doubleValue), accuracy: 1e-4)
         }
+        for item in try XCTUnwrap(fixture["step"] as? [[String: Any]]) {
+            let n = { (key: String) in (item[key] as? NSNumber)?.doubleValue ?? .nan }
+            XCTAssertEqual(ColorWheel.step(n("level"), by: n("delta")), n("result"), accuracy: 1e-9, "step \(item)")
+        }
         for item in try XCTUnwrap(fixture["name"] as? [[String: Any]]) {
             XCTAssertEqual(ColorWheel.name(try triple(item["hsv"])), item["name"] as? String, "name \(String(describing: item["hsv"]))")
         }

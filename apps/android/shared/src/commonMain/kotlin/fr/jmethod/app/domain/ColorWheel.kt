@@ -107,6 +107,17 @@ object ColorWheel {
     fun squarePoint(saturation: Double, value: Double, width: Double, height: Double): Pair<Double, Double> =
         saturation.coerceIn(0.0, 1.0) * width to (1 - value.coerceIn(0.0, 1.0)) * height
 
+    /**
+     * Pas de saturation ou de luminosité (clavier, lecteur d’écran) : la valeur est ramenée sur la grille du pas
+     * avant l’ajout, pour tomber sur des valeurs rondes ; résultat borné et arrondi à 1e-6.
+     */
+    fun step(level: Double, delta: Double): Double {
+        val size = abs(delta)
+        if (size == 0.0) return level
+        val grid = Math.round(level / size) * size
+        return (Math.round((grid + delta) * 1e6) / 1e6).coerceIn(0.0, 1.0)
+    }
+
     /** Nom approximatif annoncé par VoiceOver et TalkBack, identique sur les deux plateformes. */
     fun name(color: HSV): String = when {
         color.value < 0.1 -> "noir"
