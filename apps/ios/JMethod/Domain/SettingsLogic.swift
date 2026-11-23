@@ -1,7 +1,7 @@
 import Foundation
 
 /// Réglages, portés de `SettingsView.tsx` (suite `settingsUpdate`). Rien n'est enregistré avant « Enregistrer »,
-/// sauf les couleurs des matières, enregistrées aussitôt comme sur le web.
+/// sauf les couleurs des matières, enregistrées par « Enregistrer » de leur propre sélecteur (#8).
 enum SettingsLogic {
     static let sensitivityRange = 0.1...0.8
     static let sensitivityStep = 0.05
@@ -81,15 +81,4 @@ enum SettingsLogic {
             return changed
         }
     }
-
-    static func isValidColor(_ value: String) -> Bool {
-        value.count == 7 && value.hasPrefix("#") && value.dropFirst().allSatisfy(\.isHexDigit)
-    }
-
-    /// Palette : couleurs par défaut des matières et quelques teintes lisibles (comme Android).
-    static let palette: [String] = {
-        var seen = Set<String>()
-        return (Constants.defaultSubjects.map(\.color) + ["#0EA5E9", "#F59E0B", "#10B981", "#F97316", "#7C3AED", "#DC2626", "#0F766E", "#64748B"])
-            .filter { seen.insert($0).inserted }
-    }()
 }

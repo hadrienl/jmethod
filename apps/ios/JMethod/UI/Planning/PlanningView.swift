@@ -299,7 +299,7 @@ private struct PlanningTile: View {
         let shape = RoundedRectangle(cornerRadius: Radius.panel, style: .continuous)
         Button(action: action) {
             HStack(spacing: 0) {
-                Rectangle().fill(Color(hex: tile.subject.color)).frame(width: 4).accessibilityHidden(true)
+                SubjectColorBar(color: tile.subject.color)
                 VStack(alignment: .leading, spacing: Spacing.xxs) {
                     HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
                         Text(tile.subject.name).font(.footnote.weight(.semibold)).foregroundStyle(Theme.textSecondary).layoutPriority(1)

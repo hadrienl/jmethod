@@ -90,6 +90,16 @@ object SettingsLogic {
     /** Seule la couleur change ; l’ordre et les autres champs sont conservés. */
     fun subjectColor(subjects: List<Subject>, subjectId: String, color: String): List<Subject> =
         subjects.map { if (it.id == subjectId) it.copy(color = color) else it }
+
+    /**
+     * Confirmation du sélecteur (#8) : code normalisé en `#RRGGBB`, seule cette matière change.
+     * `null` si la matière n’existe plus (elle n’est pas recréée) ou si le code est invalide.
+     */
+    fun confirmedSubjectColor(subjects: List<Subject>, subjectId: String, color: String): List<Subject>? {
+        val code = ColorWheel.normalized(color) ?: return null
+        if (subjects.none { it.id == subjectId }) return null
+        return subjectColor(subjects, subjectId, code)
+    }
 }
 
 /**

@@ -6,6 +6,7 @@ import fr.jmethod.app.data.AppClock
 import fr.jmethod.app.data.AppRepository
 import fr.jmethod.app.domain.ImportExport
 import fr.jmethod.app.domain.SettingsLogic
+import fr.jmethod.app.domain.SubjectColorDraft
 import fr.jmethod.app.model.AppSettings
 import fr.jmethod.app.model.Subject
 import kotlinx.coroutines.channels.Channel
@@ -13,6 +14,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -53,8 +55,19 @@ sealed interface SettingsEvent {
     data class Export(val fileName: String) : SettingsEvent
 }
 
-class SettingsViewModel(private val repository: AppRepository, private val clock: AppClock) : ViewModel() {
+/** [scope] : portée du ViewModel, annulée à sa fin ; les tests en fournissent une sans fil principal. */
+class SettingsViewModel internal constructor(
+    private val repository: AppRepository,
+    private val clock: AppClock,
+    scope: kotlinx.coroutines.CoroutineScope,
+) : ViewModel(scope) {
+    constructor(repository: AppRepository, clock: AppClock) :
+        this(repository, clock, kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.Main.immediate))
+
     private val draft = MutableStateFlow<SettingsDraft?>(null)
+    /** Sélecteur de couleur ouvert (#8) : brouillon gardé ici pour survivre aux changements de configuration. */
+    private val colorDraft = MutableStateFlow<SubjectColorDraft?>(null)
+    val colorPicker: StateFlow<SubjectColorDraft?> = colorDraft.asStateFlow()
     private val pending = MutableStateFlow<ImportExport.Result.Accepted?>(null)
     private val events = Channel<SettingsEvent>(Channel.BUFFERED)
     val eventFlow: Flow<SettingsEvent> = events.receiveAsFlow()
@@ -118,12 +131,59 @@ class SettingsViewModel(private val repository: AppRepository, private val clock
         }
     }
 
-    /** Couleur d’une matière : enregistrée aussitôt, comme le web. */
-    fun setSubjectColor(subjectId: String, color: String) {
+    /** Sélecteur ouvert sur une matière : toujours repartir de sa couleur enregistrée. */
+    fun openSubjectColor(subjectId: String) {
+        val subject = repository.document.value?.subjects?.firstOrNull { it.id == subjectId } ?: return
+        colorDraft.value = SubjectColorDraft.open(subject)
+    }
+
+    /** Geste, touche ou saisie : brouillon en mémoire seulement, aucune écriture disque. Figé pendant l’enregistrement. */
+    fun editSubjectColor(transform: (SubjectColorDraft) -> SubjectColorDraft) {
+        colorDraft.update { current -> if (current == null || current.saving) current else transform(current) }
+    }
+
+    /** Annuler, fermer, Échap ou Retour : le brouillon est abandonné (sauf pendant une écriture en cours). */
+    fun cancelSubjectColor() {
+        if (colorDraft.value?.saving == true) return
+        colorDraft.value = null
+    }
+
+    /**
+     * Enregistrer : seule la couleur de cette matière change, les brouillons des autres réglages restent
+     * intacts. Le sélecteur se ferme après la sauvegarde ; un échec garde le brouillon pour réessayer.
+     */
+    fun saveSubjectColor() {
+        val draft = colorDraft.value ?: return
+        val color = draft.textColor ?: return
+        if (!draft.canSave) return
+        if (!draft.changed) {
+            colorDraft.value = null
+            return
+        }
+        colorDraft.value = draft.committed().copy(saving = true, failure = null)
         viewModelScope.launch {
-            repository.update { it.copy(subjects = SettingsLogic.subjectColor(it.subjects, subjectId, color)) }
+            val outcome = try {
+                var present = false
+                repository.update { document ->
+                    val subjects = SettingsLogic.confirmedSubjectColor(document.subjects, draft.subjectId, color)
+                    present = subjects != null
+                    if (subjects == null) document else document.copy(subjects = subjects)
+                }
+                if (present) ColorOutcome.SAVED else ColorOutcome.REMOVED
+            } catch (error: kotlinx.coroutines.CancellationException) { throw error }
+            catch (_: Exception) { ColorOutcome.FAILED }
+            colorDraft.update { current ->
+                if (current?.subjectId != draft.subjectId) current else when (outcome) {
+                    ColorOutcome.SAVED -> null
+                    ColorOutcome.REMOVED -> current.copy(saving = false, removed = true, failure = SubjectColorDraft.REMOVED_MESSAGE)
+                    ColorOutcome.FAILED -> current.copy(saving = false, failure = SubjectColorDraft.FAILURE_MESSAGE)
+                }
+            }
+            if (outcome == ColorOutcome.SAVED) events.send(SettingsEvent.Toast("Couleur enregistrée", "La nouvelle couleur de ${draft.subjectName} est appliquée partout."))
         }
     }
+
+    private enum class ColorOutcome { SAVED, REMOVED, FAILED }
 
     fun requestExport() {
         viewModelScope.launch { exports.send(SettingsEvent.Export(ImportExport.fileName(clock.today()))) }

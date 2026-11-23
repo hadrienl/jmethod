@@ -3,7 +3,7 @@ import UniformTypeIdentifiers
 
 /// Onglet Réglages (`SettingsView.tsx`) : compte Pronote, algorithme, paliers, couleurs des matières,
 /// sauvegarde et restauration compatibles avec le web, À propos. Rien n'est appliqué avant « Enregistrer »,
-/// sauf les couleurs, enregistrées tout de suite comme sur le web.
+/// sauf les couleurs des matières, appliquées par « Enregistrer » de leur sélecteur, indépendamment de ce brouillon.
 struct SettingsView: View {
     let app: AppModel
     let pronote: PronoteSession
@@ -72,10 +72,7 @@ struct SettingsView: View {
             .animation(.easeOut(duration: 0.2), value: current.dirty)
         }
         .sheet(item: $colorFor) { subject in
-            ColorSheet(subject: subject) { color in
-                app.setSubjectColor(subjectId: subject.id, color: color)
-                colorFor = nil
-            }
+            SubjectColorPicker(app: app, subject: subject)
         }
         .fileExporter(isPresented: Binding(get: { exporting != nil }, set: { if !$0 { exporting = nil } }),
                       document: exporting, contentType: .json, defaultFilename: app.exportFileName) { result in
@@ -233,7 +230,7 @@ struct SettingsView: View {
     }
 
     private var colors: some View {
-        section("Les couleurs de tes matières", subtitle: "Choisis les couleurs qui t’aident à te repérer. Elles sont enregistrées tout de suite.") {
+        section("Les couleurs de tes matières", subtitle: "Choisis les couleurs qui t’aident à te repérer. Une couleur s’applique quand tu appuies sur « Enregistrer » dans son sélecteur, sans toucher à tes autres réglages.") {
             if app.document.subjects.isEmpty {
                 Text("Aucune matière.").font(.subheadline).foregroundStyle(Theme.textSecondary)
             }
@@ -241,8 +238,7 @@ struct SettingsView: View {
                 ForEach(app.document.subjects) { subject in
                     Button { colorFor = subject } label: {
                         HStack(spacing: Spacing.s) {
-                            Circle().fill(Color(hex: subject.color)).frame(width: 24, height: 24)
-                                .overlay(Circle().strokeBorder(.black.opacity(0.08)))
+                            Circle().subjectFill(subject.color, border: .black.opacity(0.08)).frame(width: 24, height: 24)
                             Text(subject.name).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.text)
                             Spacer(minLength: Spacing.xs)
                             Text(subject.color.uppercased()).font(.caption.monospaced()).foregroundStyle(Theme.textMuted)
@@ -254,7 +250,7 @@ struct SettingsView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("\(subject.name), couleur \(subject.color)")
-                    .accessibilityHint("Changer la couleur")
+                    .accessibilityHint("Ouvre le sélecteur de couleur")
                     if subject.id != app.document.subjects.last?.id { Divider().padding(.leading, 48) }
                 }
             }
@@ -381,70 +377,6 @@ struct JSONExportDocument: FileDocument {
 
     func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
         FileWrapper(regularFileWithContents: Data(text.utf8))
-    }
-}
-
-/// Choix d'une couleur : palette ou code `#RRGGBB`.
-private struct ColorSheet: View {
-    let subject: Subject
-    let onApply: (String) -> Void
-    @Environment(\.dismiss) private var dismiss
-    @State private var hex: String
-
-    init(subject: Subject, onApply: @escaping (String) -> Void) {
-        self.subject = subject
-        self.onApply = onApply
-        _hex = State(initialValue: subject.color)
-    }
-
-    var body: some View {
-        let valid = SettingsLogic.isValidColor(hex)
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: Spacing.m) {
-                    HStack(spacing: Spacing.s) {
-                        Circle().fill(Color(hex: valid ? hex : subject.color)).frame(width: 32, height: 32)
-                            .overlay(Circle().strokeBorder(.black.opacity(0.08)))
-                            .accessibilityHidden(true)
-                        Text(subject.name).font(.headline)
-                    }
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 48), spacing: Spacing.xs)], spacing: Spacing.xs) {
-                        ForEach(SettingsLogic.palette, id: \.self) { color in
-                            let selected = color.caseInsensitiveCompare(hex) == .orderedSame
-                            Button { hex = color } label: {
-                                Circle().fill(Color(hex: color))
-                                    .padding(6)
-                                    .overlay(Circle().strokeBorder(selected ? Theme.text : Color.clear, lineWidth: 3))
-                                    .frame(width: 48, height: 48)
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("Couleur \(color)")
-                            .accessibilityAddTraits(selected ? .isSelected : [])
-                        }
-                    }
-                    VStack(alignment: .leading, spacing: Spacing.xs) {
-                        Text("Code couleur").font(.subheadline.weight(.semibold))
-                        TextField("Code couleur", text: Binding(get: { hex }, set: { hex = String($0.trimmingCharacters(in: .whitespaces).prefix(7)) }), prompt: Text("#RRGGBB"))
-                            .textInputAutocapitalization(.characters)
-                            .autocorrectionDisabled()
-                            .font(.body.monospaced())
-                            .inputField(invalid: !valid)
-                        if !valid { Text("Format attendu : #RRGGBB").font(.caption).foregroundStyle(Theme.danger) }
-                    }
-                    Button("Appliquer") { onApply(hex) }
-                        .buttonStyle(PrimaryButtonStyle())
-                        .disabled(!valid)
-                }
-                .padding(Spacing.m)
-            }
-            .navigationTitle("Couleur : \(subject.name)")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Annuler") { dismiss() } }
-            }
-        }
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
     }
 }
 

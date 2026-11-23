@@ -567,11 +567,35 @@ final class AppModel {
         toast = .init(title: "Réglages enregistrés", message: "Ils s’appliquent aux prochaines validations et aux nouveaux cours.", kind: .success)
     }
 
-    /// Couleur d'une matière : enregistrée aussitôt, comme sur le web.
-    func setSubjectColor(subjectId: String, color: String) {
-        guard SettingsLogic.isValidColor(color) else { return }
-        document.subjects = SettingsLogic.subjectColor(document.subjects, subjectId: subjectId, color: color)
-        persist()
+    enum SubjectColorFailure: LocalizedError, Equatable {
+        case invalidColor, subjectMissing, unwritable
+
+        var errorDescription: String? {
+            switch self {
+            case .invalidColor: SubjectColorDraft.invalidMessage
+            case .subjectMissing: "Cette matière n’existe plus : sa couleur n’a pas été enregistrée."
+            case .unwritable: "La couleur n’a pas pu être enregistrée sur l’iPhone. Réessaie."
+            }
+        }
+    }
+
+    /// « Enregistrer » du sélecteur de couleur : seule cette matière change, les réglages et leurs brouillons non.
+    /// Revient après l'écriture sur le disque ; en cas d'échec, la couleur précédente est rétablie et l'erreur remontée.
+    /// Une matière supprimée entre-temps n'est jamais recréée.
+    func setSubjectColor(subjectId: String, color: String) async throws {
+        guard let normalized = ColorWheel.normalized(color) else { throw SubjectColorFailure.invalidColor }
+        guard let previous = subject(id: subjectId)?.color else { throw SubjectColorFailure.subjectMissing }
+        guard normalized != previous else { return }
+        document.subjects = SettingsLogic.subjectColor(document.subjects, subjectId: subjectId, color: normalized)
+        do {
+            try await persistAndWait()
+        } catch {
+            // Une autre modification a pu suivre pendant l'écriture : seule cette couleur est annulée.
+            if let index = document.subjects.firstIndex(where: { $0.id == subjectId }), document.subjects[index].color == normalized {
+                document.subjects[index].color = previous
+            }
+            throw SubjectColorFailure.unwritable
+        }
     }
 
     /// Texte de l'export au format `exportAllData`.
@@ -619,12 +643,27 @@ final class AppModel {
 
     // MARK: Persistance
 
-    private func persist() {
-        do { document = try RevisionStreak.reconcile(document, now: now()) }
-        catch { toast = .init(title: "Enregistrement impossible", message: error.localizedDescription, kind: .warning); return }
+    /// Document réconcilié et numéro de version de la prochaine écriture.
+    private func nextSnapshot() throws -> (document: AppDocument, version: Int) {
+        document = try RevisionStreak.reconcile(document, now: now())
         version += 1
-        let snapshot = document
-        let currentVersion = version
+        return (document, version)
+    }
+
+    /// Écriture attendue, pour une action qui ne se confirme qu'une fois enregistrée. Une écriture plus récente,
+    /// déjà faite, contient aussi ce document : la version écartée par `DocumentStore` n'est pas une perte.
+    private func persistAndWait() async throws {
+        let next = try nextSnapshot()
+        guard let store else { return }
+        try await store.save(next.document, version: next.version)
+    }
+
+    private func persist() {
+        let next: (document: AppDocument, version: Int)
+        do { next = try nextSnapshot() }
+        catch { toast = .init(title: "Enregistrement impossible", message: error.localizedDescription, kind: .warning); return }
+        let snapshot = next.document
+        let currentVersion = next.version
         guard let store else { return }
         Task { [weak self] in
             do {

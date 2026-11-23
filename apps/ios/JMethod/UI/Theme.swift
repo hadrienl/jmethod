@@ -238,12 +238,30 @@ struct DestructiveTextButtonStyle: ButtonStyle {
 
 // MARK: - Éléments partagés
 
+extension InsettableShape {
+    /// Couleur brute de matière, jamais assombrie ; contour neutre si elle est trop claire sur blanc
+    /// (`ColorWheel.needsOutline`). Même règle pour l'app et l'aperçu du sélecteur. `border` : contour ordinaire.
+    func subjectFill(_ hex: String, border: Color = .clear) -> some View {
+        let outlined = ColorWheel.needsOutline(hex)
+        return fill(Color(hex: hex)).overlay(strokeBorder(outlined ? Theme.textMuted : border, lineWidth: 1))
+    }
+}
+
 /// Pastille de couleur de matière (décorative : le nom est toujours écrit).
 struct SubjectDot: View {
     let color: String
     var size: CGFloat = 10
     var body: some View {
-        Circle().fill(Color(hex: color)).frame(width: size, height: size).accessibilityHidden(true)
+        Circle().subjectFill(color).frame(width: size, height: size).accessibilityHidden(true)
+    }
+}
+
+/// Filet de couleur de matière en bord de tuile (Planning, aperçu du sélecteur).
+struct SubjectColorBar: View {
+    let color: String
+    var width: CGFloat = 4
+    var body: some View {
+        Rectangle().subjectFill(color).frame(width: width).accessibilityHidden(true)
     }
 }
 

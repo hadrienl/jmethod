@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -46,10 +45,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -62,7 +58,6 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
@@ -73,7 +68,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import fr.jmethod.app.domain.SettingsLogic
-import fr.jmethod.app.model.DEFAULT_SUBJECTS
 import fr.jmethod.app.model.Subject
 import fr.jmethod.app.pronote.PronoteUiState
 import fr.jmethod.app.ui.pronote.PronoteAccountSection
@@ -92,7 +86,9 @@ import fr.jmethod.app.ui.components.SurfaceCard
 import fr.jmethod.app.ui.components.screenPadding
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import fr.jmethod.app.ui.components.subjectColor
+import fr.jmethod.app.ui.components.subjectFill
+import fr.jmethod.app.domain.ColorWheel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -128,7 +124,6 @@ fun SettingsScreen(
 ) {
     val platform = LocalPlatform.current
     val scope = rememberCoroutineScope()
-    var colorFor by rememberSaveable { mutableStateOf<String?>(null) }
 
     val exporter = platform.rememberExportLauncher { sink ->
         if (sink == null) return@rememberExportLauncher
@@ -181,7 +176,7 @@ fun SettingsScreen(
                 NotebookSection(autoCreate, onAutoCreateChange)
                 Algorithm(draft, viewModel)
                 RhythmSettingsPanel(ui, viewModel)
-                Colors(ui.subjects) { colorFor = it }
+                Colors(ui.subjects, onPick = viewModel::openSubjectColor)
                 Backup(ui, onExport = viewModel::requestExport, onImport = { importer() })
                 About()
             }
@@ -209,13 +204,7 @@ fun SettingsScreen(
         }
     }
 
-    colorFor?.let { id ->
-        val subject = ui.subjects.firstOrNull { it.id == id }
-        if (subject == null) colorFor = null else ColorDialog(subject, onDismiss = { colorFor = null }) { color ->
-            colorFor = null
-            viewModel.setSubjectColor(id, color)
-        }
-    }
+    SubjectColorPickerHost(viewModel, ui.subjects)
     importOffer?.let { ImportOfferDialog(it, onImportOffer) }
     ui.pendingImport?.let { pending ->
         AlertDialog(
@@ -345,7 +334,10 @@ private fun Intervals(draft: SettingsDraft, viewModel: SettingsViewModel) {
 
 @Composable
 private fun Colors(subjects: List<Subject>, onPick: (String) -> Unit) {
-    Section("Les couleurs de tes matières", "Choisis les couleurs qui t’aident à te repérer. Elles sont enregistrées tout de suite.") {
+    Section(
+        "Les couleurs de tes matières",
+        "Choisis les couleurs qui t’aident à te repérer. Une couleur s’applique quand tu l’enregistres dans son sélecteur, sans toucher aux autres réglages.",
+    ) {
         if (subjects.isEmpty()) Text("Aucune matière.", style = MaterialTheme.typography.bodyMedium, color = JColors.Slate600)
         subjects.forEach { subject ->
             Row(
@@ -355,10 +347,10 @@ private fun Colors(subjects: List<Subject>, onPick: (String) -> Unit) {
                     .semantics(mergeDescendants = true) {},
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Box(Modifier.size(32.dp).clip(JShapes.badge).background(subjectColor(subject.color)))
+                Box(Modifier.size(32.dp).subjectFill(subject.color, JShapes.badge))
                 Spacer(Modifier.width(JSpacing.m))
                 Text(subject.name, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                Text(subject.color.uppercase(), style = MaterialTheme.typography.bodySmall.tabular(), color = JColors.Slate500)
+                Text(ColorWheel.normalized(subject.color) ?: subject.color.uppercase(), style = MaterialTheme.typography.bodySmall.tabular(), color = JColors.Slate500)
                 Spacer(Modifier.width(JSpacing.xs))
                 Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = JColors.Slate400)
             }
@@ -366,44 +358,20 @@ private fun Colors(subjects: List<Subject>, onPick: (String) -> Unit) {
     }
 }
 
-/** Palette : couleurs par défaut des matières et quelques teintes lisibles. */
-private val PALETTE = (DEFAULT_SUBJECTS.map { it.color } + listOf("#0EA5E9", "#F59E0B", "#10B981", "#F97316", "#7C3AED", "#DC2626", "#0F766E", "#64748B")).distinct()
-
-@OptIn(ExperimentalLayoutApi::class)
+/** Sélecteur ouvert : seul cet hôte se recompose pendant un geste sur la roue. */
 @Composable
-private fun ColorDialog(subject: Subject, onDismiss: () -> Unit, onPick: (String) -> Unit) {
-    var hex by rememberSaveable(subject.id) { mutableStateOf(subject.color) }
-    val valid = Regex("^#[0-9A-Fa-f]{6}$").matches(hex)
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Couleur : ${subject.name}") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(JSpacing.m)) {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(JSpacing.xs), verticalArrangement = Arrangement.spacedBy(JSpacing.xs)) {
-                    PALETTE.forEach { color ->
-                        val selected = color.equals(hex, ignoreCase = true)
-                        Box(
-                            Modifier.size(48.dp).clip(CircleShape)
-                                .clickable(role = Role.RadioButton) { hex = color }
-                                .semantics { this.selected = selected; contentDescription = "Couleur $color" }
-                                .padding(6.dp).clip(CircleShape).background(subjectColor(color))
-                                .border(if (selected) 3.dp else 0.dp, JColors.Slate900, CircleShape),
-                        )
-                    }
-                }
-                OutlinedTextField(
-                    value = hex,
-                    onValueChange = { hex = it.trim().take(7) },
-                    label = { Text("Code couleur") },
-                    singleLine = true,
-                    isError = !valid,
-                    supportingText = if (!valid) ({ Text("Format attendu : #RRGGBB") }) else null,
-                )
-            }
-        },
-        confirmButton = { TextButton(onClick = { onPick(hex) }, enabled = valid, modifier = Modifier.heightIn(min = 48.dp)) { Text("Appliquer") } },
-        dismissButton = { TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text("Annuler") } },
-        containerColor = Color.White,
+private fun SubjectColorPickerHost(viewModel: SettingsViewModel, subjects: List<Subject>) {
+    val picker by viewModel.colorPicker.collectAsStateWithLifecycle()
+    val draft = picker ?: return
+    // Matière supprimée pendant l’édition : le sélecteur reste ouvert avec un message, sans rien recréer.
+    val subject = subjects.firstOrNull { it.id == draft.subjectId }
+    SubjectColorPicker(
+        draft = draft,
+        subjectName = subject?.name ?: draft.subjectName,
+        removed = draft.removed || subject == null,
+        onEdit = viewModel::editSubjectColor,
+        onCancel = viewModel::cancelSubjectColor,
+        onSave = viewModel::saveSubjectColor,
     )
 }
 
