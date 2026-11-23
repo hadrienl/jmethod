@@ -302,14 +302,14 @@ private fun ToastSnackbar(data: SnackbarData) {
 @Composable
 fun JMethodApp(container: AppContainer, createConnection: (CoroutineScope) -> PronoteConnection) {
     var dayReady by remember(container) { mutableStateOf(false) }
-    var openingError by remember(container) { mutableStateOf<String?>(null) }
     val readError by container.repository.loadError.collectAsStateWithLifecycle()
+    // Gel de la journée avant toute reprise Pronote. Un échec d’écriture n’empêche pas d’utiliser l’app (comme iOS) :
+    // le retour au premier plan réessaie et l’annonce.
     LaunchedEffect(container) {
-        try { container.repository.openRevisionDay(); dayReady = true }
-        catch (error: kotlinx.coroutines.CancellationException) { throw error }
-        catch (error: Exception) { openingError = error.message ?: "La journée de révision n’a pas pu être enregistrée." }
+        container.repository.tryOpenRevisionDay()
+        dayReady = true
     }
-    val error = readError ?: openingError
+    val error = readError
     if (error != null) {
         Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) { Column { Text("Données indisponibles"); Text(error) } }
         return
@@ -423,7 +423,10 @@ private fun AppContent(container: AppContainer, createConnection: (CoroutineScop
     // Retour au premier plan : reconnexion ou synchronisation si la dernière date de plus de 6 h.
     val lifecycleScope = rememberCoroutineScope()
     LifecycleEventEffect(Lifecycle.Event.ON_START) {
-        lifecycleScope.launch { container.repository.openRevisionDay(); pronoteViewModel.controller.onForeground() }
+        lifecycleScope.launch {
+            container.repository.tryOpenRevisionDay()?.let { toast(ToastVisuals("Journée non enregistrée", it, ToastTone.WARNING)) }
+            pronoteViewModel.controller.onForeground()
+        }
     }
     // Ordinateur : l’app reste souvent ouverte ; même règle qu’au retour au premier plan, vérifiée
     // toutes les 15 minutes (synchronisation si la dernière date de plus de 6 h). Aucun service système.
@@ -431,6 +434,8 @@ private fun AppContent(container: AppContainer, createConnection: (CoroutineScop
         LaunchedEffect(pronoteViewModel) {
             while (true) {
                 kotlinx.coroutines.delay(15 * 60_000L)
+                // Fenêtre réduite après minuit : la journée est figée avant que la synchronisation ne la modifie.
+                container.repository.tryOpenRevisionDay()
                 pronoteViewModel.controller.onForeground()
             }
         }

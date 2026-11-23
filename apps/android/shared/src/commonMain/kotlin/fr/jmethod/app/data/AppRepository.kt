@@ -54,6 +54,11 @@ class AppRepository(
     /** Première ouverture fonctionnelle ou retour au premier plan : avant toute reprise Pronote. */
     suspend fun openRevisionDay(): AppDocument = update { fr.jmethod.app.domain.RevisionStreak.reconcile(it, clock.now(), openCurrent = true) }
 
+    /** Comme [openRevisionDay], sans jamais lever : l’échec (disque plein…) est rendu en message et la journée sera figée au prochain essai. */
+    suspend fun tryOpenRevisionDay(): String? = try { openRevisionDay(); null }
+        catch (error: kotlinx.coroutines.CancellationException) { throw error }
+        catch (error: Exception) { error.message ?: "La journée de révision n’a pas pu être enregistrée." }
+
     /** Applique [transform] au document courant, l’écrit sur disque puis le publie. */
     suspend fun update(transform: (AppDocument) -> AppDocument): AppDocument {
         current()

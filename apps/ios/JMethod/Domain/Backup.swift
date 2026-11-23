@@ -133,8 +133,9 @@ enum Backup {
         guard (1...3).contains(schema) else { return shapeError("cette version nécessite une app plus récente") }
         var programmes: [RevisionProgramme] = []
         var streak: StreakState?
-        if schema >= 3 {
-            guard let raw = root["streakState"], let data = try? JSONSerialization.data(withJSONObject: raw),
+        // Un document v3 sans journal (journal local abandonné) démarre un nouveau suivi ; un journal présent doit être valide.
+        if schema >= 3, let raw = root["streakState"], !(raw is NSNull) {
+            guard let data = try? JSONSerialization.data(withJSONObject: raw),
                   let decoded = try? JSONDecoder().decode(StreakState.self, from: data),
                   (try? RevisionStreak.validate(decoded)) != nil else { return shapeError("le journal de révision est illisible ou incohérent") }
             streak = decoded

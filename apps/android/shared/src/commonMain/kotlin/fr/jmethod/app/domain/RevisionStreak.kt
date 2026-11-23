@@ -121,6 +121,45 @@ object RevisionStreak {
     /** « 0 journée », « 1 journée », « 2 journées » : accord français, 0 et 1 au singulier. */
     fun days(count: Int) = "$count journée${if (count > 1) "s" else ""}"
 
+    /**
+     * Séances figées que la mutation [before] → [after], décidée par l'app (adaptation après une validation, rythme
+     * réappliqué aux programmes en cours), a sorties du programme du jour : elles ne conditionnent plus la flamme.
+     * Une séance recréée sous un autre identifiant (même programme, même étape) et encore due reste exigée sous ce
+     * nouvel identifiant. Ce qui manquait déjà avant la mutation (suppression ou report de l'élève) reste bloquant.
+     */
+    fun releaseMovedByApp(before: AppDocument, after: AppDocument, now: Instant): AppDocument {
+        val state = after.streakState ?: return after
+        val today = day(now)
+        val index = state.days.indexOfLast { it.date == today.toString() }
+        if (index < 0 || state.days[index].status != RevisionDayStatus.PENDING) return after
+        val entry = state.days[index]
+        val preparation = today.plusDays(1).toString()
+        fun due(revision: Revision?) = revision != null && (revision.status == RevisionStatus.COMPLETED || revision.scheduledDate <= preparation)
+        fun step(revision: Revision) = if (revision.isEmergencySession == true || revision.programmeId == null || revision.rhythmStepId == null) null
+            else revision.programmeId to revision.rhythmStepId
+        val previous = before.revisions.associateBy { it.id }
+        val current = after.revisions.associateBy { it.id }
+        val created = after.revisions.filter { it.id !in previous }
+        val required = entry.requiredRevisionIds.mapNotNull { id ->
+            val old = previous[id]
+            when {
+                !due(old) -> id // Absente ou repoussée avant cette mutation : décision de l'élève, reste bloquante.
+                due(current[id]) -> id
+                current[id] != null -> null // Repoussée par l'app.
+                else -> step(old!!)?.let { key -> created.firstOrNull { step(it) == key } }?.takeIf { due(it) }?.id
+            }
+        }.distinct()
+        if (required == entry.requiredRevisionIds) return after
+        val completed = entry.completedRevisionIds.filter { it in required }
+        val stamp = AppDocumentCodec.isoMillis(now)
+        val updated = when {
+            required.isEmpty() -> entry.copy(requiredRevisionIds = emptyList(), completedRevisionIds = emptyList(), status = RevisionDayStatus.REST, finalizedAt = stamp)
+            completed.size == required.size -> entry.copy(requiredRevisionIds = required, completedRevisionIds = completed, status = RevisionDayStatus.EARNED, finalizedAt = stamp)
+            else -> entry.copy(requiredRevisionIds = required, completedRevisionIds = completed)
+        }
+        return after.copy(streakState = derived(state.copy(days = state.days.toMutableList().also { it[index] = updated })))
+    }
+
     data class Summary(val count: Int, val record: Int, val status: String, val title: String, val message: String, val remaining: Int)
 
     fun summary(state: StreakState?, date: String): Summary {
@@ -130,10 +169,12 @@ object RevisionStreak {
         val entry = normalized?.days?.firstOrNull { it.date == date }
         val remaining = entry?.requiredRevisionIds?.count { it !in entry.completedRevisionIds } ?: 0
         if (entry == null) return Summary(count, record, "waiting", "${days(count)} de révision", "Le suivi reprendra à la prochaine journée de révision.", 0)
-        val interrupted = normalized?.days?.lastOrNull { it.date < date }?.status == RevisionDayStatus.MISSED
+        // Les pauses ne masquent pas une interruption : on regarde la dernière journée qui comptait.
+        val interrupted = normalized?.days?.lastOrNull { it.date < date && it.status != RevisionDayStatus.REST }?.status == RevisionDayStatus.MISSED
         return when (entry.status) {
             RevisionDayStatus.EARNED -> Summary(count, record, "earned", "Flamme gagnée !", "Toutes tes révisions sont terminées : série de ${days(count)} !", 0)
-            RevisionDayStatus.REST -> Summary(count, record, "rest", "Flamme en pause", "Aucun J aujourd’hui, ta série est conservée.", 0)
+            RevisionDayStatus.REST -> if (interrupted) Summary(count, record, "rest", "Série interrompue", "Aucun J aujourd’hui. Ta prochaine journée de révision lancera une nouvelle série.", 0)
+                else Summary(count, record, "rest", "Flamme en pause", "Aucun J aujourd’hui, ta série est conservée.", 0)
             RevisionDayStatus.MISSED -> Summary(count, record, "missed", "Série interrompue", "Une journée de révision est restée incomplète. Tu peux recommencer une nouvelle série.", remaining)
             RevisionDayStatus.PENDING -> Summary(count, record, "pending", if (interrupted) "Une nouvelle série commence ici" else "À compléter",
                 "Encore $remaining révision${if (remaining > 1) "s" else ""} pour gagner la flamme du jour.", remaining)

@@ -109,7 +109,8 @@ class SettingsViewModel(private val repository: AppRepository, private val clock
                 repository.update { document ->
                     val updated = document.copy(settings = document.settings.copy(rhythm = rhythm,
                         intervals = rhythm.steps.map { it.offsetDays }, adaptiveEnabled = adaptive))
-                    if (applyToOngoing) fr.jmethod.app.domain.RevisionProgrammes.reapply(updated, document.programmes.map { it.id }.toSet(), rhythm) else updated
+                    if (applyToOngoing) fr.jmethod.app.domain.RevisionStreak.releaseMovedByApp(updated,
+                        fr.jmethod.app.domain.RevisionProgrammes.reapply(updated, document.programmes.map { it.id }.toSet(), rhythm), clock.now()) else updated
                 }
                 events.send(SettingsEvent.Toast("Rythme enregistré", if (applyToOngoing) "Les séances réalisées et les rattrapages ont été conservés." else "Les programmes existants gardent leur rythme et leur mode."))
             } catch (error: kotlinx.coroutines.CancellationException) { throw error }

@@ -67,7 +67,8 @@ class TodayViewModel(
         while (true) {
             val date = clock.today().toString()
             if (date != previous) {
-                repository.openRevisionDay()
+                // Un échec d’écriture ne fige pas l’écran : la date change quand même, le gel sera retenté.
+                repository.tryOpenRevisionDay()
                 previous = date
                 emit(date)
             }
@@ -123,7 +124,8 @@ class TodayViewModel(
                     // Première séance due dans l’ordre affiché d’Aujourd’hui (comme iOS).
                     next = RevisionSession.nextInDisplayOrder(result.revisions, document.courses, document.subjects, result.today, revisionId)?.id
                 }
-                if (result.ignored) document else fr.jmethod.app.domain.RevisionStreak.completed(document.copy(revisions = result.revisions), revisionId, clock.now())
+                if (result.ignored) document else fr.jmethod.app.domain.RevisionStreak.releaseMovedByApp(document,
+                    fr.jmethod.app.domain.RevisionStreak.completed(document.copy(revisions = result.revisions), revisionId, clock.now()), clock.now())
             }
             val done = outcome
             val toast = done?.toast

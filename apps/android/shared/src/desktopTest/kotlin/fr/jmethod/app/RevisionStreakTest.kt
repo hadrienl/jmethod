@@ -12,7 +12,7 @@ import java.time.Instant
 
 class RevisionStreakTest {
     private fun revision(id: String, date: String) = Revision(id, "c1", 0, "J0", date, status = RevisionStatus.PENDING, phase = Phase.ENCODAGE,
-        courseIds = listOf("c1", "c2"), programmeId = "p")
+        courseIds = listOf("c1", "c2"), programmeId = "p", rhythmStepId = "s-$id")
     private fun document(revisions: List<Revision>) = AppDocument(courses = listOf(
         Course("c1","maths","",1,"C1","2026-11-01",createdAt = "2026-11-01"),
         Course("c2","maths","",2,"C2","2026-11-01",createdAt = "2026-11-01")), revisions = revisions, initialized = true, schemaVersion = 2)
@@ -38,11 +38,20 @@ class RevisionStreakTest {
                         val changed = before.copy(revisions = before.revisions.map { r ->
                             if (r.id == id && r.status != RevisionStatus.COMPLETED) r.copy(status = RevisionStatus.COMPLETED, completedDate = date, score = 0) else r
                         })
-                        RevisionStreak.completed(changed,id!!,now)
+                        // Comme l'app : validation puis libération de ce que l'adaptation a sorti du jour.
+                        RevisionStreak.releaseMovedByApp(before, RevisionStreak.completed(changed,id!!,now), now)
                     }
                     "add" -> RevisionStreak.reconcile(doc,now).let { it.copy(revisions = it.revisions + revision(id!!,event.getValue("date").jsonPrimitive.content)) }
                     "delete" -> RevisionStreak.reconcile(doc,now).let { it.copy(revisions = it.revisions.filterNot { r -> r.id == id }) }
                     "move" -> RevisionStreak.reconcile(doc,now).let { it.copy(revisions = it.revisions.map { r -> if(r.id == id) r.copy(scheduledDate = event.getValue("date").jsonPrimitive.content) else r }) }
+                    "appMove" -> RevisionStreak.reconcile(doc, now).let { before -> RevisionStreak.releaseMovedByApp(before, before.copy(revisions = before.revisions.map { r ->
+                        if (r.id == id) r.copy(scheduledDate = event.getValue("date").jsonPrimitive.content) else r }), now) }
+                    "appRemove" -> RevisionStreak.reconcile(doc, now).let { before -> RevisionStreak.releaseMovedByApp(before, before.copy(revisions = before.revisions.filterNot { r -> r.id == id }), now) }
+                    "appReplace" -> RevisionStreak.reconcile(doc, now).let { before ->
+                        val old = before.revisions.first { it.id == id }
+                        val replacement = old.copy(id = event.getValue("newId").jsonPrimitive.content, scheduledDate = event.getValue("date").jsonPrimitive.content)
+                        RevisionStreak.releaseMovedByApp(before, before.copy(revisions = before.revisions.filterNot { it.id == id } + replacement), now)
+                    }
                     else -> error("Événement inconnu")
                 }
                 val label = "$name / $index"
@@ -100,5 +109,24 @@ class RevisionStreakTest {
         assertEquals("2026-11-19", fresh.trackingStartDate)
         assertEquals(0, fresh.bestCount)
         assertEquals(1, fresh.days.size)
+
+        // v3 dont le journal local a été abandonné : acceptée, un nouveau suivi démarrera.
+        val orphan = ImportExport.parse(AppDocumentCodec.export(doc.copy(streakState = null), now)) as ImportExport.Result.Accepted
+        assertNull(orphan.streakState)
+    }
+
+    /** Une pause après une journée manquée explique l'interruption ; un journal local incohérent n'efface que lui-même. */
+    @Test fun interruptedPauseAndInvalidLocalJournal() {
+        val missed = RevisionDay("2026-11-16", listOf("x"), emptyList(), "2026-11-16T17:00:00.000Z", "2026-11-16T23:00:00.000Z", RevisionDayStatus.MISSED)
+        val rest = { d: String -> RevisionDay(d, emptyList(), emptyList(), "${d}T17:00:00.000Z", "${d}T17:00:00.000Z", RevisionDayStatus.REST) }
+        val state = StreakState("2026-11-16", "2026-11-18", days = listOf(missed, rest("2026-11-17"), rest("2026-11-18")))
+        assertEquals("Série interrompue", RevisionStreak.summary(state, "2026-11-18").title)
+        assertEquals("Flamme en pause", RevisionStreak.summary(state.copy(trackingStartDate = "2026-11-17", days = state.days.drop(1)), "2026-11-18").title)
+
+        val broken = state.copy(days = listOf(missed.copy(status = RevisionDayStatus.EARNED), rest("2026-11-17"), rest("2026-11-18")))
+        val doc = document(emptyList()).copy(schemaVersion = 3, streakState = broken)
+        val decoded = AppDocumentCodec.decode(AppDocumentCodec.encode(doc))
+        assertNull(decoded.streakState)
+        assertEquals(doc.courses, decoded.courses)
     }
 }

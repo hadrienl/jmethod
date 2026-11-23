@@ -135,6 +135,49 @@ enum RevisionStreak {
         return result
     }
 
+    /// Séances figées que la mutation `before` → `after`, décidée par l'app (adaptation après une validation, rythme
+    /// réappliqué aux programmes en cours), a sorties du programme du jour : elles ne conditionnent plus la flamme.
+    /// Une séance recréée sous un autre identifiant (même programme, même étape) et encore due reste exigée sous ce
+    /// nouvel identifiant. Ce qui manquait déjà avant la mutation (suppression ou report de l'élève) reste bloquant.
+    static func releaseMovedByApp(before: AppDocument, after: AppDocument, now: Date) throws -> AppDocument {
+        guard var state = after.streakState else { return after }
+        let today = SchoolDay.today(now: now)
+        guard let index = state.days.lastIndex(where: { $0.date == today }), state.days[index].status == .pending else { return after }
+        guard let preparation = SchoolDay.adding(1, to: today) else { throw Failure() }
+        func due(_ revision: Revision?) -> Bool {
+            guard let revision else { return false }
+            return revision.status == .completed || revision.scheduledDate <= preparation
+        }
+        func step(_ revision: Revision) -> String? {
+            guard revision.isEmergencySession != true, let programme = revision.programmeId, let step = revision.rhythmStepId else { return nil }
+            return programme + "\u{1F}" + step
+        }
+        let previous = Dictionary(before.revisions.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let current = Dictionary(after.revisions.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let created = after.revisions.filter { previous[$0.id] == nil }
+        var entry = state.days[index]
+        var seen = Set<String>()
+        let required = entry.requiredRevisionIds.compactMap { id -> String? in
+            let old = previous[id]
+            // Absente ou repoussée avant cette mutation : décision de l'élève, reste bloquante.
+            if !due(old) { return id }
+            if due(current[id]) { return id }
+            if current[id] != nil { return nil } // Repoussée par l'app.
+            guard let old, let key = step(old), let replacement = created.first(where: { step($0) == key }), due(replacement) else { return nil }
+            return replacement.id
+        }.filter { seen.insert($0).inserted }
+        guard required != entry.requiredRevisionIds else { return after }
+        let completed = entry.completedRevisionIds.filter { required.contains($0) }
+        entry.requiredRevisionIds = required
+        entry.completedRevisionIds = completed
+        if required.isEmpty { entry.completedRevisionIds = []; entry.status = .rest; entry.finalizedAt = Backup.isoMillis(now) }
+        else if completed.count == required.count { entry.status = .earned; entry.finalizedAt = Backup.isoMillis(now) }
+        state.days[index] = entry
+        var result = after
+        result.streakState = derived(state)
+        return result
+    }
+
     /// « 0 journée », « 1 journée », « 2 journées » : accord français, 0 et 1 au singulier.
     static func days(_ count: Int) -> String { "\(count) journée\(count > 1 ? "s" : "")" }
 
@@ -153,10 +196,13 @@ enum RevisionStreak {
             return Summary(count: count, record: record, status: "waiting", title: "\(days(count)) de révision", message: "Le suivi reprendra à la prochaine journée de révision.", remaining: 0)
         }
         let remaining = entry.requiredRevisionIds.filter { !entry.completedRevisionIds.contains($0) }.count
-        let interrupted = state?.days.last(where: { $0.date < date })?.status == .missed
+        // Les pauses ne masquent pas une interruption : on regarde la dernière journée qui comptait.
+        let interrupted = state?.days.last(where: { $0.date < date && $0.status != .rest })?.status == .missed
         switch entry.status {
         case .earned:
             return Summary(count: count, record: record, status: "earned", title: "Flamme gagnée !", message: "Toutes tes révisions sont terminées : série de \(days(count)) !", remaining: 0)
+        case .rest where interrupted:
+            return Summary(count: count, record: record, status: "rest", title: "Série interrompue", message: "Aucun J aujourd’hui. Ta prochaine journée de révision lancera une nouvelle série.", remaining: 0)
         case .rest:
             return Summary(count: count, record: record, status: "rest", title: "Flamme en pause", message: "Aucun J aujourd’hui, ta série est conservée.", remaining: 0)
         case .missed:

@@ -29,6 +29,7 @@ struct RootView: View {
         }
         .task {
             await app.load()
+            app.sceneVisible = scenePhase != .background
             app.openRevisionDay()
             #if DEBUG
             let arguments = ProcessInfo.processInfo.arguments
@@ -53,6 +54,7 @@ struct RootView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in app.refreshDay() }
         .onChange(of: scenePhase) { _, phase in
+            app.sceneVisible = phase != .background
             switch phase {
             case .active:
                 app.refreshDay()

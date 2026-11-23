@@ -200,12 +200,10 @@ struct AppDocument: Codable, Equatable, Sendable {
         initialized = try container.decodeIfPresent(Bool.self, forKey: .initialized) ?? true
         notebookImports = (try? container.decodeIfPresent([String: NotebookImport].self, forKey: .notebookImports)) ?? [:]
         programmes = try container.decodeIfPresent([RevisionProgramme].self, forKey: .programmes) ?? []
-        streakState = try container.decodeIfPresent(StreakState.self, forKey: .streakState)
+        // Un journal illisible ou incohérent ne doit pas coûter tout le document : un nouveau suivi démarre à la prochaine ouverture.
+        streakState = (try? container.decodeIfPresent(StreakState.self, forKey: .streakState)) ?? nil
+        if let streakState, (try? RevisionStreak.validate(streakState)) == nil { self.streakState = nil }
         schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
-        if schemaVersion >= 3 {
-            guard let streakState else { throw DecodingError.dataCorruptedError(forKey: .streakState, in: container, debugDescription: "Le journal de révision manque au document.") }
-            try RevisionStreak.validate(streakState)
-        }
         guard (1...3).contains(schemaVersion) else { throw DecodingError.dataCorruptedError(forKey: .schemaVersion, in: container, debugDescription: "Cette sauvegarde nécessite une version plus récente de J-Method.") }
     }
 

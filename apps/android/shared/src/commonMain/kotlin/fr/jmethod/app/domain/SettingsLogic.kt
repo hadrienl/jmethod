@@ -200,8 +200,10 @@ object ImportExport {
         val programmes = if (schema >= 2) runCatching {
             json.decodeFromJsonElement(ListSerializer(fr.jmethod.app.model.RevisionProgramme.serializer()), root.getValue("programmes"))
         }.getOrNull() ?: return shapeError("les programmes sont illisibles") else emptyList()
-        val streak = if (schema >= 3) runCatching {
-            json.decodeFromJsonElement(fr.jmethod.app.model.StreakState.serializer(), root.getValue("streakState")).also(RevisionStreak::validate)
+        // Un document v3 sans journal (journal local abandonné) démarre un nouveau suivi ; un journal présent doit être valide.
+        val rawStreak = root["streakState"]?.takeUnless { it is kotlinx.serialization.json.JsonNull }
+        val streak = if (schema >= 3 && rawStreak != null) runCatching {
+            json.decodeFromJsonElement(fr.jmethod.app.model.StreakState.serializer(), rawStreak).also(RevisionStreak::validate)
         }.getOrNull() ?: return shapeError("le journal de révision est illisible ou incohérent") else null
         if (schema >= 2) {
             val candidate = AppDocument(courses = courses, revisions = revisions, subjects = subjects ?: emptyList(), settings = settings ?: AppSettings(), programmes = programmes, schemaVersion = schema, streakState = streak)

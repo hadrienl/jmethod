@@ -23,6 +23,8 @@ final class AppModel {
     private(set) var document: AppDocument
     /// Jour réel au fuseau Europe/Paris, rafraîchi au changement de jour.
     private(set) var today: String
+    /// Faux pendant un réveil en arrière-plan : la journée de révision n'est figée qu'à une ouverture réelle.
+    var sceneVisible = true
     /// Incrémenté quand la dernière séance du programme est validée (feu d'artifice).
     private(set) var celebration = 0
     /// Incrémenté pour une séance validée avec au moins 75/100 (petite gerbe, comme le web).
@@ -205,7 +207,7 @@ final class AppModel {
     }
 
     func openRevisionDay() {
-        guard loadState == .ready else { return }
+        guard loadState == .ready, sceneVisible else { return }
         do { try prepareRevisionDays(openCurrent: true) }
         catch { showToast("Journée non enregistrée", error.localizedDescription, warning: true) }
     }
@@ -256,7 +258,7 @@ final class AppModel {
         today = outcome.today
         guard !outcome.ignored, let explanation = outcome.explanation else { return nil }
         var completed = document; completed.revisions = outcome.revisions
-        do { document = try RevisionStreak.completed(completed, revisionId: revisionId, now: now()) }
+        do { document = try RevisionStreak.releaseMovedByApp(before: document, after: RevisionStreak.completed(completed, revisionId: revisionId, now: now()), now: now()) }
         catch { showToast("Séance non enregistrée", error.localizedDescription, warning: true); return nil }
         persist()
         let next = RevisionSession.nextDue(revisions: document.revisions, courses: document.courses,
@@ -470,7 +472,10 @@ final class AppModel {
             updated.settings.rhythm = rhythm
             updated.settings.intervals = rhythm.steps.map(\.offsetDays)
             updated.settings.adaptiveEnabled = adaptive
-            if applyToOngoing { updated = try RevisionProgrammes.reapply(updated, programmeIds: Set(updated.programmes.map(\.id)), rhythm: rhythm) }
+            if applyToOngoing {
+                let reapplied = try RevisionProgrammes.reapply(updated, programmeIds: Set(updated.programmes.map(\.id)), rhythm: rhythm)
+                updated = try RevisionStreak.releaseMovedByApp(before: updated, after: reapplied, now: now())
+            }
             document = updated
             persist()
             showToast("Rythme enregistré", applyToOngoing ? "Les séances terminées et les rattrapages ont été conservés." : "Les programmes existants gardent leur rythme et leur mode.")

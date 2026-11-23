@@ -4,7 +4,7 @@ import XCTest
 final class RevisionStreakTests: XCTestCase {
     private func revision(_ id: String, _ date: String) -> Revision {
         Revision(id: id, courseId: "c1", stepIndex: 0, stepLabel: "J0", scheduledDate: date, status: .pending, phase: .encodage,
-                 programmeId: "p", courseIds: ["c1","c2"])
+                 programmeId: "p", courseIds: ["c1","c2"], rhythmStepId: "s-\(id)")
     }
     private func document(_ revisions: [Revision]) -> AppDocument {
         var result = AppDocument(settings: Constants.defaultSettings, subjects: Constants.defaultSubjects, courses: [
@@ -30,12 +30,14 @@ final class RevisionStreakTests: XCTestCase {
                 case "open": doc = try RevisionStreak.reconcile(doc, now: now, openCurrent: true)
                 case "complete":
                     doc = try RevisionStreak.reconcile(doc, now: now, openCurrent: true)
+                    let before = doc
                     doc.revisions = doc.revisions.map { original in
                         var r = original
                         if r.id == id && r.status != .completed { r.status = .completed; r.completedDate = day; r.score = 0 }
                         return r
                     }
-                    doc = try RevisionStreak.completed(doc, revisionId: XCTUnwrap(id), now: now)
+                    // Comme l'app : validation puis libération de ce que l'adaptation a sorti du jour.
+                    doc = try RevisionStreak.releaseMovedByApp(before: before, after: RevisionStreak.completed(doc, revisionId: XCTUnwrap(id), now: now), now: now)
                 case "add":
                     doc = try RevisionStreak.reconcile(doc, now: now)
                     doc.revisions.append(revision(try XCTUnwrap(id), try XCTUnwrap(event["date"] as? String)))
@@ -46,6 +48,26 @@ final class RevisionStreakTests: XCTestCase {
                     doc = try RevisionStreak.reconcile(doc, now: now)
                     let date = try XCTUnwrap(event["date"] as? String)
                     doc.revisions = doc.revisions.map { original in var r = original; if r.id == id { r.scheduledDate = date }; return r }
+                case "appMove":
+                    let before = try RevisionStreak.reconcile(doc, now: now)
+                    let date = try XCTUnwrap(event["date"] as? String)
+                    var after = before
+                    after.revisions = after.revisions.map { original in var r = original; if r.id == id { r.scheduledDate = date }; return r }
+                    doc = try RevisionStreak.releaseMovedByApp(before: before, after: after, now: now)
+                case "appRemove":
+                    let before = try RevisionStreak.reconcile(doc, now: now)
+                    var after = before
+                    after.revisions.removeAll { $0.id == id }
+                    doc = try RevisionStreak.releaseMovedByApp(before: before, after: after, now: now)
+                case "appReplace":
+                    let before = try RevisionStreak.reconcile(doc, now: now)
+                    var replacement = try XCTUnwrap(before.revisions.first { $0.id == id })
+                    replacement.id = try XCTUnwrap(event["newId"] as? String)
+                    replacement.scheduledDate = try XCTUnwrap(event["date"] as? String)
+                    var after = before
+                    after.revisions.removeAll { $0.id == id }
+                    after.revisions.append(replacement)
+                    doc = try RevisionStreak.releaseMovedByApp(before: before, after: after, now: now)
                 default: XCTFail("Événement inconnu"); continue
                 }
                 let state = try XCTUnwrap(doc.streakState)
@@ -100,5 +122,30 @@ final class RevisionStreakTests: XCTestCase {
         XCTAssertNil(legacy.streakState)
         let fresh = try XCTUnwrap(RevisionStreak.reconcile(legacy.apply(to: doc), now: now, openCurrent: true).streakState)
         XCTAssertEqual(fresh.trackingStartDate, "2026-11-19"); XCTAssertEqual(fresh.bestCount, 0); XCTAssertEqual(fresh.days.count, 1)
+
+        // v3 dont le journal local a été abandonné : acceptée, un nouveau suivi démarrera.
+        var orphan = doc; orphan.streakState = nil
+        guard case .accepted(let accepted3) = Backup.parse(Data(Backup.export(orphan, now: now).utf8)) else { return XCTFail("v3 sans journal refusée") }
+        XCTAssertNil(accepted3.streakState)
+    }
+
+    /// Une pause après une journée manquée explique l'interruption ; un journal local incohérent n'efface que lui-même.
+    func testInterruptedPauseAndInvalidLocalJournal() throws {
+        let missed = RevisionDay(date: "2026-11-16", requiredRevisionIds: ["x"], completedRevisionIds: [], frozenAt: "2026-11-16T17:00:00.000Z",
+                                 finalizedAt: "2026-11-16T23:00:00.000Z", status: .missed)
+        func rest(_ d: String) -> RevisionDay {
+            RevisionDay(date: d, requiredRevisionIds: [], completedRevisionIds: [], frozenAt: "\(d)T17:00:00.000Z", finalizedAt: "\(d)T17:00:00.000Z", status: .rest)
+        }
+        let state = StreakState(trackingStartDate: "2026-11-16", lastReconciledDate: "2026-11-18", days: [missed, rest("2026-11-17"), rest("2026-11-18")])
+        XCTAssertEqual(RevisionStreak.summary(state, date: "2026-11-18").title, "Série interrompue")
+        let calm = StreakState(trackingStartDate: "2026-11-17", lastReconciledDate: "2026-11-18", days: [rest("2026-11-17"), rest("2026-11-18")])
+        XCTAssertEqual(RevisionStreak.summary(calm, date: "2026-11-18").title, "Flamme en pause")
+
+        var brokenMissed = missed; brokenMissed.status = .earned
+        var doc = document([]); doc.schemaVersion = 3
+        doc.streakState = StreakState(trackingStartDate: "2026-11-16", lastReconciledDate: "2026-11-18", days: [brokenMissed, rest("2026-11-17"), rest("2026-11-18")])
+        let decoded = try JSONDecoder().decode(AppDocument.self, from: DocumentStore.encode(doc))
+        XCTAssertNil(decoded.streakState)
+        XCTAssertEqual(decoded.courses, doc.courses)
     }
 }

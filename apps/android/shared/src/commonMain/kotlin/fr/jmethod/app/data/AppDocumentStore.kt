@@ -32,7 +32,9 @@ object AppDocumentCodec {
     fun decode(text: String): AppDocument {
         val document = json.decodeFromString(AppDocument.serializer(), text)
         if (document.schemaVersion !in 1..3) throw UnsupportedVersion()
-        if (document.schemaVersion >= 3) fr.jmethod.app.domain.RevisionStreak.validate(requireNotNull(document.streakState) { "Le journal de révision manque au document." })
+        // Un journal incohérent ne doit pas coûter tout le document : un nouveau suivi démarre à la prochaine ouverture.
+        val streak = document.streakState
+        if (streak != null && runCatching { fr.jmethod.app.domain.RevisionStreak.validate(streak) }.isFailure) return document.copy(streakState = null)
         return document
     }
 
@@ -48,7 +50,7 @@ object AppDocumentCodec {
             if (document.schemaVersion >= 2) {
                 put("schemaVersion", kotlinx.serialization.json.JsonPrimitive(document.schemaVersion))
                 put("programmes", full.getValue("programmes"))
-                if (document.schemaVersion >= 3) put("streakState", full.getValue("streakState"))
+                if (document.schemaVersion >= 3) full["streakState"]?.let { put("streakState", it) }
             }
             // `notebookImports` (cahier de textes → cours) seulement s’il existe : ignoré par le web.
             val keys = listOf("courses", "revisions", "subjects", "settings") + if (document.notebookImports.isEmpty()) emptyList() else listOf("notebookImports")
