@@ -59,6 +59,8 @@ targets:
         buildPhase: resources
       - path: ../../native/shared/domain/streak-vectors.json
         buildPhase: resources
+      - path: ../../native/shared/domain/color-vectors.json
+        buildPhase: resources
       - path: ../../native/shared/domain/programme-vectors.json
         buildPhase: resources
       - path: ../../native/shared/domain/constants.json
