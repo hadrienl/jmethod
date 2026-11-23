@@ -46,23 +46,7 @@ data class StatsModel(
 
         private fun average(scores: List<Int>): Int? = if (scores.isEmpty()) null else jsRound(scores.sum().toDouble() / scores.size)
 
-        /**
-         * D3 : jours consécutifs ayant au moins une séance validée (`completedDate`), en remontant depuis
-         * aujourd’hui, ou depuis hier si rien n’est encore validé aujourd’hui.
-         */
-        fun streak(revisions: List<Revision>, today: LocalDate): Int {
-            val days = revisions.filter { it.status == RevisionStatus.COMPLETED }
-                .mapNotNull { it.completedDate?.let(FrenchDates::parse) }.toHashSet()
-            var day = if (today in days) today else today.minusDays(1)
-            var count = 0
-            while (day in days) {
-                count++
-                day = day.minusDays(1)
-            }
-            return count
-        }
-
-        fun build(courses: List<Course>, revisions: List<Revision>, subjects: List<Subject>, today: LocalDate): StatsModel {
+        fun build(courses: List<Course>, revisions: List<Revision>, subjects: List<Subject>, today: LocalDate, streakState: fr.jmethod.app.model.StreakState? = null): StatsModel {
             val courseMap = courses.associateBy { it.id }
             val completed = revisions.count { it.status == RevisionStatus.COMPLETED }
             val overall = average(scored(revisions))
@@ -83,7 +67,8 @@ data class StatsModel(
                     averageTone = avg?.let { if (it >= 50) Tone.GOOD else Tone.WEAK },
                 )
             }
-            val streak = streak(revisions, today)
+            val flame = RevisionStreak.summary(streakState, today.toString())
+            val streak = flame.count
             return StatsModel(
                 completionRate = if (revisions.isNotEmpty()) jsRound(completed.toDouble() / revisions.size * 100) else 0,
                 completionLine = "$completed sur ${revisions.size} faites",
@@ -95,8 +80,8 @@ data class StatsModel(
                     else -> "Sous l’équilibre"
                 },
                 streakDays = streak,
-                streakLabel = "$streak j",
-                streakLine = if (streak == 0) "Valide une séance pour commencer" else "${plural(streak, "Jour consécutif", "Jours consécutifs")} avec une séance",
+                streakLabel = "$streak",
+                streakLine = "${flame.title} · Record : ${RevisionStreak.days(flame.record)}",
                 coursesCount = courses.size,
                 subjectsLine = "Sur ${rows.size} ${plural(rows.size, "matière")}",
                 weakSubjects = rows.filter { it.avgScore != null && it.avgScore < 50 },

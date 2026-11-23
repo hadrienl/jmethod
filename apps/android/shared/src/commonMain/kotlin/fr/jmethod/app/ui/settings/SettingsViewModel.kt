@@ -109,7 +109,8 @@ class SettingsViewModel(private val repository: AppRepository, private val clock
                 repository.update { document ->
                     val updated = document.copy(settings = document.settings.copy(rhythm = rhythm,
                         intervals = rhythm.steps.map { it.offsetDays }, adaptiveEnabled = adaptive))
-                    if (applyToOngoing) fr.jmethod.app.domain.RevisionProgrammes.reapply(updated, document.programmes.map { it.id }.toSet(), rhythm) else updated
+                    if (applyToOngoing) fr.jmethod.app.domain.RevisionStreak.releaseMovedByApp(updated,
+                        fr.jmethod.app.domain.RevisionProgrammes.reapply(updated, document.programmes.map { it.id }.toSet(), rhythm), clock.now()) else updated
                 }
                 events.send(SettingsEvent.Toast("Rythme enregistré", if (applyToOngoing) "Les séances réalisées et les rattrapages ont été conservés." else "Les programmes existants gardent leur rythme et leur mode."))
             } catch (error: kotlinx.coroutines.CancellationException) { throw error }
@@ -160,7 +161,7 @@ class SettingsViewModel(private val repository: AppRepository, private val clock
         val accepted = pending.value ?: return
         pending.value = null
         viewModelScope.launch {
-            repository.update { accepted.applyTo(it) }
+            repository.update { fr.jmethod.app.domain.RevisionStreak.reconcile(accepted.applyTo(it), clock.now(), openCurrent = true) }
             draft.value = null
             events.send(SettingsEvent.Toast("Sauvegarde restaurée", "${accepted.courses.size} cours et ${accepted.revisions.size} séances importés."))
         }

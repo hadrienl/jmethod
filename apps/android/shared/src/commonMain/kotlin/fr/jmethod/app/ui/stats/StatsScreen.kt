@@ -66,7 +66,7 @@ import kotlinx.coroutines.flow.stateIn
 
 class StatsViewModel(repository: AppRepository, clock: AppClock) : ViewModel() {
     val uiState: StateFlow<StatsModel?> = combine(repository.document.filterNotNull(), clock.todayTicks()) { document, today ->
-        StatsModel.build(document.courses, document.revisions, document.subjects, today)
+        StatsModel.build(document.courses, document.revisions, document.subjects, today, document.streakState)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 }
 
@@ -97,8 +97,8 @@ fun StatsScreen(model: StatsModel, contentPadding: PaddingValues) {
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(JSpacing.m), modifier = Modifier.height(IntrinsicSize.Min)) {
                         Metric(
-                            "Régularité", model.streakLabel, model.streakLine, JColors.Slate900, Modifier.weight(1f),
-                            spoken = "Régularité : ${model.streakDays} ${if (model.streakDays > 1) "jours consécutifs" else "jour"}",
+                            "Journées de révision", model.streakLabel, model.streakLine, JColors.Slate900, Modifier.weight(1f),
+                            spoken = "${fr.jmethod.app.domain.RevisionStreak.days(model.streakDays)} de révision. ${model.streakLine}",
                         )
                         Metric("Cours suivis", "${model.coursesCount}", model.subjectsLine, JColors.Slate900, Modifier.weight(1f))
                     }

@@ -114,12 +114,13 @@ object ImportExport {
             val notebookImports: Map<String, fr.jmethod.app.model.NotebookImport>? = null,
             val programmes: List<fr.jmethod.app.model.RevisionProgramme> = emptyList(),
             val schemaVersion: Int = 1,
+            val streakState: fr.jmethod.app.model.StreakState? = null,
         ) : Result {
             /** État après import : les créneaux Pronote de l’appareil sont conservés. */
             fun applyTo(document: AppDocument): AppDocument = document.copy(
                 courses = courses,
                 revisions = revisions,
-                programmes = programmes, schemaVersion = schemaVersion,
+                programmes = programmes, schemaVersion = schemaVersion, streakState = streakState,
                 subjects = subjects ?: document.subjects,
                 settings = settings ?: document.settings,
                 notebookImports = notebookImports ?: document.notebookImports,
@@ -149,9 +150,10 @@ object ImportExport {
         val envelope = runCatching { AppDocumentCodec.json.parseToJsonElement(text) }.getOrNull()
         if (envelope !is JsonObject) return Result.Rejected(ERROR_TITLE, INVALID_MESSAGE)
         val root = if (envelope["data"] != null) {
-            if ((envelope["schemaVersion"] as? JsonPrimitive)?.content != "2" || (envelope["version"] as? JsonPrimitive)?.content != "2.0") return shapeError("cette version nécessite une app plus récente")
+            val outer = (envelope["schemaVersion"] as? JsonPrimitive)?.content
+            if (outer !in setOf("2", "3") || (envelope["version"] as? JsonPrimitive)?.content != "$outer.0") return shapeError("cette version nécessite une app plus récente")
             val payload = envelope["data"] as? JsonObject ?: return shapeError("le contenu est illisible")
-            if ((payload["schemaVersion"] as? JsonPrimitive)?.content != "2") return shapeError("les versions de la sauvegarde sont incohérentes")
+            if ((payload["schemaVersion"] as? JsonPrimitive)?.content != outer) return shapeError("les versions de la sauvegarde sont incohérentes")
             payload
         } else envelope
         if (falsy(root["courses"]) || falsy(root["revisions"])) return Result.Rejected(ERROR_TITLE, INVALID_MESSAGE)
@@ -194,14 +196,19 @@ object ImportExport {
             }.getOrNull() ?: return shapeError("les séances importées du cahier de textes sont illisibles")
         }
         val schema = root["schemaVersion"]?.let { (it as? JsonPrimitive)?.content?.toIntOrNull() ?: return shapeError("la version du document est illisible") } ?: 1
-        if (schema !in 1..2) return shapeError("cette version nécessite une app plus récente")
-        val programmes = if (schema == 2) runCatching {
+        if (schema !in 1..3) return shapeError("cette version nécessite une app plus récente")
+        val programmes = if (schema >= 2) runCatching {
             json.decodeFromJsonElement(ListSerializer(fr.jmethod.app.model.RevisionProgramme.serializer()), root.getValue("programmes"))
         }.getOrNull() ?: return shapeError("les programmes sont illisibles") else emptyList()
-        if (schema == 2) {
-            val candidate = AppDocument(courses = courses, revisions = revisions, subjects = subjects ?: emptyList(), settings = settings ?: AppSettings(), programmes = programmes, schemaVersion = 2)
+        // Un document v3 sans journal (journal local abandonné) démarre un nouveau suivi ; un journal présent doit être valide.
+        val rawStreak = root["streakState"]?.takeUnless { it is kotlinx.serialization.json.JsonNull }
+        val streak = if (schema >= 3 && rawStreak != null) runCatching {
+            json.decodeFromJsonElement(fr.jmethod.app.model.StreakState.serializer(), rawStreak).also(RevisionStreak::validate)
+        }.getOrNull() ?: return shapeError("le journal de révision est illisible ou incohérent") else null
+        if (schema >= 2) {
+            val candidate = AppDocument(courses = courses, revisions = revisions, subjects = subjects ?: emptyList(), settings = settings ?: AppSettings(), programmes = programmes, schemaVersion = schema, streakState = streak)
             if (runCatching { RevisionProgrammes.validateDocument(candidate, checkSubjects = subjects != null) }.isFailure) return shapeError("les feuilles, programmes ou rythmes sont incohérents")
         }
-        return Result.Accepted(courses, revisions, subjects, settings, imports, programmes, schema)
+        return Result.Accepted(courses, revisions, subjects, settings, imports, programmes, schema, streak)
     }
 }

@@ -16,7 +16,7 @@ object RevisionProgrammes {
     }
 
     fun validateDocument(document: AppDocument, checkSubjects: Boolean = true) {
-        require(document.schemaVersion == 2)
+        require(document.schemaVersion in 2..3)
         require(document.courses.map { it.id }.distinct().size == document.courses.size)
         require(document.revisions.map { it.id }.distinct().size == document.revisions.size)
         require(document.programmes.map { it.id }.distinct().size == document.programmes.size)
@@ -60,7 +60,7 @@ object RevisionProgrammes {
                 status = RevisionStatus.PENDING, phase = step.phase, adjustedIntervalDays = if (index == 0) 0 else step.offsetDays-rhythm.steps[index-1].offsetDays,
                 programmeId = id, courseIds = courseIds.toList(), rhythmStepId = step.id, nominalOffsetDays = step.offsetDays)
         }
-        return document.copy(programmes = document.programmes + programme, revisions = document.revisions + sessions, schemaVersion = 2)
+        return document.copy(programmes = document.programmes + programme, revisions = document.revisions + sessions, schemaVersion = maxOf(document.schemaVersion, 2))
     }
 
     /** Préserve les séances déjà faites et les rattrapages ; les étapes passées sont dues, jamais validées implicitement. */
@@ -87,8 +87,8 @@ object RevisionProgrammes {
 
     /** Conversion à une feuille par programme : aucun regroupement arbitraire et aucune date déplacée. */
     fun migrate(document: AppDocument): AppDocument {
-        require(document.schemaVersion <= 2) { "Cette sauvegarde nécessite une version plus récente de J-Method." }
-        if (document.schemaVersion == 2) return document
+        require(document.schemaVersion <= 3) { "Cette sauvegarde nécessite une version plus récente de J-Method." }
+        if (document.schemaVersion >= 2) return document
         var sessions = document.revisions
         val programmes = document.programmes.toMutableList()
         for (course in document.courses) {

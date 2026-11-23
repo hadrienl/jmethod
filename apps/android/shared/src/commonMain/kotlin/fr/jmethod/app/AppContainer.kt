@@ -41,6 +41,7 @@ class AppContainer(
         store = AppDocumentStore(File(filesDir, DATA_FILE)),
         scope = scope,
         io = Dispatchers.IO,
+        clock = clock,
     )
 
     /** Un seul verrou Pronote par processus, partagé par l’app et la synchronisation d’arrière-plan. */

@@ -42,7 +42,7 @@ enum RevisionProgrammes {
     }
     static func validateDocument(_ document: AppDocument, checkSubjects: Bool = true) throws {
         func require(_ condition: Bool) throws { if !condition { throw Failure(message: "Les feuilles, programmes ou rythmes sont incohérents.") } }
-        try require(document.schemaVersion == 2)
+        try require((2...3).contains(document.schemaVersion))
         try require(Set(document.courses.map(\.id)).count == document.courses.count)
         try require(Set(document.revisions.map(\.id)).count == document.revisions.count)
         try require(Set(document.programmes.map(\.id)).count == document.programmes.count)
@@ -80,7 +80,7 @@ enum RevisionProgrammes {
                                           rhythmSnapshot: rhythm, adaptiveEnabled: document.settings.adaptiveEnabled)
         var result = document
         result.programmes.append(programme)
-        result.schemaVersion = 2
+        result.schemaVersion = max(document.schemaVersion, 2)
         result.revisions += try rhythm.steps.enumerated().map { index, step in
             guard let date = SchoolDay.adding(step.offsetDays, to: startDate) else { throw Failure(message: "Date invalide.") }
             return Revision(id: "\(id)-\(step.id)", courseId: courseIds[0], stepIndex: index, stepLabel: "J\(step.offsetDays)",
@@ -143,7 +143,7 @@ enum RevisionProgrammes {
                 : RevisionRhythm(id: "custom-legacy", name: "Rythme personnalisé", revision: 1,
                     steps: result.settings.intervals.enumerated().map { index, day in RhythmStep(id: "day-\(day)", offsetDays: day, phase: AdaptiveAlgorithm.phase(forStep: index)) })
         }
-        result.schemaVersion = 2
+        result.schemaVersion = max(document.schemaVersion, 2)
         return result
     }
     static func nominalDay(_ label: String) -> Int? {

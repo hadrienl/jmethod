@@ -4,6 +4,10 @@ import fr.jmethod.app.data.AppDocumentCodec
 import fr.jmethod.app.domain.ImportExport
 import fr.jmethod.app.domain.SettingsLogic
 import fr.jmethod.app.domain.StatsModel
+import fr.jmethod.app.domain.RevisionStreak
+import fr.jmethod.app.model.RevisionDay
+import fr.jmethod.app.model.RevisionDayStatus
+import fr.jmethod.app.model.StreakState
 import fr.jmethod.app.model.AppDocument
 import fr.jmethod.app.model.AppSettings
 import fr.jmethod.app.model.Course
@@ -129,17 +133,28 @@ class StatsSettingsVectorsTest {
         status = if (completed != null) RevisionStatus.COMPLETED else RevisionStatus.PENDING, phase = Phase.ENCODAGE,
     )
 
+    /** D3 (#7) : la série vient du journal des journées, jamais des anciennes validations « au moins une séance ». */
     @Test
-    fun d3StreakCountsConsecutiveDaysUpToTodayOrYesterday() {
-        val days = listOf("2026-11-17", "2026-11-16", "2026-11-16", "2026-11-15", "2026-11-13")
-        val revisions = days.mapIndexed { i, d -> revision("r$i", d) } + revision("p", null)
-        assertEquals(3, StatsModel.streak(revisions, today))
-        // Rien aujourd’hui : la série part d’hier.
-        assertEquals(2, StatsModel.streak(revisions.filter { it.completedDate != "2026-11-17" }, today))
-        assertEquals(0, StatsModel.streak(revisions.filter { it.completedDate == "2026-11-13" }, today))
-        assertEquals(0, StatsModel.streak(emptyList(), today))
-        val model = StatsModel.build(emptyList(), revisions, emptyList(), today)
-        assertEquals("3 j", model.streakLabel)
+    fun d3StreakComesFromTheRevisionDayJournal() {
+        fun day(date: String, status: RevisionDayStatus): RevisionDay {
+            val required = if (status == RevisionDayStatus.REST) emptyList() else listOf("r-$date")
+            return RevisionDay(date, required, if (status == RevisionDayStatus.EARNED) required else emptyList(),
+                "${date}T17:00:00.000Z", "${date}T22:00:00.000Z", status)
+        }
+        val state = StreakState("2026-11-13", "2026-11-17", days = listOf(
+            day("2026-11-13", RevisionDayStatus.EARNED), day("2026-11-14", RevisionDayStatus.MISSED),
+            day("2026-11-15", RevisionDayStatus.EARNED), day("2026-11-16", RevisionDayStatus.REST), day("2026-11-17", RevisionDayStatus.EARNED)))
+        RevisionStreak.validate(state)
+        val legacy = listOf("2026-11-17", "2026-11-16", "2026-11-15").mapIndexed { i, d -> revision("r$i", d) }
+        val empty = StatsModel.build(emptyList(), legacy, emptyList(), today)
+        assertEquals(0, empty.streakDays)
+        assertEquals("0", empty.streakLabel)
+        assertEquals("0 journée de révision · Record : 0 journée", empty.streakLine)
+        val model = StatsModel.build(emptyList(), legacy, emptyList(), today, state)
+        assertEquals(2, model.streakDays)
+        assertEquals("2", model.streakLabel)
+        assertEquals("Flamme gagnée ! · Record : 2 journées", model.streakLine)
+        assertEquals("1 journée", RevisionStreak.days(1))
     }
 
     @Test

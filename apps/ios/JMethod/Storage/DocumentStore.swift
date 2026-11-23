@@ -17,7 +17,11 @@ actor DocumentStore {
 
     nonisolated let url: URL
     private var v2URL: URL { url.deletingLastPathComponent().appendingPathComponent(url.deletingPathExtension().lastPathComponent + "-v2.json") }
-    private var readableURL: URL { FileManager.default.fileExists(atPath: v2URL.path) ? v2URL : url }
+    private var v3URL: URL { url.deletingLastPathComponent().appendingPathComponent(url.deletingPathExtension().lastPathComponent + "-v3.json") }
+    private var readableURL: URL {
+        if FileManager.default.fileExists(atPath: v3URL.path) { return v3URL }
+        return FileManager.default.fileExists(atPath: v2URL.path) ? v2URL : url
+    }
     private var lastWrittenVersion = 0
 
     init(url: URL) { self.url = url }
@@ -41,7 +45,7 @@ actor DocumentStore {
         guard version > lastWrittenVersion else { return }
         do {
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try Self.encode(document).write(to: document.schemaVersion >= 2 ? v2URL : url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            try Self.encode(document).write(to: document.schemaVersion >= 3 ? v3URL : document.schemaVersion >= 2 ? v2URL : url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
             lastWrittenVersion = version
         } catch {
             throw Failure.unwritable

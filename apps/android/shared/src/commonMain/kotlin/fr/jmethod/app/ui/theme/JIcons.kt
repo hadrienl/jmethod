@@ -28,6 +28,9 @@ object JIcons {
         .addPath(addPathNodes("M35,40a8,8 0,1 1,16 0a8,8 0,1 1,-16 0z"), fill = SolidColor(Color(0xFFD9F99D)))
         .build()
 
+    /** Flamme du journal des journées, silhouette statique. */
+    val Flame = icon("Flame", "M13,2C14,7 8,8 10,12C7,11 6,9 6,7C2,12 3,17 6,20C9,23 15,23 18,20C23,15 19,8 13,2ZM12,20C9,20 8,18 9,16C10,14 12,14 13,11C14,14 17,17 15,19C14,20 13,20 12,20Z")
+
     /** Progrès : trois barres montantes. */
     val Stats = icon("Stats", "M4,13h4v7H4zM10,8h4v12h-4zM16,4h4v16h-4z")
 

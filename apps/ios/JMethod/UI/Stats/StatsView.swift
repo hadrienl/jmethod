@@ -7,7 +7,7 @@ struct StatsView: View {
 
     var body: some View {
         let document = app.document
-        let model = StatsScreen(courses: document.courses, revisions: document.revisions, subjects: document.subjects, today: app.today)
+        let model = StatsScreen(courses: document.courses, revisions: document.revisions, subjects: document.subjects, today: app.today, streakState: document.streakState)
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.m) {
@@ -19,8 +19,8 @@ struct StatsView: View {
                         Metric(title: "Score moyen", value: model.overallAvgScore.map { "\($0)/100" } ?? model.overallAvgLabel, line: model.balanceLabel,
                                icon: "gauge.with.dots.needle.50percent",
                                spoken: model.overallAvgScore.map { "Score moyen : \($0) sur 100" } ?? "Score moyen : pas encore de note")
-                        Metric(title: "Régularité", value: model.streakLabel, line: model.streakLine, icon: "flame",
-                               spoken: "Régularité : \(model.streakDays) \(model.streakDays > 1 ? "jours consécutifs" : "jour")")
+                        Metric(title: "Journées de révision", value: model.streakLabel, line: model.streakLine, icon: "flame",
+                               spoken: "\(RevisionStreak.days(model.streakDays)) de révision. \(model.streakLine)")
                         Metric(title: "Cours suivis", value: "\(model.coursesCount)", line: model.subjectsLine, icon: "books.vertical")
                     }
 
