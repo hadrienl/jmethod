@@ -148,6 +148,23 @@ class SubjectColorPickerTest {
     }
 
     @Test
+    fun retypingTheDisplayedCodeDoesNotMoveTheCursors() = runBlocking {
+        viewModel.openSubjectColor(repository.current().subjects.first().id)
+        // Couleur peu saturée : relire son code arrondi donnerait une autre teinte (220° au lieu de 205°).
+        viewModel.editSubjectColor { it.withHue(205.0).withSquare(0.02, 0.5) }
+        val shown = picker()!!
+        for (input in listOf(shown.hex.lowercase(), shown.hex.removePrefix("#"), shown.hex)) {
+            viewModel.editSubjectColor { it.withText(input) }
+            val draft = picker()!!
+            assertEquals(input, draft.text)
+            assertEquals(205.0, draft.hue, 1e-9)
+            assertEquals(0.02, draft.saturation, 1e-9)
+            assertEquals(0.5, draft.value, 1e-9)
+            assertEquals(shown.hex, draft.hex)
+        }
+    }
+
+    @Test
     fun subjectDeletedDuringEditingIsNotRecreated() = runBlocking {
         val subject = repository.current().subjects.first()
         viewModel.openSubjectColor(subject.id)

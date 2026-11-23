@@ -65,6 +65,8 @@ data class SubjectColorDraft(
     fun withText(input: String): SubjectColorDraft {
         val text = input.take(MAX_INPUT)
         val code = ColorWheel.normalized(text) ?: return copy(text = text, failure = null)
+        // Code déjà affiché (retapé, casse ou « # » différents) : les curseurs ne bougent pas, même peu saturés.
+        if (code == hex) return copy(text = text, failure = null)
         val color = ColorWheel.hsv(code, hsv) ?: return copy(text = text, failure = null)
         return copy(hue = color.hue, saturation = color.saturation, value = color.value, hex = code, text = text, failure = null)
     }

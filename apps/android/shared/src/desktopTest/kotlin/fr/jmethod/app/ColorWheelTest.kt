@@ -47,6 +47,7 @@ class ColorWheelTest {
         items("contrast").forEach {
             assertEquals(it.getValue("ratio").jsonPrimitive.double, ColorWheel.contrast(it.getValue("a").jsonPrimitive.content, it.getValue("b").jsonPrimitive.content)!!, 1e-4)
         }
+        items("name").forEach { assertEquals("name ${it["hsv"]}", it.getValue("name").jsonPrimitive.content, ColorWheel.name(triple(it.getValue("hsv")))) }
         items("needsOutline").forEach {
             val hex = it.getValue("hex").jsonPrimitive.content
             assertEquals("outline $hex", it.getValue("outline").jsonPrimitive.boolean, ColorWheel.needsOutline(hex))

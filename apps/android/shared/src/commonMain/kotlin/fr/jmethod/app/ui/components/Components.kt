@@ -201,9 +201,10 @@ internal val SubjectOutlineColor = JColors.Slate500
 
 /**
  * Règle unique de contraste des couleurs de matière (#8), partagée par l’app et l’aperçu du sélecteur :
- * la couleur brute est conservée et reçoit un contour neutre si elle est trop claire sur blanc.
+ * la couleur brute est conservée et reçoit un contour neutre si elle est trop claire sur blanc, ou si
+ * son code est illisible (`needsOutline`, comme iOS).
  */
-internal fun subjectNeedsOutline(hex: String?): Boolean = hex != null && ColorWheel.normalized(hex)?.let(ColorWheel::needsOutline) == true
+internal fun subjectNeedsOutline(hex: String?): Boolean = hex != null && ColorWheel.needsOutline(hex)
 
 /** Fond d’une pastille de matière (couleur brute), contour neutre si elle est trop claire. */
 internal fun Modifier.subjectFill(hex: String?, shape: Shape): Modifier {

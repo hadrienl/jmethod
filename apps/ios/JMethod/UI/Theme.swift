@@ -256,12 +256,17 @@ struct SubjectDot: View {
     }
 }
 
-/// Filet de couleur de matière en bord de tuile (Planning, aperçu du sélecteur).
+/// Filet de couleur de matière en bord de tuile (Planning, aperçu du sélecteur). La largeur colorée reste entière ;
+/// une couleur trop claire reçoit un trait neutre de 1 pt seulement sur son bord intérieur (côté contenu).
 struct SubjectColorBar: View {
     let color: String
     var width: CGFloat = 4
     var body: some View {
-        Rectangle().subjectFill(color).frame(width: width).accessibilityHidden(true)
+        HStack(spacing: 0) {
+            Rectangle().fill(Color(hex: color)).frame(width: width)
+            if ColorWheel.needsOutline(color) { Rectangle().fill(Theme.textMuted).frame(width: 1) }
+        }
+        .accessibilityHidden(true)
     }
 }
 

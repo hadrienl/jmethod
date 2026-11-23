@@ -115,7 +115,8 @@ private struct SubjectBar: View {
                 Spacer(minLength: Spacing.xs)
                 Text("\(row.rate) %").font(.subheadline.weight(.bold).monospacedDigit()).foregroundStyle(Theme.violetDark)
             }
-            ProgressBar(percent: row.rate, height: 6, tint: Color(hex: row.subject.color), track: Color(hex: "#F1F5F9"))
+            ProgressBar(percent: row.rate, height: 6, tint: Color(hex: row.subject.color), track: Color(hex: "#F1F5F9"),
+                        outline: ColorWheel.needsOutline(row.subject.color) ? Theme.textMuted : nil)
             HStack(alignment: .firstTextBaseline) {
                 Text(row.line).font(.footnote).foregroundStyle(Theme.textSecondary)
                 Spacer(minLength: Spacing.xs)

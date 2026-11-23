@@ -107,6 +107,21 @@ object ColorWheel {
     fun squarePoint(saturation: Double, value: Double, width: Double, height: Double): Pair<Double, Double> =
         saturation.coerceIn(0.0, 1.0) * width to (1 - value.coerceIn(0.0, 1.0)) * height
 
+    /** Nom approximatif annoncé par VoiceOver et TalkBack, identique sur les deux plateformes. */
+    fun name(color: HSV): String = when {
+        color.value < 0.1 -> "noir"
+        color.saturation < 0.1 -> if (color.value > 0.9) "blanc" else "gris"
+        color.hue < 15 -> "rouge"
+        color.hue < 45 -> "orange"
+        color.hue < 70 -> "jaune"
+        color.hue < 150 -> "vert"
+        color.hue < 200 -> "cyan"
+        color.hue < 260 -> "bleu"
+        color.hue < 290 -> "violet"
+        color.hue < 345 -> "rose"
+        else -> "rouge"
+    }
+
     /** Luminance relative WCAG 2. */
     fun luminance(hex: String): Double? {
         val (r, g, b) = rgb(hex) ?: return null

@@ -6,9 +6,13 @@ import Foundation
 struct SubjectColorDraft: Equatable, Sendable {
     /// Repli d'une couleur enregistrée illisible : gris neutre de `Color(hex:)`.
     static let fallback = "#94A3B8"
-    /// Pas des flèches et des ajustements VoiceOver.
-    static let hueStep = 5.0
-    static let levelStep = 0.05
+    /// Flèches du clavier : 1° ou 1 % par appui, 10 fois plus avec Maj.
+    static let keyHueStep = 1.0
+    static let keyLevelStep = 0.01
+    static let shiftMultiplier = 10.0
+    /// Ajustements VoiceOver : 5° (la teinte boucle de 359 à 0) et 5 %.
+    static let voiceOverHueStep = 5.0
+    static let voiceOverLevelStep = 0.05
     static let invalidMessage = "Code attendu : 6 chiffres hexadécimaux, par exemple #2563EB."
 
     let subjectId: String
@@ -42,10 +46,13 @@ struct SubjectColorDraft: Equatable, Sendable {
         apply(ColorWheel.HSV(hue: color.hue, saturation: saturation, value: value))
     }
 
-    /// Flèches et VoiceOver : la teinte fait le tour, saturation et luminosité sont bornées.
-    mutating func adjustHue(steps: Int) { setHue(color.hue + Double(steps) * Self.hueStep) }
-    mutating func adjustSaturation(steps: Int) { setSaturation(Self.snapped(color.saturation, steps), value: color.value) }
-    mutating func adjustValue(steps: Int) { setSaturation(color.saturation, value: Self.snapped(color.value, steps)) }
+    /// Flèches et VoiceOver : la teinte boucle (359 ↔ 0), saturation et luminosité sont bornées à [0, 1].
+    mutating func adjustHue(by degrees: Double) { setHue(color.hue + degrees) }
+    mutating func adjustSaturation(by delta: Double) { setSaturation(Self.snapped(color.saturation, delta), value: color.value) }
+    mutating func adjustValue(by delta: Double) { setSaturation(color.saturation, value: Self.snapped(color.value, delta)) }
+
+    /// Pas d'une flèche du clavier, multiplié par 10 avec Maj.
+    static func keyStep(_ base: Double, shift: Bool) -> Double { shift ? base * shiftMultiplier : base }
 
     private mutating func apply(_ next: ColorWheel.HSV) {
         color = next
@@ -53,10 +60,12 @@ struct SubjectColorDraft: Equatable, Sendable {
         text = hex
     }
 
-    /// Pas de 5 % aligné sur la grille, pour que l'annonce tombe sur une valeur ronde.
-    private static func snapped(_ level: Double, _ steps: Int) -> Double {
-        let grid = (level / levelStep).rounded() * levelStep
-        return min(1, max(0, grid + Double(steps) * levelStep))
+    /// Valeur ramenée sur la grille du pas avant l'ajout, pour que l'annonce tombe sur une valeur ronde.
+    private static func snapped(_ level: Double, _ delta: Double) -> Double {
+        let step = abs(delta)
+        guard step > 0 else { return level }
+        let grid = (level / step).rounded() * step
+        return min(1, max(0, ((grid + delta) * 1e6).rounded() / 1e6))
     }
 
     // MARK: Champ hexadécimal
@@ -78,20 +87,8 @@ struct SubjectColorDraft: Equatable, Sendable {
     // MARK: Annonces
 
     var hueDegrees: Int { Int(color.hue.rounded()) % 360 }
-    /// Nom approximatif de la teinte, pour VoiceOver.
-    var hueName: String {
-        switch color.hue {
-        case ..<15: "rouge"
-        case ..<45: "orange"
-        case ..<70: "jaune"
-        case ..<165: "vert"
-        case ..<195: "cyan"
-        case ..<255: "bleu"
-        case ..<285: "violet"
-        case ..<335: "rose"
-        default: "rouge"
-        }
-    }
+    /// Nom commun annoncé par VoiceOver (même table que TalkBack).
+    var colorName: String { ColorWheel.name(color) }
     var saturationPercent: Int { Int((color.saturation * 100).rounded()) }
     var valuePercent: Int { Int((color.value * 100).rounded()) }
 }

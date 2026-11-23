@@ -97,6 +97,23 @@ enum ColorWheel {
         (min(1, max(0, saturation)) * width, (1 - min(1, max(0, value))) * height)
     }
 
+    /// Nom approximatif annoncé par VoiceOver et TalkBack, identique sur les deux plateformes.
+    static func name(_ color: HSV) -> String {
+        if color.value < 0.1 { return "noir" }
+        if color.saturation < 0.1 { return color.value > 0.9 ? "blanc" : "gris" }
+        switch color.hue {
+        case ..<15: return "rouge"
+        case ..<45: return "orange"
+        case ..<70: return "jaune"
+        case ..<150: return "vert"
+        case ..<200: return "cyan"
+        case ..<260: return "bleu"
+        case ..<290: return "violet"
+        case ..<345: return "rose"
+        default: return "rouge"
+        }
+    }
+
     /// Luminance relative WCAG 2.
     static func luminance(_ hex: String) -> Double? {
         guard let (r, g, b) = rgb(hex) else { return nil }

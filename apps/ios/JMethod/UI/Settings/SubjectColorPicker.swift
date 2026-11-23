@@ -1,14 +1,19 @@
 import SwiftUI
 
 /// État du sélecteur de couleur d'une matière : brouillon local et enregistrement confirmé (#8).
-/// Rien n'est écrit avant `save()` ; un échec garde le brouillon et explique comment réessayer.
+/// Rien n'est écrit avant `confirm()` ; un échec garde le brouillon et explique comment réessayer.
 @Observable
 @MainActor
 final class SubjectColorEditor {
     let subjectName: String
-    var draft: SubjectColorDraft
+    var draft: SubjectColorDraft {
+        // L'erreur d'écriture précédente s'efface dès que la couleur change.
+        didSet { if draft.hex != oldValue.hex || draft.candidate != oldValue.candidate { saveError = nil } }
+    }
     private(set) var saving = false
     private(set) var saveError: String?
+    /// Annuler, la croix, Échap ou la fermeture de la feuille : plus aucune écriture possible.
+    private(set) var cancelled = false
     @ObservationIgnored private let app: AppModel
 
     init(app: AppModel, subject: Subject) {
@@ -17,11 +22,18 @@ final class SubjectColorEditor {
         draft = SubjectColorDraft(subject: subject)
     }
 
-    /// Vrai après une écriture réussie : la feuille peut se fermer. Un code invalide n'est jamais envoyé.
-    func save() async -> Bool {
-        guard !saving else { return false }
+    /// Faux si la matière a été supprimée pendant l'édition (restauration) : elle ne sera pas recréée.
+    var subjectExists: Bool { app.subject(id: draft.subjectId) != nil }
+    var canConfirm: Bool { draft.canSave && subjectExists && !saving && !cancelled }
+    /// Message sous l'aperçu : matière supprimée (permanent) ou échec de la dernière écriture.
+    var message: String? { subjectExists ? saveError : AppModel.SubjectColorFailure.subjectMissing.errorDescription }
+
+    /// Enregistrer, ou Entrée (champ, anneau, carré). Vrai après une écriture réussie : la feuille peut se fermer.
+    /// Un code invalide n'est jamais envoyé : rien ne se passe et l'erreur du champ reste affichée.
+    func confirm() async -> Bool {
+        guard !saving, !cancelled else { return false }
         draft.commitText()
-        guard let color = draft.candidate else { return false }
+        guard let color = draft.candidate, subjectExists else { return false }
         saving = true
         saveError = nil
         defer { saving = false }
@@ -33,10 +45,16 @@ final class SubjectColorEditor {
             return false
         }
     }
+
+    /// Abandon du brouillon ; sans effet pendant une écriture (la fermeture est alors désactivée).
+    func cancel() {
+        guard !saving else { return }
+        cancelled = true
+    }
 }
 
 /// Feuille « Couleur de la matière » : anneau de teinte, carré saturation/luminosité, code hexadécimal, aperçu.
-/// Annuler, la croix, Échap et le glissement vers le bas abandonnent le brouillon.
+/// Annuler (« Fermer » si la matière a été supprimée), la croix, Échap et le glissement vers le bas abandonnent le brouillon.
 struct SubjectColorPicker: View {
     enum Control: Hashable { case ring, square, hex }
 
@@ -61,7 +79,7 @@ struct SubjectColorPicker: View {
                     ColorWheelControl(draft: $editor.draft, focus: $focus, onConfirm: save)
                     selectedColor
                     SubjectColorPreview(subjectName: editor.subjectName, color: editor.draft.hex)
-                    if let error = editor.saveError {
+                    if let error = editor.message {
                         Label(error, systemImage: "exclamationmark.triangle.fill")
                             .font(.subheadline).foregroundStyle(Theme.danger)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -74,7 +92,7 @@ struct SubjectColorPicker: View {
                 .frame(maxWidth: .infinity)
                 .onKeyPress(.escape) {
                     guard !editor.saving else { return .ignored }
-                    dismiss()
+                    close()
                     return .handled
                 }
             }
@@ -83,7 +101,7 @@ struct SubjectColorPicker: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button { dismiss() } label: { Image(systemName: "xmark").frame(minWidth: 44, minHeight: 44) }
+                    Button(action: close) { Image(systemName: "xmark").frame(minWidth: 44, minHeight: 44) }
                         .disabled(editor.saving)
                         .accessibilityLabel("Fermer sans enregistrer")
                 }
@@ -93,6 +111,8 @@ struct SubjectColorPicker: View {
             // Sortie du champ : un code valide est normalisé, une saisie incomplète reste telle quelle.
             if previous == .hex, current != .hex { editor.draft.commitText() }
         }
+        // Glissement vers le bas : le brouillon est abandonné comme avec Annuler.
+        .onDisappear { editor.cancel() }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
         .interactiveDismissDisabled(editor.saving)
@@ -115,7 +135,8 @@ struct SubjectColorPicker: View {
                     .font(.body.monospaced())
                     .inputField(invalid: error != nil)
                     .focused($focus, equals: .hex)
-                    .onSubmit { editor.draft.commitText() }
+                    // Entrée : enregistre et ferme si le code est valide ; sinon rien, l'erreur reste affichée.
+                    .onSubmit { editor.draft.commitText(); save() }
                     .accessibilityLabel("Code hexadécimal de la couleur")
                     .accessibilityHint(error ?? "Six chiffres hexadécimaux, avec ou sans dièse")
             }
@@ -135,7 +156,7 @@ struct SubjectColorPicker: View {
     }
 
     private var cancelButton: some View {
-        Button("Annuler") { dismiss() }
+        Button(editor.subjectExists ? "Annuler" : "Fermer", action: close)
             .buttonStyle(SecondaryButtonStyle())
             .keyboardShortcut(.cancelAction)
             .disabled(editor.saving)
@@ -151,14 +172,19 @@ struct SubjectColorPicker: View {
         }
         .buttonStyle(PrimaryButtonStyle())
         .keyboardShortcut(.defaultAction)
-        .disabled(!editor.draft.canSave || editor.saving)
+        .disabled(!editor.canConfirm)
         .accessibilityHint(editor.draft.canSave ? "Applique cette couleur à \(editor.subjectName)" : "Corrige le code couleur pour enregistrer")
     }
 
+    private func close() {
+        editor.cancel()
+        dismiss()
+    }
+
     private func save() {
-        guard editor.draft.canSave, !editor.saving else { return }
+        guard editor.canConfirm else { return }
         Task {
-            if await editor.save() {
+            if await editor.confirm() {
                 dismiss()
             } else if let error = editor.saveError {
                 AccessibilityNotification.Announcement(error).post()
@@ -220,17 +246,18 @@ private struct ColorWheelControl: View {
         .focused(focus, equals: .ring)
         .focusEffectDisabled()
         .onKeyPress(keys: [.leftArrow, .rightArrow, .upArrow, .downArrow]) { press in
-            draft.adjustHue(steps: press.key == .rightArrow || press.key == .upArrow ? 1 : -1)
+            let step = SubjectColorDraft.keyStep(SubjectColorDraft.keyHueStep, shift: press.modifiers.contains(.shift))
+            draft.adjustHue(by: press.key == .rightArrow || press.key == .upArrow ? step : -step)
             return .handled
         }
         .onKeyPress(.return) { confirm() }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Teinte")
-        .accessibilityValue("\(draft.hueDegrees) degrés, \(draft.hueName)")
+        .accessibilityValue("\(draft.hueDegrees) degrés, \(draft.colorName)")
         .accessibilityAdjustableAction { direction in
             switch direction {
-            case .increment: draft.adjustHue(steps: 1)
-            case .decrement: draft.adjustHue(steps: -1)
+            case .increment: draft.adjustHue(by: SubjectColorDraft.voiceOverHueStep)
+            case .decrement: draft.adjustHue(by: -SubjectColorDraft.voiceOverHueStep)
             @unknown default: break
             }
         }
@@ -260,11 +287,13 @@ private struct ColorWheelControl: View {
         .focused(focus, equals: .square)
         .focusEffectDisabled()
         .onKeyPress(keys: [.leftArrow, .rightArrow, .upArrow, .downArrow]) { press in
+            // Un seul arrêt de Tab : gauche/droite pour la saturation, haut/bas pour la luminosité.
+            let step = SubjectColorDraft.keyStep(SubjectColorDraft.keyLevelStep, shift: press.modifiers.contains(.shift))
             switch press.key {
-            case .leftArrow: draft.adjustSaturation(steps: -1)
-            case .rightArrow: draft.adjustSaturation(steps: 1)
-            case .upArrow: draft.adjustValue(steps: 1)
-            default: draft.adjustValue(steps: -1)
+            case .leftArrow: draft.adjustSaturation(by: -step)
+            case .rightArrow: draft.adjustSaturation(by: step)
+            case .upArrow: draft.adjustValue(by: step)
+            default: draft.adjustValue(by: -step)
             }
             return .handled
         }
@@ -275,15 +304,17 @@ private struct ColorWheelControl: View {
             VStack(spacing: 0) {
                 Rectangle()
                     .accessibilityLabel("Saturation")
-                    .accessibilityValue("\(draft.saturationPercent) %")
+                    .accessibilityValue("\(draft.saturationPercent) %, \(draft.colorName)")
                     .accessibilityAdjustableAction { direction in
-                        draft.adjustSaturation(steps: direction == .increment ? 1 : -1)
+                        let step = SubjectColorDraft.voiceOverLevelStep
+                        draft.adjustSaturation(by: direction == .increment ? step : -step)
                     }
                 Rectangle()
                     .accessibilityLabel("Luminosité")
-                    .accessibilityValue("\(draft.valuePercent) %")
+                    .accessibilityValue("\(draft.valuePercent) %, \(draft.colorName)")
                     .accessibilityAdjustableAction { direction in
-                        draft.adjustValue(steps: direction == .increment ? 1 : -1)
+                        let step = SubjectColorDraft.voiceOverLevelStep
+                        draft.adjustValue(by: direction == .increment ? step : -step)
                     }
             }
         }

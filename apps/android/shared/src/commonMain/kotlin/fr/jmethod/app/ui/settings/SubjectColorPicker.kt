@@ -171,7 +171,7 @@ fun SubjectColorPicker(
                     }
                 }
                 WheelControls(draft, onEdit, Modifier.align(Alignment.CenterHorizontally))
-                ChosenColor(draft, onEdit)
+                ChosenColor(draft, onEdit) { save() }
                 Preview(draft.hex, subjectName)
                 if (message != null) {
                     Text(
@@ -207,7 +207,8 @@ private fun Modifier.focusOutline(shape: Shape): Modifier {
         .onFocusChanged { focused = it.isFocused || it.hasFocus }
 }
 
-private enum class WheelPart { HUE, SATURATION, VALUE }
+/** Arrêts de Tab de la roue : l’anneau (teinte) et le carré (saturation et luminosité). */
+private enum class WheelPart { HUE, SQUARE }
 
 /** Géométrie de la roue en pixels, recalculée à chaque dessin et chaque geste (redimensionnement, densité). */
 private class WheelGeometry(side: Float, density: Density) {
@@ -238,7 +239,7 @@ private class WheelGeometry(side: Float, density: Density) {
     fun zone(point: Offset): WheelPart? {
         val inSquare = point.x in (square.left - squareSlop)..(square.right + squareSlop) &&
             point.y in (square.top - squareSlop)..(square.bottom + squareSlop)
-        if (inSquare) return WheelPart.SATURATION
+        if (inSquare) return WheelPart.SQUARE
         val distance = hypot(point.x - center.x, point.y - center.y)
         return if (distance in (inner - ringSlop)..(outer + ringSlop)) WheelPart.HUE else null
     }
@@ -252,7 +253,7 @@ private fun WheelControls(draft: SubjectColorDraft, onEdit: ((SubjectColorDraft)
     val edit by rememberUpdatedState(onEdit)
     var focused by remember { mutableStateOf<WheelPart?>(null) }
     val hueFocus = remember { FocusRequester() }
-    val saturationFocus = remember { FocusRequester() }
+    val squareFocus = remember { FocusRequester() }
     val density = LocalDensity.current
     val hue = draft.hue
     val saturation = draft.saturation
@@ -273,7 +274,7 @@ private fun WheelControls(draft: SubjectColorDraft, onEdit: ((SubjectColorDraft)
                         // Un geste reste attaché au contrôle où il a commencé ; hors des zones, il est ignoré.
                         val part = shape.zone(down.position) ?: return@awaitEachGesture
                         down.consume()
-                        if (down.type == PointerType.Mouse) runCatching { (if (part == WheelPart.HUE) hueFocus else saturationFocus).requestFocus() }
+                        if (down.type == PointerType.Mouse) runCatching { (if (part == WheelPart.HUE) hueFocus else squareFocus).requestFocus() }
                         fun apply(point: Offset) {
                             if (part == WheelPart.HUE) {
                                 ColorWheel.hue((point.x - shape.center.x).toDouble(), (point.y - shape.center.y).toDouble())
@@ -308,7 +309,7 @@ private fun WheelControls(draft: SubjectColorDraft, onEdit: ((SubjectColorDraft)
                     val focusStroke = Stroke(2.5.dp.toPx())
                     when (focused) {
                         WheelPart.HUE -> drawCircle(JColors.Violet700, radius = g.outer + 4.dp.toPx(), center = g.center, style = focusStroke)
-                        WheelPart.SATURATION, WheelPart.VALUE -> {
+                        WheelPart.SQUARE -> {
                             val gap = 4.dp.toPx()
                             drawRect(JColors.Violet700, Offset(topLeft.x - gap, topLeft.y - gap), Size(squareSize.width + 2 * gap, squareSize.height + 2 * gap), style = focusStroke)
                         }
@@ -319,17 +320,19 @@ private fun WheelControls(draft: SubjectColorDraft, onEdit: ((SubjectColorDraft)
                     val (x, y) = ColorWheel.squarePoint(saturation, value, g.square.width.toDouble(), g.square.height.toDouble())
                     cursor(Offset(g.square.left + x.toFloat(), g.square.top + y.toFloat()), current, 10.dp.toPx())
                 }
-                // Contrôles accessibles (lecteur d’écran, clavier) superposés à la roue : teinte sur l’anneau,
-                // saturation et luminosité sur le carré. Ils ne captent pas le pointeur.
+                val name = ColorWheel.name(draft.hsv)
+                // Contrôles accessibles superposés à la roue ; ils ne captent pas le pointeur.
+                // Teinte : un arrêt de Tab et un nœud réglable. Son intervalle déborde de 5° de chaque côté
+                // pour que le lecteur d’écran puisse toujours avancer ou reculer : 0° ↔ 355° et 359° → 4°.
                 Box(
                     Modifier.size(side)
                         .focusRequester(hueFocus)
                         .onFocusChanged { if (it.isFocused) focused = WheelPart.HUE else if (focused == WheelPart.HUE) focused = null }
-                        .onKeyEvent { event -> arrowStep(event, 1.0, 10.0) { step -> edit { it.stepHue(step) } } }
+                        .onKeyEvent { event -> arrowStep(event, horizontal = { step -> edit { it.stepHue(step) } }, vertical = { step -> edit { it.stepHue(step) } }, small = 1.0, big = 10.0) }
                         .semantics {
                             contentDescription = "Teinte"
-                            stateDescription = "${hue.roundToInt() % 360} degrés, ${hueName(hue)}"
-                            progressBarRangeInfo = ProgressBarRangeInfo(hue.toFloat().coerceIn(0f, 360f), 0f..360f)
+                            stateDescription = "${hue.roundToInt() % 360} degrés, $name"
+                            progressBarRangeInfo = ProgressBarRangeInfo(hue.toFloat(), -HUE_STEP..(360f + HUE_STEP), steps = HUE_STEPS)
                             setProgress { target -> edit { it.withHue(target.toDouble()) }; true }
                         }
                         .focusable(),
@@ -337,30 +340,39 @@ private fun WheelControls(draft: SubjectColorDraft, onEdit: ((SubjectColorDraft)
                 Box(
                     Modifier.offset { IntOffset(geometry.square.left.roundToInt(), geometry.square.top.roundToInt()) }.size(squareSide),
                 ) {
+                    // Clavier : un seul arrêt pour le carré, gauche/droite pour la saturation, haut/bas pour la luminosité.
+                    // Ce nœud ne s’annonce pas : le lecteur d’écran utilise les deux nœuds réglables ci-dessous.
                     Box(
                         Modifier.size(squareSide)
-                            .focusRequester(saturationFocus)
-                            .onFocusChanged { if (it.isFocused) focused = WheelPart.SATURATION else if (focused == WheelPart.SATURATION) focused = null }
-                            .onKeyEvent { event -> arrowStep(event, 0.01, 0.1) { step -> edit { it.stepSaturation(step) } } }
-                            .semantics {
-                                contentDescription = "Saturation"
-                                stateDescription = percent(saturation)
-                                progressBarRangeInfo = ProgressBarRangeInfo((saturation * 100).toFloat(), 0f..100f)
-                                setProgress { target -> edit { it.withSquare(target / 100.0, it.value) }; true }
+                            .focusRequester(squareFocus)
+                            .onFocusChanged { if (it.isFocused) focused = WheelPart.SQUARE else if (focused == WheelPart.SQUARE) focused = null }
+                            .onKeyEvent { event ->
+                                arrowStep(
+                                    event,
+                                    horizontal = { step -> edit { it.stepSaturation(step) } },
+                                    vertical = { step -> edit { it.stepValue(step) } },
+                                    small = 0.01, big = 0.1,
+                                )
                             }
+                            .clearAndSetSemantics {}
                             .focusable(),
                     )
+                    // Lecteur d’écran : saturation et luminosité réglables séparément, par pas de 5 %.
                     Box(
-                        Modifier.size(squareSide)
-                            .onFocusChanged { if (it.isFocused) focused = WheelPart.VALUE else if (focused == WheelPart.VALUE) focused = null }
-                            .onKeyEvent { event -> arrowStep(event, 0.01, 0.1) { step -> edit { it.stepValue(step) } } }
-                            .semantics {
-                                contentDescription = "Luminosité"
-                                stateDescription = percent(value)
-                                progressBarRangeInfo = ProgressBarRangeInfo((value * 100).toFloat(), 0f..100f)
-                                setProgress { target -> edit { it.withSquare(it.saturation, target / 100.0) }; true }
-                            }
-                            .focusable(),
+                        Modifier.size(squareSide).semantics {
+                            contentDescription = "Saturation"
+                            stateDescription = "${percent(saturation)}, $name"
+                            progressBarRangeInfo = ProgressBarRangeInfo((saturation * 100).toFloat(), 0f..100f, steps = PERCENT_STEPS)
+                            setProgress { target -> edit { it.withSquare(target / 100.0, it.value) }; true }
+                        },
+                    )
+                    Box(
+                        Modifier.size(squareSide).semantics {
+                            contentDescription = "Luminosité"
+                            stateDescription = "${percent(value)}, $name"
+                            progressBarRangeInfo = ProgressBarRangeInfo((value * 100).toFloat(), 0f..100f, steps = PERCENT_STEPS)
+                            setProgress { target -> edit { it.withSquare(it.saturation, target / 100.0) }; true }
+                        },
                     )
                 }
             }
@@ -373,16 +385,17 @@ private fun WheelControls(draft: SubjectColorDraft, onEdit: ((SubjectColorDraft)
                 fun part(kind: WheelPart, text: String) = if (focused == kind) withStyle(highlight) { append(text) } else append(text)
                 part(WheelPart.HUE, "Teinte ${hue.roundToInt() % 360}°")
                 append(" · ")
-                part(WheelPart.SATURATION, "Saturation ${percent(saturation)}")
+                part(WheelPart.SQUARE, "Saturation ${percent(saturation)}")
                 append(" · ")
-                part(WheelPart.VALUE, "Luminosité ${percent(value)}")
+                part(WheelPart.SQUARE, "Luminosité ${percent(value)}")
             },
             style = MaterialTheme.typography.bodySmall.tabular(), color = JColors.Slate600,
             modifier = Modifier.clearAndSetSemantics {},
         )
         if (focused != null) {
             Text(
-                "Flèches pour ajuster, Maj pour aller plus vite.",
+                if (focused == WheelPart.SQUARE) "Gauche et droite : saturation ; haut et bas : luminosité. Maj pour aller plus vite."
+                else "Flèches pour ajuster, Maj pour aller plus vite.",
                 style = MaterialTheme.typography.bodySmall, color = JColors.Slate500,
                 modifier = Modifier.clearAndSetSemantics {},
             )
@@ -390,30 +403,27 @@ private fun WheelControls(draft: SubjectColorDraft, onEdit: ((SubjectColorDraft)
     }
 }
 
-/** Flèches droite/haut pour augmenter, gauche/bas pour diminuer ; Maj : pas plus grand. */
-private fun arrowStep(event: KeyEvent, step: Double, bigStep: Double, apply: (Double) -> Unit): Boolean {
+/** Pas du lecteur d’écran : 5° pour la teinte (intervalle de -5 à 365), 5 % pour saturation et luminosité. */
+private const val HUE_STEP = 5f
+/** (365 - (-5)) / 5 = 74 intervalles, soit 73 valeurs intermédiaires. */
+private const val HUE_STEPS = 73
+private const val PERCENT_STEPS = 19
+
+/** Flèches : droite/haut augmentent, gauche/bas diminuent ; Maj : pas plus grand. */
+private fun arrowStep(event: KeyEvent, horizontal: (Double) -> Unit, vertical: (Double) -> Unit, small: Double, big: Double): Boolean {
     if (event.type != KeyEventType.KeyDown) return false
-    val direction = when (event.key) {
-        Key.DirectionRight, Key.DirectionUp -> 1
-        Key.DirectionLeft, Key.DirectionDown -> -1
+    val step = if (event.isShiftPressed) big else small
+    when (event.key) {
+        Key.DirectionRight -> horizontal(step)
+        Key.DirectionLeft -> horizontal(-step)
+        Key.DirectionUp -> vertical(step)
+        Key.DirectionDown -> vertical(-step)
         else -> return false
     }
-    apply(direction * if (event.isShiftPressed) bigStep else step)
     return true
 }
 
 private fun percent(fraction: Double) = "${(fraction * 100).roundToInt()} %"
-
-private fun hueName(hue: Double): String = when {
-    hue < 15 || hue >= 345 -> "rouge"
-    hue < 45 -> "orange"
-    hue < 70 -> "jaune"
-    hue < 160 -> "vert"
-    hue < 195 -> "cyan"
-    hue < 255 -> "bleu"
-    hue < 290 -> "violet"
-    else -> "rose"
-}
 
 /** Curseur à double contour (sombre, blanc, sombre) : visible sur blanc, noir et couleurs saturées. */
 private fun DrawScope.cursor(at: Offset, fill: Color, radius: Float) {
@@ -424,7 +434,12 @@ private fun DrawScope.cursor(at: Offset, fill: Color, radius: Float) {
 }
 
 @Composable
-private fun ChosenColor(draft: SubjectColorDraft, onEdit: ((SubjectColorDraft) -> SubjectColorDraft) -> Unit) {
+private fun ChosenColor(
+    draft: SubjectColorDraft,
+    onEdit: ((SubjectColorDraft) -> SubjectColorDraft) -> Unit,
+    /** Entrée ou « OK » du clavier : enregistre si le code est valide (sinon rien). */
+    save: () -> Unit,
+) {
     // Copie locale du champ : la saisie garde son curseur ; le champ ne reprend le brouillon qu’après un geste ou une validation.
     var field by remember(draft.subjectId) { mutableStateOf(TextFieldValue(draft.text, TextRange(draft.text.length))) }
     LaunchedEffect(draft.subjectId, draft.textRevision) {
@@ -460,8 +475,11 @@ private fun ChosenColor(draft: SubjectColorDraft, onEdit: ((SubjectColorDraft) -
                     capitalization = KeyboardCapitalization.Characters, autoCorrectEnabled = false,
                     keyboardType = KeyboardType.Ascii, imeAction = ImeAction.Done,
                 ),
-                keyboardActions = KeyboardActions(onDone = { onEdit { it.committed() } }),
+                keyboardActions = KeyboardActions(onDone = { onEdit { it.committed() }; save() }),
                 modifier = Modifier.weight(1f)
+                    // Entrée est traitée par « OK » du champ (clavier physique compris) : le relâchement ne
+                    // remonte pas au dialogue, pour ne pas demander l’enregistrement deux fois.
+                    .onKeyEvent { event -> (event.key == Key.Enter || event.key == Key.NumPadEnter) && event.type == KeyEventType.KeyUp }
                     .semantics { if (error != null) error(error) }
                     .onFocusChanged {
                         if (it.isFocused) hadFocus = true

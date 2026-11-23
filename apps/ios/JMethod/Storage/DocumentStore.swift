@@ -1,8 +1,15 @@
 import Foundation
 
+/// Persistance du document utilisée par `AppModel` ; `DocumentStore` en production, un double scripté en test.
+protocol DocumentPersistence: Actor {
+    func load() async throws -> AppDocument?
+    func save(_ document: AppDocument, version: Int) async throws
+    func archiveUnreadable() async throws
+}
+
 /// Lecture et écriture atomique du document JSON dans Application Support.
 /// Les écritures sont sérialisées par l'acteur ; un numéro de version écarte une sauvegarde plus ancienne arrivée en retard.
-actor DocumentStore {
+actor DocumentStore: DocumentPersistence {
     enum Failure: Error, LocalizedError, Equatable {
         case unreadable
         case unwritable

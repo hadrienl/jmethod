@@ -60,7 +60,7 @@ final class AppModel {
         }
     }
 
-    @ObservationIgnored private let store: DocumentStore?
+    @ObservationIgnored private let store: (any DocumentPersistence)?
     /// Fichiers des cours créés depuis le cahier de textes (Application Support, hors sauvegarde).
     @ObservationIgnored let documentStore: CourseDocumentStore
     @ObservationIgnored private let now: () -> Date
@@ -79,7 +79,7 @@ final class AppModel {
     /// Séance du cahier de textes en cours de transformation en cours (formulaire prérempli ouvert).
     var notebookDraft: NotebookCourseDraft?
 
-    init(store: DocumentStore?, now: @escaping () -> Date = Date.init, preferences: UserDefaults = .standard,
+    init(store: (any DocumentPersistence)?, now: @escaping () -> Date = Date.init, preferences: UserDefaults = .standard,
          documentStore: CourseDocumentStore = .live) {
         self.store = store
         self.documentStore = documentStore
@@ -151,7 +151,7 @@ final class AppModel {
     }
 
     /// Migration unique : retire les données de démonstration puis l'enregistre avant de la marquer faite.
-    private func migrateDemoDataIfNeeded(store: DocumentStore) async {
+    private func migrateDemoDataIfNeeded(store: any DocumentPersistence) async {
         guard !preferences.bool(forKey: Self.demoMigrationKey) else { return }
         let cleaned = DemoMigration.removingDemoData(from: document)
         if cleaned != document {
@@ -573,7 +573,7 @@ final class AppModel {
         var errorDescription: String? {
             switch self {
             case .invalidColor: SubjectColorDraft.invalidMessage
-            case .subjectMissing: "Cette matière n’existe plus : sa couleur n’a pas été enregistrée."
+            case .subjectMissing: "Cette matière n’existe plus : sa couleur ne peut pas être enregistrée."
             case .unwritable: "La couleur n’a pas pu être enregistrée sur l’iPhone. Réessaie."
             }
         }
@@ -590,9 +590,12 @@ final class AppModel {
         do {
             try await persistAndWait()
         } catch {
-            // Une autre modification a pu suivre pendant l'écriture : seule cette couleur est annulée.
+            // Une autre modification a pu suivre pendant l'écriture : seule cette couleur est annulée. Une écriture
+            // plus récente, lancée pendant l'attente, a pu enregistrer la nouvelle couleur : le disque est réaligné.
             if let index = document.subjects.firstIndex(where: { $0.id == subjectId }), document.subjects[index].color == normalized {
                 document.subjects[index].color = previous
+                // Le sélecteur affiche déjà l'échec : pas de second message si cette écriture échoue aussi.
+                persist(announcesFailure: false)
             }
             throw SubjectColorFailure.unwritable
         }
@@ -658,19 +661,22 @@ final class AppModel {
         try await store.save(next.document, version: next.version)
     }
 
-    private func persist() {
+    private func persist(announcesFailure: Bool = true) {
         let next: (document: AppDocument, version: Int)
         do { next = try nextSnapshot() }
-        catch { toast = .init(title: "Enregistrement impossible", message: error.localizedDescription, kind: .warning); return }
+        catch {
+            if announcesFailure { toast = .init(title: "Enregistrement impossible", message: error.localizedDescription, kind: .warning) }
+            return
+        }
         let snapshot = next.document
         let currentVersion = next.version
         guard let store else { return }
         Task { [weak self] in
             do {
                 try await store.save(snapshot, version: currentVersion)
-            } catch {
+            } catch where announcesFailure {
                 self?.toast = .init(title: "Enregistrement impossible", message: "Tes dernières modifications n’ont pas pu être enregistrées sur l’iPhone.", kind: .warning)
-            }
+            } catch {}
         }
     }
 
