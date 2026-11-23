@@ -64,6 +64,8 @@ struct ProgressBar: View {
     var height: CGFloat = 8
     var tint: Color = Theme.violet
     var track: Color = Theme.violetTrack
+    /// Contour de la partie remplie (couleur de matière trop claire : même contour neutre que les pastilles).
+    var outline: Color?
     /// Libellé VoiceOver ; sans libellé, la barre est décorative.
     var label: String?
 
@@ -72,6 +74,7 @@ struct ProgressBar: View {
             ZStack(alignment: .leading) {
                 Capsule().fill(track)
                 Capsule().fill(tint)
+                    .overlay { if let outline { Capsule().strokeBorder(outline, lineWidth: 1) } }
                     .frame(width: max(percent > 0 ? height : 0, proxy.size.width * CGFloat(min(max(percent, 0), 100)) / 100))
             }
         }

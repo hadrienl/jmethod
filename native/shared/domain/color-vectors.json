@@ -1,0 +1,582 @@
+{
+ "description": "Roue chromatique des matières (#8) : conversions HSV ↔ #RRGGBB, saisie hexadécimale, anneau (teinte 0 = rouge en haut, sens horaire, y vers le bas), carré (saturation en x, valeur décroissante en y), contraste WCAG. Tolérance HSV : 1e-6.",
+ "toHsv": [
+  {
+   "hex": "#FF0000",
+   "hsv": [
+    0.0,
+    1.0,
+    1.0
+   ]
+  },
+  {
+   "hex": "#00FF00",
+   "hsv": [
+    120.0,
+    1.0,
+    1.0
+   ]
+  },
+  {
+   "hex": "#0000FF",
+   "hsv": [
+    240.0,
+    1.0,
+    1.0
+   ]
+  },
+  {
+   "hex": "#FFFFFF",
+   "hsv": [
+    0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "hex": "#000000",
+   "hsv": [
+    0,
+    0,
+    0.0
+   ]
+  },
+  {
+   "hex": "#808080",
+   "hsv": [
+    0,
+    0.0,
+    0.501961
+   ]
+  },
+  {
+   "hex": "#FFFF00",
+   "hsv": [
+    60.0,
+    1.0,
+    1.0
+   ]
+  },
+  {
+   "hex": "#00FFFF",
+   "hsv": [
+    180.0,
+    1.0,
+    1.0
+   ]
+  },
+  {
+   "hex": "#FF00FF",
+   "hsv": [
+    300.0,
+    1.0,
+    1.0
+   ]
+  },
+  {
+   "hex": "#2563EB",
+   "hsv": [
+    221.212121,
+    0.842553,
+    0.921569
+   ]
+  },
+  {
+   "hex": "#38BDF8",
+   "hsv": [
+    198.4375,
+    0.774194,
+    0.972549
+   ]
+  },
+  {
+   "hex": "#F59E0B",
+   "hsv": [
+    37.692308,
+    0.955102,
+    0.960784
+   ]
+  },
+  {
+   "hex": "#7C3AED",
+   "hsv": [
+    262.122905,
+    0.755274,
+    0.929412
+   ]
+  },
+  {
+   "hex": "#0F766E",
+   "hsv": [
+    175.339806,
+    0.872881,
+    0.462745
+   ]
+  }
+ ],
+ "toHex": [
+  {
+   "hsv": [
+    0,
+    1,
+    1
+   ],
+   "hex": "#FF0000"
+  },
+  {
+   "hsv": [
+    120,
+    1,
+    1
+   ],
+   "hex": "#00FF00"
+  },
+  {
+   "hsv": [
+    240,
+    1,
+    1
+   ],
+   "hex": "#0000FF"
+  },
+  {
+   "hsv": [
+    360,
+    1,
+    1
+   ],
+   "hex": "#FF0000"
+  },
+  {
+   "hsv": [
+    60,
+    1,
+    1
+   ],
+   "hex": "#FFFF00"
+  },
+  {
+   "hsv": [
+    180,
+    1,
+    1
+   ],
+   "hex": "#00FFFF"
+  },
+  {
+   "hsv": [
+    300,
+    1,
+    1
+   ],
+   "hex": "#FF00FF"
+  },
+  {
+   "hsv": [
+    0,
+    0,
+    1
+   ],
+   "hex": "#FFFFFF"
+  },
+  {
+   "hsv": [
+    0,
+    0,
+    0
+   ],
+   "hex": "#000000"
+  },
+  {
+   "hsv": [
+    0,
+    0,
+    0.5
+   ],
+   "hex": "#808080"
+  },
+  {
+   "hsv": [
+    217.2,
+    0.84,
+    0.92
+   ],
+   "hex": "#2670EB"
+  },
+  {
+   "hsv": [
+    359.9,
+    1,
+    1
+   ],
+   "hex": "#FF0000"
+  },
+  {
+   "hsv": [
+    30,
+    0.5,
+    0.25
+   ],
+   "hex": "#403020"
+  }
+ ],
+ "parse": [
+  {
+   "input": "2563eb",
+   "hex": "#2563EB"
+  },
+  {
+   "input": " #2563eb ",
+   "hex": "#2563EB"
+  },
+  {
+   "input": "#2563EB",
+   "hex": "#2563EB"
+  },
+  {
+   "input": "#2563E",
+   "hex": null
+  },
+  {
+   "input": "#GGGGGG",
+   "hex": null
+  },
+  {
+   "input": "#2563EB0",
+   "hex": null
+  },
+  {
+   "input": "",
+   "hex": null
+  },
+  {
+   "input": "##2563EB",
+   "hex": null
+  }
+ ],
+ "ring": [
+  {
+   "dx": 0,
+   "dy": -1,
+   "hue": 0
+  },
+  {
+   "dx": 1,
+   "dy": 0,
+   "hue": 90
+  },
+  {
+   "dx": 0,
+   "dy": 1,
+   "hue": 180
+  },
+  {
+   "dx": -1,
+   "dy": 0,
+   "hue": 270
+  },
+  {
+   "dx": 1,
+   "dy": -1,
+   "hue": 45
+  },
+  {
+   "dx": -1,
+   "dy": -1,
+   "hue": 315
+  },
+  {
+   "dx": 0,
+   "dy": 0,
+   "hue": null
+  }
+ ],
+ "square": [
+  {
+   "x": 0,
+   "y": 0,
+   "width": 100,
+   "height": 100,
+   "saturation": 0,
+   "value": 1
+  },
+  {
+   "x": 100,
+   "y": 100,
+   "width": 100,
+   "height": 100,
+   "saturation": 1,
+   "value": 0
+  },
+  {
+   "x": -10,
+   "y": 150,
+   "width": 100,
+   "height": 100,
+   "saturation": 0,
+   "value": 0
+  },
+  {
+   "x": 50,
+   "y": 25,
+   "width": 100,
+   "height": 100,
+   "saturation": 0.5,
+   "value": 0.75
+  },
+  {
+   "x": 30,
+   "y": 30,
+   "width": 0,
+   "height": 0,
+   "saturation": 0,
+   "value": 1
+  }
+ ],
+ "keepHue": [
+  {
+   "previous": [
+    200,
+    0.5,
+    0.5
+   ],
+   "hex": "#000000",
+   "hsv": [
+    200,
+    0.5,
+    0
+   ]
+  },
+  {
+   "previous": [
+    200,
+    0.5,
+    0.5
+   ],
+   "hex": "#808080",
+   "hsv": [
+    200,
+    0,
+    0.501961
+   ]
+  },
+  {
+   "previous": [
+    200,
+    0.5,
+    0.5
+   ],
+   "hex": "#FFFFFF",
+   "hsv": [
+    200,
+    0,
+    1
+   ]
+  },
+  {
+   "previous": [
+    200,
+    0.5,
+    0.5
+   ],
+   "hex": "#2563EB",
+   "hsv": [
+    221.212121,
+    0.842553,
+    0.921569
+   ]
+  }
+ ],
+ "contrast": [
+  {
+   "a": "#FFFFFF",
+   "b": "#000000",
+   "ratio": 21.0
+  },
+  {
+   "a": "#2563EB",
+   "b": "#FFFFFF",
+   "ratio": 5.1686
+  },
+  {
+   "a": "#FDE047",
+   "b": "#FFFFFF",
+   "ratio": 1.3183
+  }
+ ],
+ "needsOutline": [
+  {
+   "hex": "#FFFFFF",
+   "outline": true
+  },
+  {
+   "hex": "#FDE047",
+   "outline": true
+  },
+  {
+   "hex": "#38BDF8",
+   "outline": true
+  },
+  {
+   "hex": "#2563EB",
+   "outline": false
+  },
+  {
+   "hex": "#000000",
+   "outline": false
+  }
+ ],
+ "name": [
+  {
+   "hsv": [
+    0,
+    1,
+    1
+   ],
+   "name": "rouge"
+  },
+  {
+   "hsv": [
+    14.9,
+    1,
+    1
+   ],
+   "name": "rouge"
+  },
+  {
+   "hsv": [
+    30,
+    1,
+    1
+   ],
+   "name": "orange"
+  },
+  {
+   "hsv": [
+    55,
+    1,
+    1
+   ],
+   "name": "jaune"
+  },
+  {
+   "hsv": [
+    100,
+    1,
+    1
+   ],
+   "name": "vert"
+  },
+  {
+   "hsv": [
+    162,
+    1,
+    1
+   ],
+   "name": "cyan"
+  },
+  {
+   "hsv": [
+    217,
+    0.84,
+    0.92
+   ],
+   "name": "bleu"
+  },
+  {
+   "hsv": [
+    275,
+    1,
+    1
+   ],
+   "name": "violet"
+  },
+  {
+   "hsv": [
+    340,
+    1,
+    1
+   ],
+   "name": "rose"
+  },
+  {
+   "hsv": [
+    350,
+    1,
+    1
+   ],
+   "name": "rouge"
+  },
+  {
+   "hsv": [
+    200,
+    0.5,
+    0.05
+   ],
+   "name": "noir"
+  },
+  {
+   "hsv": [
+    200,
+    0.05,
+    0.95
+   ],
+   "name": "blanc"
+  },
+  {
+   "hsv": [
+    200,
+    0.05,
+    0.5
+   ],
+   "name": "gris"
+  }
+ ],
+ "step": [
+  {
+   "level": 0.774,
+   "delta": 0.01,
+   "result": 0.78
+  },
+  {
+   "level": 0.774,
+   "delta": -0.01,
+   "result": 0.76
+  },
+  {
+   "level": 0.774,
+   "delta": 0.05,
+   "result": 0.8
+  },
+  {
+   "level": 0.774,
+   "delta": -0.05,
+   "result": 0.7
+  },
+  {
+   "level": 0.774,
+   "delta": 0.1,
+   "result": 0.9
+  },
+  {
+   "level": 0.98,
+   "delta": 0.05,
+   "result": 1.0
+  },
+  {
+   "level": 0.02,
+   "delta": -0.05,
+   "result": 0.0
+  },
+  {
+   "level": 0.5,
+   "delta": 0.05,
+   "result": 0.55
+  },
+  {
+   "level": 0.333,
+   "delta": 0,
+   "result": 0.333
+  }
+ ]
+}

@@ -91,7 +91,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.ui.text.style.TextDecoration
 import fr.jmethod.app.ui.components.SurfaceCard
 import fr.jmethod.app.ui.components.screenPadding
-import fr.jmethod.app.ui.components.subjectColor
+import fr.jmethod.app.ui.components.SubjectStripe
 import java.time.LocalDate
 
 @Composable
@@ -499,7 +499,6 @@ private fun Timetable(day: PlanningModel.Day, expandedByDefault: Boolean, onAddC
 @Composable
 private fun Tile(tile: PlanningModel.Tile, onOpen: (String) -> Unit) {
     val shape = JShapes.inner
-    val color = subjectColor(tile.subject.color)
     Row(
         Modifier.fillMaxWidth().clip(shape)
             .background(if (tile.done) JColors.Slate50 else Color.White)
@@ -512,7 +511,7 @@ private fun Tile(tile: PlanningModel.Tile, onOpen: (String) -> Unit) {
             .height(IntrinsicSize.Min)
             .heightIn(min = 48.dp),
     ) {
-        Box(Modifier.width(JSpacing.xs).fillMaxHeight().background(color))
+        SubjectStripe(tile.subject.color)
         Column(Modifier.weight(1f).padding(horizontal = JSpacing.m, vertical = JSpacing.m)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(tile.subjectName, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))

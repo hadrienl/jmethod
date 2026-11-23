@@ -6,6 +6,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -40,6 +44,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import fr.jmethod.app.domain.ColorWheel
 import fr.jmethod.app.model.Phase
 import fr.jmethod.app.ui.platform.animationsEnabled
 import fr.jmethod.app.ui.theme.JIcons
@@ -191,13 +196,35 @@ internal fun Pill(text: String, container: Color, content: Color, modifier: Modi
     )
 }
 
-/** Pastille de couleur d’une matière, avec un liseré pour les teintes très claires. */
+/** Contour neutre des couleurs de matière trop claires sur blanc (contraste < 3:1). */
+internal val SubjectOutlineColor = JColors.Slate500
+
+/**
+ * Règle unique de contraste des couleurs de matière (#8), partagée par l’app et l’aperçu du sélecteur :
+ * la couleur brute est conservée et reçoit un contour neutre si elle est trop claire sur blanc, ou si
+ * son code est illisible (`needsOutline`, comme iOS).
+ */
+internal fun subjectNeedsOutline(hex: String?): Boolean = hex != null && ColorWheel.needsOutline(hex)
+
+/** Fond d’une pastille de matière (couleur brute), contour neutre si elle est trop claire. */
+internal fun Modifier.subjectFill(hex: String?, shape: Shape): Modifier {
+    val filled = clip(shape).background(hex?.let(::subjectColor) ?: JColors.Slate400)
+    return if (subjectNeedsOutline(hex)) filled.border(1.dp, SubjectOutlineColor, shape) else filled
+}
+
+/** Pastille de couleur d’une matière, avec un contour neutre pour les teintes très claires. */
 @Composable
 internal fun SubjectDot(hex: String?, size: Dp = 10.dp, modifier: Modifier = Modifier) {
-    Box(
-        modifier.size(size).clip(CircleShape).background(hex?.let(::subjectColor) ?: JColors.Slate400)
-            .clearAndSetSemantics {},
-    )
+    Box(modifier.size(size).subjectFill(hex, CircleShape).clearAndSetSemantics {})
+}
+
+/** Liseré de matière au bord d’une carte (planning, aperçu du sélecteur), séparé du fond blanc s’il est trop clair. */
+@Composable
+internal fun SubjectStripe(hex: String, modifier: Modifier = Modifier) {
+    Row(modifier.fillMaxHeight().clearAndSetSemantics {}) {
+        Box(Modifier.width(JSpacing.xs).fillMaxHeight().background(subjectColor(hex)))
+        if (subjectNeedsOutline(hex)) Box(Modifier.width(1.dp).fillMaxHeight().background(SubjectOutlineColor))
+    }
 }
 
 /** État vide : icône douce, titre, explication et actions facultatives. */

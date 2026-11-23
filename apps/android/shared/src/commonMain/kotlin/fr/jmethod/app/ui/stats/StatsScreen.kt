@@ -22,7 +22,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -30,7 +29,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -57,7 +55,7 @@ import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import fr.jmethod.app.ui.components.SurfaceCard
 import fr.jmethod.app.ui.components.screenPadding
-import fr.jmethod.app.ui.components.subjectColor
+import fr.jmethod.app.ui.components.subjectFill
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -168,7 +166,6 @@ private fun Metric(title: String, value: String, line: String, color: Color, mod
 
 @Composable
 private fun SubjectBar(row: StatsModel.SubjectRow) {
-    val color = subjectColor(row.subject.color)
     val spoken = buildString {
         append("${row.subject.name}, ${row.coursesCount} cours, ${row.completedRevs} séances faites sur ${row.totalRevs}, ${row.rate} %")
         row.avgScore?.let { append(", moyenne $it sur 100") }
@@ -194,15 +191,12 @@ private fun SubjectBar(row: StatsModel.SubjectRow) {
                 }
             }
             Spacer(Modifier.height(JSpacing.m))
-            LinearProgressIndicator(
-                progress = { row.rate / 100f },
-                color = color,
-                trackColor = JColors.Slate100,
-                strokeCap = StrokeCap.Round,
-                gapSize = 0.dp,
-                drawStopIndicator = {},
-                modifier = Modifier.fillMaxWidth().height(8.dp),
-            )
+            // Barre de la matière : couleur brute, contour neutre si elle est trop claire (même règle que les pastilles).
+            Box(Modifier.fillMaxWidth().height(8.dp).clip(JShapes.pill).background(JColors.Slate100)) {
+                if (row.rate > 0) {
+                    Box(Modifier.fillMaxWidth((row.rate / 100f).coerceIn(0f, 1f)).fillMaxHeight().subjectFill(row.subject.color, JShapes.pill))
+                }
+            }
         }
     }
 }
