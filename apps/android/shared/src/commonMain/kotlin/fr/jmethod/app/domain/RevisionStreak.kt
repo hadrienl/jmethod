@@ -137,6 +137,9 @@ object RevisionStreak {
         fun due(revision: Revision?) = revision != null && (revision.status == RevisionStatus.COMPLETED || revision.scheduledDate <= preparation)
         fun step(revision: Revision) = if (revision.isEmergencySession == true || revision.programmeId == null || revision.rhythmStepId == null) null
             else revision.programmeId to revision.rhythmStepId
+        // Secours pour les programmes migrés (étapes `legacy-N`) : même programme, même nombre de jours.
+        fun offset(revision: Revision) = if (revision.isEmergencySession == true || revision.programmeId == null || revision.nominalOffsetDays == null) null
+            else revision.programmeId to revision.nominalOffsetDays
         val previous = before.revisions.associateBy { it.id }
         val current = after.revisions.associateBy { it.id }
         val created = after.revisions.filter { it.id !in previous }
@@ -146,7 +149,8 @@ object RevisionStreak {
                 !due(old) -> id // Absente ou repoussée avant cette mutation : décision de l'élève, reste bloquante.
                 due(current[id]) -> id
                 current[id] != null -> null // Repoussée par l'app.
-                else -> step(old!!)?.let { key -> created.firstOrNull { step(it) == key } }?.takeIf { due(it) }?.id
+                else -> (step(old!!)?.let { key -> created.firstOrNull { step(it) == key } }
+                    ?: offset(old)?.let { key -> created.firstOrNull { offset(it) == key } })?.takeIf { due(it) }?.id
             }
         }.distinct()
         if (required == entry.requiredRevisionIds) return after

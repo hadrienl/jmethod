@@ -11,8 +11,8 @@ import org.junit.Test
 import java.time.Instant
 
 class RevisionStreakTest {
-    private fun revision(id: String, date: String) = Revision(id, "c1", 0, "J0", date, status = RevisionStatus.PENDING, phase = Phase.ENCODAGE,
-        courseIds = listOf("c1", "c2"), programmeId = "p", rhythmStepId = "s-$id")
+    private fun revision(id: String, date: String, offset: Int? = null) = Revision(id, "c1", 0, "J0", date, status = RevisionStatus.PENDING, phase = Phase.ENCODAGE,
+        courseIds = listOf("c1", "c2"), programmeId = "p", rhythmStepId = "s-$id", nominalOffsetDays = offset)
     private fun document(revisions: List<Revision>) = AppDocument(courses = listOf(
         Course("c1","maths","",1,"C1","2026-11-01",createdAt = "2026-11-01"),
         Course("c2","maths","",2,"C2","2026-11-01",createdAt = "2026-11-01")), revisions = revisions, initialized = true, schemaVersion = 2)
@@ -24,7 +24,7 @@ class RevisionStreakTest {
         for (case in cases.map { it.jsonObject }) {
             val name = case.getValue("name").jsonPrimitive.content
             var doc = document(case.getValue("revisions").jsonArray.map { value ->
-                val r = value.jsonObject; revision(r.getValue("id").jsonPrimitive.content,r.getValue("date").jsonPrimitive.content)
+                val r = value.jsonObject; revision(r.getValue("id").jsonPrimitive.content,r.getValue("date").jsonPrimitive.content, r["offset"]?.jsonPrimitive?.content?.toInt())
             })
             for ((index,event) in case.getValue("events").jsonArray.map { it.jsonObject }.withIndex()) {
                 val now = Instant.parse(event.getValue("at").jsonPrimitive.content)
@@ -49,7 +49,8 @@ class RevisionStreakTest {
                     "appRemove" -> RevisionStreak.reconcile(doc, now).let { before -> RevisionStreak.releaseMovedByApp(before, before.copy(revisions = before.revisions.filterNot { r -> r.id == id }), now) }
                     "appReplace" -> RevisionStreak.reconcile(doc, now).let { before ->
                         val old = before.revisions.first { it.id == id }
-                        val replacement = old.copy(id = event.getValue("newId").jsonPrimitive.content, scheduledDate = event.getValue("date").jsonPrimitive.content)
+                        val replacement = old.copy(id = event.getValue("newId").jsonPrimitive.content, scheduledDate = event.getValue("date").jsonPrimitive.content,
+                            rhythmStepId = event["stepId"]?.jsonPrimitive?.content ?: old.rhythmStepId)
                         RevisionStreak.releaseMovedByApp(before, before.copy(revisions = before.revisions.filterNot { it.id == id } + replacement), now)
                     }
                     else -> error("Événement inconnu")

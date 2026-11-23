@@ -138,6 +138,16 @@
         {"op":"complete","id":"a","at":"2026-11-23T18:20:00Z","count":0,"best":0,"status":"pending","required":["a","b"]},
         {"op":"open","at":"2026-11-24T18:00:00Z","count":0,"best":0,"status":"rest","past":{"2026-11-23":"missed"}}
       ]
+    },
+    {
+      "name":"programme_migre_suit_les_seances_recreees_par_jour",
+      "revisions":[{"id":"a","date":"2026-11-24","offset":"1"},{"id":"b","date":"2026-11-24","offset":"3"}],
+      "events":[
+        {"op":"open","at":"2026-11-23T18:00:00Z","count":0,"best":0,"status":"pending","required":["a","b"]},
+        {"op":"complete","id":"a","at":"2026-11-23T18:10:00Z","count":0,"best":0,"status":"pending","required":["a","b"]},
+        {"op":"appReplace","id":"b","newId":"b2","stepId":"day-3","date":"2026-11-24","at":"2026-11-23T18:20:00Z","count":0,"best":0,"status":"pending","required":["a","b2"]},
+        {"op":"complete","id":"b2","at":"2026-11-23T18:30:00Z","count":1,"best":1,"status":"earned","required":["a","b2"]}
+      ]
     }
   ]
 }

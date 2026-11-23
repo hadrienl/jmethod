@@ -2,9 +2,9 @@ import XCTest
 @testable import JMethod
 
 final class RevisionStreakTests: XCTestCase {
-    private func revision(_ id: String, _ date: String) -> Revision {
+    private func revision(_ id: String, _ date: String, offset: Int? = nil) -> Revision {
         Revision(id: id, courseId: "c1", stepIndex: 0, stepLabel: "J0", scheduledDate: date, status: .pending, phase: .encodage,
-                 programmeId: "p", courseIds: ["c1","c2"], rhythmStepId: "s-\(id)")
+                 programmeId: "p", courseIds: ["c1","c2"], rhythmStepId: "s-\(id)", nominalOffsetDays: offset)
     }
     private func document(_ revisions: [Revision]) -> AppDocument {
         var result = AppDocument(settings: Constants.defaultSettings, subjects: Constants.defaultSubjects, courses: [
@@ -19,7 +19,7 @@ final class RevisionStreakTests: XCTestCase {
         let fixture = try SharedVectors.object("streak-vectors.json", subdirectory: "domain")
         for value in try XCTUnwrap(fixture["cases"] as? [[String: Any]]) {
             let name = try XCTUnwrap(value["name"] as? String)
-            var doc = document(try XCTUnwrap(value["revisions"] as? [[String: String]]).map { revision($0["id"]!, $0["date"]!) })
+            var doc = document(try XCTUnwrap(value["revisions"] as? [[String: String]]).map { r in revision(r["id"]!, r["date"]!, offset: r["offset"].flatMap { Int($0) }) })
             for (index,event) in try XCTUnwrap(value["events"] as? [[String: Any]]).enumerated() {
                 let label = "\(name) / \(index)"
                 let now = try XCTUnwrap(ISO8601DateFormatter().date(from: try XCTUnwrap(event["at"] as? String)))
@@ -64,6 +64,7 @@ final class RevisionStreakTests: XCTestCase {
                     var replacement = try XCTUnwrap(before.revisions.first { $0.id == id })
                     replacement.id = try XCTUnwrap(event["newId"] as? String)
                     replacement.scheduledDate = try XCTUnwrap(event["date"] as? String)
+                    if let step = event["stepId"] as? String { replacement.rhythmStepId = step }
                     var after = before
                     after.revisions.removeAll { $0.id == id }
                     after.revisions.append(replacement)

@@ -152,6 +152,11 @@ enum RevisionStreak {
             guard revision.isEmergencySession != true, let programme = revision.programmeId, let step = revision.rhythmStepId else { return nil }
             return programme + "\u{1F}" + step
         }
+        // Secours pour les programmes migrés (étapes `legacy-N`) : même programme, même nombre de jours.
+        func offset(_ revision: Revision) -> String? {
+            guard revision.isEmergencySession != true, let programme = revision.programmeId, let days = revision.nominalOffsetDays else { return nil }
+            return programme + "\u{1F}" + String(days)
+        }
         let previous = Dictionary(before.revisions.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let current = Dictionary(after.revisions.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let created = after.revisions.filter { previous[$0.id] == nil }
@@ -163,7 +168,10 @@ enum RevisionStreak {
             if !due(old) { return id }
             if due(current[id]) { return id }
             if current[id] != nil { return nil } // Repoussée par l'app.
-            guard let old, let key = step(old), let replacement = created.first(where: { step($0) == key }), due(replacement) else { return nil }
+            guard let old else { return nil }
+            let byStep = step(old).flatMap { key in created.first { step($0) == key } }
+            let byOffset = offset(old).flatMap { key in created.first { offset($0) == key } }
+            guard let replacement = byStep ?? byOffset, due(replacement) else { return nil }
             return replacement.id
         }.filter { seen.insert($0).inserted }
         guard required != entry.requiredRevisionIds else { return after }
