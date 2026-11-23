@@ -15,7 +15,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -41,8 +41,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -171,11 +171,12 @@ private fun ScorePage(
     onClose: () -> Unit,
     onSubmit: (Int) -> Unit,
     referenceLine: String,
+    presentation: SessionPagePresentation,
 ) {
-    var score by rememberSaveable(revision.id) { mutableIntStateOf(SCORE_INITIAL) }
+    val score = presentation.score
     val preview = ScorePreview.of(score, settings.sensitivity, settings.emergencyThreshold)
     Column(
-        Modifier.verticalScroll(rememberScrollState()).padding(horizontal = JSpacing.xl).padding(bottom = JSpacing.xl).navigationBarsPadding(),
+        Modifier.verticalScroll(presentation.scroll).padding(horizontal = JSpacing.xl).padding(bottom = JSpacing.xl).navigationBarsPadding(),
     ) {
         SheetHeader(
             subject, revision.phase, "${revision.phaseLabel} · ${revision.stepLabel}", "$referenceLine · ${course.title}",
@@ -194,7 +195,7 @@ private fun ScorePage(
                 Text("$score", style = MaterialTheme.typography.displayMedium.tabular(), fontWeight = FontWeight.Black, color = bandColor(preview.scoreBand))
                 Text(" / 100", style = MaterialTheme.typography.titleMedium, color = JColors.Slate500, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
             }
-            ScoreSlider(score, { score = it }, "Ton niveau de mémorisation sur 100")
+            ScoreSlider(score, { presentation.score = it }, "Ton niveau de mémorisation sur 100")
             // Cinq repères sur une ligne ; avec un grand texte, trois puis deux pour ne jamais couper un mot.
             val perRow = if (LocalDensity.current.fontScale > 1.15f) 3 else SCORE_PRESETS.size
             FlowRow(
@@ -209,7 +210,7 @@ private fun ScorePage(
                         Modifier.weight(1f).heightIn(min = 56.dp).clip(JShapes.badge)
                             .background(if (selected) JColors.Violet100 else Color.White)
                             .border(if (selected) 2.dp else 1.dp, if (selected) JColors.Violet700 else JColors.Slate200, JShapes.badge)
-                            .clickable(role = Role.RadioButton) { score = preset.value }
+                            .clickable(role = Role.RadioButton) { presentation.score = preset.value }
                             .semantics { this.selected = selected }
                             .padding(horizontal = JSpacing.xs, vertical = JSpacing.s),
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -254,6 +255,19 @@ private fun ScorePage(
     }
 }
 
+internal class SessionPagePresentation(initialScore: Int = SCORE_INITIAL, historyExpanded: Boolean = false, scrollOffset: Int = 0) {
+    var score by mutableIntStateOf(initialScore)
+    var historyOpen by mutableStateOf(historyExpanded)
+    val scroll = ScrollState(scrollOffset)
+
+    companion object {
+        val Saver = listSaver<SessionPagePresentation, Any>(
+            save = { listOf(it.score, it.historyOpen, it.scroll.value) },
+            restore = { SessionPagePresentation(it[0] as Int, it[1] as Boolean, it[2] as Int) },
+        )
+    }
+}
+
 /**
  * Fiche de séance (« Réviser », section 8 de `notebook-to-course.md`) : une feuille avec sa propre
  * navigation (fiche, document, autoévaluation, résultat et séance suivante). Ouverte depuis
@@ -261,8 +275,9 @@ private fun ScorePage(
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SessionSheet(
+internal fun SessionSheet(
     state: SessionSheetState,
+    presentation: SessionPagePresentation,
     model: RevisionDetailModel,
     settings: AppSettings,
     today: String,
@@ -297,18 +312,19 @@ fun SessionSheet(
         }
         when {
             viewer != null -> Box(Modifier.fillMaxSize()) {
-                DocumentViewerScreen(viewer.document, viewer.file, onClose = onCloseViewer, embedded = true)
+                DocumentViewerScreen(viewer, onClose = onCloseViewer)
             }
             page is SessionPage.Score -> ScorePage(
                 model.revision, model.course, model.subject, settings, state.submitting,
                 onBack = { onPage(SessionPage.Main) }, onClose = onDismiss, onSubmit = onSubmit,
                 referenceLine = model.members.joinToString(" + ") { it.displayReference },
+                presentation = presentation,
             )
-            page is SessionPage.Result -> ResultPage(page, nextLabel, remainingLabel, onNext = { onNext(page.nextRevisionId) }, onBackToToday = onBackToToday, onClose = onDismiss)
+            page is SessionPage.Result -> ResultPage(page, nextLabel, remainingLabel, onNext = { onNext(page.nextRevisionId) }, onBackToToday = onBackToToday, onClose = onDismiss, presentation = presentation)
             else -> MainPage(
                 model, today, documents, notebookParts, notebookLoading, downloadingId,
                 onOpenDocument, onRedownload, onDownloadAttachment, onLink, nearby, onOpenNearby, onAttachNearby,
-                onScore = { onPage(SessionPage.Score) }, onClose = onDismiss,
+                onScore = { onPage(SessionPage.Score) }, onClose = onDismiss, presentation = presentation,
             )
         }
     }
@@ -331,12 +347,13 @@ private fun MainPage(
     onAttachNearby: (RevisionSession.Nearby) -> Unit,
     onScore: () -> Unit,
     onClose: () -> Unit,
+    presentation: SessionPagePresentation,
 ) {
     val revision = model.revision
     val course = model.course
-    var historyOpen by rememberSaveable(revision.id) { mutableStateOf(false) }
+    val historyOpen = presentation.historyOpen
+    val scroll = presentation.scroll
     Column(Modifier.fillMaxWidth()) {
-        val scroll = rememberScrollState()
         ScrollbarBox(scroll, Modifier.weight(1f, fill = false)) { Column(
             Modifier.verticalScroll(scroll).padding(horizontal = JSpacing.xl).padding(bottom = JSpacing.l),
             verticalArrangement = Arrangement.spacedBy(JSpacing.l),
@@ -388,7 +405,7 @@ private fun MainPage(
             // 4. Séances précédentes (repliable).
             Column(Modifier.fillMaxWidth().clip(JShapes.inner).border(1.dp, JColors.Slate200, JShapes.inner)) {
                 Row(
-                    Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(role = Role.Button) { historyOpen = !historyOpen }
+                    Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(role = Role.Button) { presentation.historyOpen = !historyOpen }
                         .semantics { stateDescription = if (historyOpen) "Ouvert" else "Fermé" }
                         .padding(horizontal = JSpacing.l, vertical = JSpacing.m),
                     verticalAlignment = Alignment.CenterVertically,
@@ -448,10 +465,11 @@ private fun ResultPage(
     onNext: () -> Unit,
     onBackToToday: () -> Unit,
     onClose: () -> Unit,
+    presentation: SessionPagePresentation,
 ) {
     val (background, foreground) = if (result.warning) JColors.Amber50 to JColors.Amber900 else JColors.Emerald50 to JColors.Emerald800
     Column(
-        Modifier.verticalScroll(rememberScrollState()).padding(horizontal = JSpacing.xl).padding(bottom = JSpacing.xl).navigationBarsPadding(),
+        Modifier.verticalScroll(presentation.scroll).padding(horizontal = JSpacing.xl).padding(bottom = JSpacing.xl).navigationBarsPadding(),
         verticalArrangement = Arrangement.spacedBy(JSpacing.l),
     ) {
         Row(verticalAlignment = Alignment.Top) {

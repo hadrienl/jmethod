@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.DesktopComposeUiTest
 import androidx.compose.ui.test.isRoot
@@ -55,6 +56,7 @@ import org.apache.pdfbox.pdmodel.font.PDType1Font
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.io.File
@@ -155,7 +157,10 @@ class DesktopTour {
                 tab("Aujourd’hui", substring = true)
             }
             scene(720, 900, container, owners) {
-                waitForIdle(); shot(dir, "medium-720-today")
+                waitForIdle()
+                val planning = onAllNodesWithContentDescription("Planning").onFirst().getUnclippedBoundsInRoot()
+                assertTrue("Le rail commence en haut de la fenêtre", planning.top < 200.dp)
+                shot(dir, "medium-720-today")
             }
             scene(390, 844, container, owners) {
                 waitForIdle(); shot(dir, "compact-390-today")

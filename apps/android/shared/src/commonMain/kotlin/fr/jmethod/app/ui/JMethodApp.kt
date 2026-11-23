@@ -93,6 +93,8 @@ import fr.jmethod.app.model.CourseDocument
 import fr.jmethod.app.ui.documents.SheetDocument
 import fr.jmethod.app.ui.notebook.NotebookUiState
 import fr.jmethod.app.ui.today.SessionPage
+import fr.jmethod.app.ui.today.SessionPagePresentation
+import fr.jmethod.app.ui.courses.CourseDetailPresentation
 import fr.jmethod.app.ui.today.SessionSheet
 import fr.jmethod.app.ui.today.SessionSheetState
 import fr.jmethod.app.ui.courses.CourseDetailSheet
@@ -271,8 +273,7 @@ private fun AppNavigationRail(current: Tab, badge: Int, showBrand: Boolean = fal
                 null
             },
         ) {
-            Spacer(Modifier.weight(1f))
-            Column(Modifier.verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(Modifier.verticalScroll(rememberScrollState()).padding(top = JSpacing.s), horizontalAlignment = Alignment.CenterHorizontally) {
                 Destinations.forEach { destination ->
                     TooltipBox(
                         positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.End),
@@ -290,7 +291,6 @@ private fun AppNavigationRail(current: Tab, badge: Int, showBrand: Boolean = fal
                     }
                 }
             }
-            Spacer(Modifier.weight(1f))
         }
         VerticalDivider(color = JColors.Slate200)
     }
@@ -523,12 +523,23 @@ private fun AppContent(container: AppContainer, createConnection: (CoroutineScop
         container.courseFiles.fileOf(document)?.takeIf { it.isFile }?.let { sheetViewer = SheetDocument(document, it) }
     }
 
+    val activeCourse = courses?.detail?.course
+    val activeSession = today?.session
+    // Le contenu peut quitter le volet pour un dialogue pendant un redimensionnement.
+    // Les brouillons et défilements restent à la racine de l’écran pendant cette transition.
+    val coursePresentation = rememberSaveable(activeCourse?.id, activeCourse?.displayReference, saver = CourseDetailPresentation.Saver) {
+        CourseDetailPresentation(activeCourse?.displayReference.orEmpty())
+    }
+    val sessionPresentation = rememberSaveable(activeSession?.revisionId, activeSession?.page, saver = SessionPagePresentation.Saver) {
+        SessionPagePresentation()
+    }
+
     /** Fiche de séance (section 8), ouverte depuis Aujourd’hui, le Planning ou la fiche d’un cours. */
     val sessionSheet: @Composable () -> Unit = {
         today?.let { state ->
             state.session?.let { session ->
                 SessionSheetHost(
-                    session, state, notebook, pronote, container.courseFiles, sheetViewer,
+                    session, sessionPresentation, state, notebook, pronote, container.courseFiles, sheetViewer,
                     todayViewModel, notebookViewModel, coursesViewModel,
                     onOpenDocument = openDocument,
                     onCloseViewer = { sheetViewer = null },
@@ -556,6 +567,7 @@ private fun AppContent(container: AppContainer, createConnection: (CoroutineScop
             val documents = remember(course.documents) { course.documents.orEmpty().map { it to container.courseFiles.exists(it) } }
             CourseDetailSheet(
                 detail,
+                coursePresentation,
                 onDismiss = {
                     sheetViewer = null
                     coursesViewModel.closeDetail()
@@ -606,7 +618,7 @@ private fun AppContent(container: AppContainer, createConnection: (CoroutineScop
         when (pronote.access) {
             AccessPhase.CHECKING -> LoadingScreen(onSkip = pronoteViewModel.controller::skipResume)
             AccessPhase.SIGNED_OUT -> LoginScreen(pronoteViewModel, pronote)
-            AccessPhase.CONNECTED, AccessPhase.OFFLINE -> BoxWithConstraints(Modifier.fillMaxSize()) {
+            AccessPhase.CONNECTED, AccessPhase.OFFLINE -> {
                 val layout = LocalWindowLayout.current
                 val navigation = layout.navigationMode
                 val sideNavigation = navigation != NavigationMode.BOTTOM
@@ -616,11 +628,9 @@ private fun AppContent(container: AppContainer, createConnection: (CoroutineScop
                 val docked = dockCourse || dockSession
                 val pane = if (docked) layout.detailWidth else 0.dp
                 val available = layout.listWidth(docked)
-                val courseState = rememberSaveableStateHolder()
-                val sessionState = rememberSaveableStateHolder()
                 val tabs = rememberSaveableStateHolder()
                 val badge = today?.model?.badgeCount ?: 0
-                val tall = maxHeight >= 560.dp
+                val tall = layout.height >= 560.dp
                 // Changer d’onglet ferme la fiche ancrée qui n’y a plus sa place (comme une feuille sur téléphone,
                 // qui masque la barre d’onglets tant qu’elle est ouverte).
                 val selectTab: (Tab) -> Unit = { next ->
@@ -715,9 +725,9 @@ private fun AppContent(container: AppContainer, createConnection: (CoroutineScop
                                     Box(Modifier.width(DetailPaneWidth).fillMaxHeight().padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())) {
                                         CompositionLocalProvider(LocalSheetMode provides SheetMode.PANE) {
                                             if (dockCourse) {
-                                                courseState.SaveableStateProvider("course") { courseSheet() }
+                                                courseSheet()
                                             } else {
-                                                sessionState.SaveableStateProvider("session") { sessionSheet() }
+                                                sessionSheet()
                                             }
                                         }
                                     }
@@ -732,12 +742,8 @@ private fun AppContent(container: AppContainer, createConnection: (CoroutineScop
 
                             // Fiches ouvertes depuis n’importe quel onglet, sans changer d’onglet (section 8) ;
                             // feuilles sur téléphone, panneau latéral ou volet de détail sur grande fenêtre.
-                            if (!dockSession && today?.session != null) sessionState.SaveableStateProvider("session") { sessionSheet() }
-                            if (!dockCourse && courses?.detail != null) courseState.SaveableStateProvider("course") { courseSheet() }
-                            LaunchedEffect(courses?.detail != null, today?.session != null) {
-                                if (courses?.detail == null) courseState.removeState("course")
-                                if (today?.session == null) sessionState.removeState("session")
-                            }
+                            if (!dockSession && today?.session != null) sessionSheet()
+                            if (!dockCourse && courses?.detail != null) courseSheet()
                         }
                     }
                 }
@@ -844,6 +850,7 @@ private fun TabContent(
 @Composable
 private fun SessionSheetHost(
     session: SessionSheetState,
+    presentation: SessionPagePresentation,
     state: TodayUiState,
     notebook: NotebookUiState?,
     pronote: PronoteUiState,
@@ -875,6 +882,7 @@ private fun SessionSheetHost(
     val remaining = state.model.due.size
     SessionSheet(
         state = session,
+        presentation = presentation,
         model = model,
         settings = document.settings.copy(adaptiveEnabled = document.programmes.firstOrNull { it.id == model.revision.programmeId }?.let { it.adaptiveEnabled && !it.needsReview } ?: true),
         today = state.model.today,
