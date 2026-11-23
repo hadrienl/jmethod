@@ -22,6 +22,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -80,7 +81,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import fr.jmethod.app.domain.RevisionStreak
+import fr.jmethod.app.domain.sentenceCase
 import fr.jmethod.app.domain.TodayModel
 import fr.jmethod.app.model.PHASE_CONFIG
 import fr.jmethod.app.model.Phase
@@ -99,7 +101,6 @@ import fr.jmethod.app.ui.components.Pill
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.text.style.TextDecoration
-import java.util.Locale
 
 private val CardShape = JShapes.card
 
@@ -137,9 +138,10 @@ fun TodayScreen(
                     contentPadding = screenPadding(contentPadding, 24.dp),
                     verticalArrangement = Arrangement.spacedBy(JSpacing.l),
                 ) {
-                    item(key = "header") { Header(model) }
+                    item(key = "header") {
+                        Header(model.headerDate, RevisionStreak.summary(state.document.streakState, model.today))
+                    }
                     val hasCourses = state.document.courses.isNotEmpty()
-                    item(key = "flame") { RevisionFlame(fr.jmethod.app.domain.RevisionStreak.summary(state.document.streakState, state.model.today)) }
                     item(key = "hero") { Hero(model, hasCourses, onScore, onReview) }
                     // Aujourd’hui montre seulement la carte pour démarrer et enchaîner, puis l’emploi du temps de demain ;
                     // le détail du programme est replié par défaut.
@@ -195,17 +197,34 @@ private fun AllDoneBanner() {
 }
 
 @Composable
-private fun Header(model: TodayModel) {
+private fun Header(date: String, flame: RevisionStreak.Summary) {
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        if (maxWidth >= 560.dp * LocalDensity.current.fontScale) {
+            Row(horizontalArrangement = Arrangement.spacedBy(JSpacing.l)) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(JSpacing.s)) {
+                    TodayDate(date)
+                    TodayIntro()
+                }
+                RevisionFlame(flame, Modifier.weight(1f))
+            }
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(JSpacing.m)) {
+                TodayDate(date)
+                RevisionFlame(flame)
+                TodayIntro()
+            }
+        }
+    }
+}
+
+@Composable
+private fun TodayDate(date: String) {
+    Text(date.sentenceCase(), style = MaterialTheme.typography.titleSmall, color = JColors.Slate600)
+}
+
+@Composable
+private fun TodayIntro() {
     Column {
-        Text(
-            model.headerDate.uppercase(Locale.FRENCH),
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.5.sp,
-            color = JColors.Slate500,
-            modifier = Modifier.semantics { contentDescription = model.headerDate },
-        )
-        Spacer(Modifier.height(8.dp))
         Text(
             buildAnnotatedString {
                 append("Un petit pas, ")

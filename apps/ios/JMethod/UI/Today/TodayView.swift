@@ -17,8 +17,8 @@ struct TodayView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.l) {
-                    TodayHeader(date: screen.headerDate)
-                    RevisionFlameCard(summary: RevisionStreak.summary(document.streakState, date: app.today))
+                    TodayHeader(date: screen.headerDate,
+                                flame: RevisionStreak.summary(document.streakState, date: app.today))
                     HeroCard(hero: screen.hero, hasCourses: hasCourses, canReview: RevisionSession.hasDocuments(screen.hero.course),
                              onStart: { if let revision = screen.hero.revision { app.presented = .score(revisionId: revision.id) } },
                              onReview: { if let revision = screen.hero.revision { app.presented = .review(revisionId: revision.id) } })
@@ -112,12 +112,38 @@ private struct AllDoneBanner: View {
 
 private struct TodayHeader: View {
     let date: String
+    let flame: RevisionStreak.Summary
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
+        ViewThatFits(in: .horizontal) {
+            if !typeSize.isAccessibilitySize {
+                HStack(alignment: .top, spacing: Spacing.l) {
+                    VStack(alignment: .leading, spacing: Spacing.s) {
+                        dateLabel
+                        intro
+                    }
+                    .frame(minWidth: 230, maxWidth: .infinity, alignment: .leading)
+                    RevisionFlameCard(summary: flame)
+                        .frame(minWidth: 300, maxWidth: .infinity)
+                }
+            }
+            VStack(alignment: .leading, spacing: Spacing.m) {
+                dateLabel
+                RevisionFlameCard(summary: flame)
+                intro
+            }
+        }
+    }
+
+    private var dateLabel: some View {
+        Text(date.capitalizedFirst)
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(Theme.textSecondary)
+    }
+
+    private var intro: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
-            Text(date.capitalizedFirst)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Theme.textMuted)
             (Text("Un petit pas, ") + Text("chaque jour.").foregroundColor(Theme.violet))
                 .font(.largeTitle.weight(.bold))
                 .foregroundStyle(Theme.text)
