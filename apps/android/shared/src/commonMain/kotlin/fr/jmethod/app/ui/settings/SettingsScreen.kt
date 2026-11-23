@@ -1,5 +1,7 @@
 package fr.jmethod.app.ui.settings
 
+import fr.jmethod.app.ui.components.LocalContentWidth
+import fr.jmethod.app.ui.components.TwoColumnWidth
 import fr.jmethod.app.ui.components.ScrollbarBox
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -9,8 +11,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -20,7 +25,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -108,6 +112,7 @@ private fun Section(title: String, subtitle: String? = null, content: @Composabl
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(
     ui: SettingsUiState,
@@ -172,13 +177,29 @@ fun SettingsScreen(
                 verticalArrangement = Arrangement.spacedBy(JSpacing.l),
             ) {
                 ScreenHeader("Réglages")
-                PronoteAccountSection(pronoteViewModel, pronote, syncInfo)
-                NotebookSection(autoCreate, onAutoCreateChange)
-                Algorithm(draft, viewModel)
-                RhythmSettingsPanel(ui, viewModel)
-                Colors(ui.subjects, onPick = viewModel::openSubjectColor)
-                Backup(ui, onExport = viewModel::requestExport, onImport = { importer() })
-                About()
+                val twoColumns = LocalContentWidth.current >= TwoColumnWidth && LocalDensity.current.fontScale <= 1.3f
+                BoxWithConstraints(Modifier.fillMaxWidth()) {
+                    val sectionWidth = if (twoColumns) (maxWidth - JSpacing.l) / 2 else maxWidth
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(JSpacing.l),
+                        verticalArrangement = Arrangement.spacedBy(JSpacing.l),
+                        maxItemsInEachRow = if (twoColumns) 2 else 1,
+                    ) {
+                        Column(Modifier.width(sectionWidth), verticalArrangement = Arrangement.spacedBy(JSpacing.l)) {
+                            PronoteAccountSection(pronoteViewModel, pronote, syncInfo)
+                            NotebookSection(autoCreate, onAutoCreateChange)
+                        }
+                        Column(Modifier.width(sectionWidth), verticalArrangement = Arrangement.spacedBy(JSpacing.l)) {
+                            Algorithm(draft, viewModel)
+                            RhythmSettingsPanel(ui, viewModel)
+                        }
+                        Box(Modifier.width(sectionWidth)) { Colors(ui.subjects, onPick = viewModel::openSubjectColor) }
+                        Column(Modifier.width(sectionWidth), verticalArrangement = Arrangement.spacedBy(JSpacing.l)) {
+                            Backup(ui, onExport = viewModel::requestExport, onImport = { importer() })
+                            About()
+                        }
+                    }
+                }
             }
         }
         if (draft.dirty) {

@@ -42,7 +42,7 @@ fun main() {
     val icon = DesktopPlatform::class.java.getResourceAsStream("/j-method.png")?.use { ImageIO.read(it) }?.let { BitmapPainter(it.toComposeImageBitmap()) }
 
     application {
-        val state = rememberWindowState(size = DpSize(1180.dp, 800.dp), position = WindowPosition(Alignment.Center))
+        val state = rememberWindowState(size = DpSize(1280.dp, 800.dp), position = WindowPosition(Alignment.Center))
         Window(
             onCloseRequest = ::exitApplication,
             title = "J-Method",
@@ -52,7 +52,7 @@ fun main() {
             // l’écran plein écran du dessus, puis revient à Aujourd’hui.
             onKeyEvent = { event -> event.key == Key.Escape && event.type == KeyEventType.KeyDown && DesktopBack.dispatch() },
         ) {
-            remember { window.minimumSize = Dimension(360, 600) }
+            remember { window.minimumSize = Dimension(360, 360) }
             val platform = remember { DesktopPlatform({ window }, dirs.cache) }
             CompositionLocalProvider(LocalPlatform provides platform) {
                 JMethodTheme { JMethodApp(container) { scope -> desktopConnection(container, scope) } }
