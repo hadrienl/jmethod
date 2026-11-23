@@ -160,7 +160,7 @@ class SettingsViewModel(private val repository: AppRepository, private val clock
         val accepted = pending.value ?: return
         pending.value = null
         viewModelScope.launch {
-            repository.update { accepted.applyTo(it) }
+            repository.update { fr.jmethod.app.domain.RevisionStreak.reconcile(accepted.applyTo(it), clock.now(), openCurrent = true) }
             draft.value = null
             events.send(SettingsEvent.Toast("Sauvegarde restaurée", "${accepted.courses.size} cours et ${accepted.revisions.size} séances importés."))
         }

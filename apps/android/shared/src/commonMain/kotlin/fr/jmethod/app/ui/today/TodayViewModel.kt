@@ -63,8 +63,14 @@ class TodayViewModel(
 
     /** Date réelle, recalculée toutes les 30 s tant que l’écran est actif (changement de jour). */
     private val todayFlow: Flow<String> = flow {
+        var previous: String? = null
         while (true) {
-            emit(clock.today().toString())
+            val date = clock.today().toString()
+            if (date != previous) {
+                repository.openRevisionDay()
+                previous = date
+                emit(date)
+            }
             delay(30_000)
         }
     }.distinctUntilChanged()
@@ -79,7 +85,7 @@ class TodayViewModel(
             model = TodayModel.build(today, document.courses, document.revisions, document.subjects, document.pronoteEvents),
             session = open,
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(0), null)
 
     /** Ouvre la fiche d’une séance (Aujourd’hui, Planning, fiche d’un cours). */
     fun openSession(revisionId: String, page: SessionPage = SessionPage.Main) {
@@ -107,7 +113,8 @@ class TodayViewModel(
         viewModelScope.launch {
             var outcome: ScoreSubmission.Outcome? = null
             var next: String? = null
-            repository.update { document ->
+            repository.update { original ->
+                val document = fr.jmethod.app.domain.RevisionStreak.reconcile(original, clock.now(), openCurrent = true)
                 val result = ScoreSubmission.submit(
                     document.courses, document.revisions, document.settings, revisionId, score, clock.now(), AppClock.ZONE, document.programmes,
                 )
@@ -116,7 +123,7 @@ class TodayViewModel(
                     // Première séance due dans l’ordre affiché d’Aujourd’hui (comme iOS).
                     next = RevisionSession.nextInDisplayOrder(result.revisions, document.courses, document.subjects, result.today, revisionId)?.id
                 }
-                if (result.ignored) document else document.copy(revisions = result.revisions)
+                if (result.ignored) document else fr.jmethod.app.domain.RevisionStreak.completed(document.copy(revisions = result.revisions), revisionId, clock.now())
             }
             val done = outcome
             val toast = done?.toast

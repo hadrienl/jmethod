@@ -21,6 +21,7 @@ class AppRepository(
     private val store: AppDocumentStore,
     scope: CoroutineScope,
     private val io: CoroutineDispatcher,
+    private val clock: AppClock = AppClock.SYSTEM,
 ) {
     private val failure = MutableStateFlow<String?>(null)
     val loadError: StateFlow<String?> = failure.asStateFlow()
@@ -40,7 +41,7 @@ class AppRepository(
                     // Premier lancement : aucune donnée fictive, seulement la configuration par défaut.
                     DataMigrations.emptyDocument().also { store.write(it) }
                 } else {
-                    DataMigrations.migrate(loaded).also { if (it != loaded) store.write(it) }
+                    fr.jmethod.app.domain.RevisionStreak.reconcile(DataMigrations.migrate(loaded), clock.now()).also { if (it != loaded) store.write(it) }
                 }
                 state.value = document
             } } catch (error: kotlinx.coroutines.CancellationException) { throw error }
@@ -50,11 +51,16 @@ class AppRepository(
 
     suspend fun current(): AppDocument = document.filterNotNull().first()
 
+    /** Première ouverture fonctionnelle ou retour au premier plan : avant toute reprise Pronote. */
+    suspend fun openRevisionDay(): AppDocument = update { fr.jmethod.app.domain.RevisionStreak.reconcile(it, clock.now(), openCurrent = true) }
+
     /** Applique [transform] au document courant, l’écrit sur disque puis le publie. */
     suspend fun update(transform: (AppDocument) -> AppDocument): AppDocument {
         current()
         return mutex.withLock {
-            val updated = transform(state.value!!)
+            val before = fr.jmethod.app.domain.RevisionStreak.reconcile(state.value!!, clock.now())
+            val updated = transform(before)
+            if (updated == state.value) return@withLock updated
             withContext(io) { store.write(updated) }
             state.value = updated
             updated

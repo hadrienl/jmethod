@@ -105,6 +105,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -126,6 +127,7 @@ import fr.jmethod.app.ui.pronote.PronoteConnection
 import fr.jmethod.app.ui.components.LocalWindowLayout
 import fr.jmethod.app.ui.components.WindowLayout
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import fr.jmethod.app.pronote.AccessPhase
 import fr.jmethod.app.ui.pronote.LoadingScreen
 import fr.jmethod.app.ui.pronote.LoginScreen
@@ -299,6 +301,21 @@ private fun ToastSnackbar(data: SnackbarData) {
  */
 @Composable
 fun JMethodApp(container: AppContainer, createConnection: (CoroutineScope) -> PronoteConnection) {
+    var dayReady by remember(container) { mutableStateOf(false) }
+    var openingError by remember(container) { mutableStateOf<String?>(null) }
+    val readError by container.repository.loadError.collectAsStateWithLifecycle()
+    LaunchedEffect(container) {
+        try { container.repository.openRevisionDay(); dayReady = true }
+        catch (error: kotlinx.coroutines.CancellationException) { throw error }
+        catch (error: Exception) { openingError = error.message ?: "La journée de révision n’a pas pu être enregistrée." }
+    }
+    val error = readError ?: openingError
+    if (error != null) {
+        Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) { Column { Text("Données indisponibles"); Text(error) } }
+        return
+    }
+    if (!dayReady) { Loading(); return }
+
     BoxWithConstraints(Modifier.fillMaxSize()) {
         CompositionLocalProvider(LocalWindowLayout provides WindowLayout(maxWidth, maxHeight)) {
             AppContent(container, createConnection)
@@ -404,7 +421,10 @@ private fun AppContent(container: AppContainer, createConnection: (CoroutineScop
     SystemBackHandler(enabled = tab != Tab.TODAY && (pronote.access == AccessPhase.CONNECTED || pronote.access == AccessPhase.OFFLINE)) { tab = Tab.TODAY }
 
     // Retour au premier plan : reconnexion ou synchronisation si la dernière date de plus de 6 h.
-    LifecycleEventEffect(Lifecycle.Event.ON_START) { pronoteViewModel.controller.onForeground() }
+    val lifecycleScope = rememberCoroutineScope()
+    LifecycleEventEffect(Lifecycle.Event.ON_START) {
+        lifecycleScope.launch { container.repository.openRevisionDay(); pronoteViewModel.controller.onForeground() }
+    }
     // Ordinateur : l’app reste souvent ouverte ; même règle qu’au retour au premier plan, vérifiée
     // toutes les 15 minutes (synchronisation si la dernière date de plus de 6 h). Aucun service système.
     if (platform.isDesktop) {

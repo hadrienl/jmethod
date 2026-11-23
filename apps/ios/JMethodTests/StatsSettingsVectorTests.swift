@@ -118,24 +118,27 @@ final class StatsSettingsVectorTests: XCTestCase {
                  status: completed == nil ? .pending : .completed, phase: .encodage, adjustedIntervalDays: 0)
     }
 
-    /// D3 : jours consécutifs avec une séance validée, depuis aujourd'hui ou depuis hier.
-    func testD3Streak() {
-        let days = ["2026-11-17", "2026-11-16", "2026-11-16", "2026-11-15", "2026-11-13"]
-        let revisions = days.enumerated().map { revision("r\($0.offset)", completed: $0.element) } + [revision("p", completed: nil)]
-        XCTAssertEqual(StatsScreen.streak(revisions: revisions, today: today), 3)
-        XCTAssertEqual(StatsScreen.streak(revisions: revisions.filter { $0.completedDate != "2026-11-17" }, today: today), 2, "rien aujourd'hui : depuis hier")
-        XCTAssertEqual(StatsScreen.streak(revisions: revisions.filter { $0.completedDate == "2026-11-13" }, today: today), 0)
-        XCTAssertEqual(StatsScreen.streak(revisions: [], today: today), 0)
-        // Passage de mois et changement d'heure : jours civils.
-        let autumn = ["2026-10-24", "2026-10-25", "2026-10-26"].enumerated().map { revision("a\($0.offset)", completed: $0.element) }
-        XCTAssertEqual(StatsScreen.streak(revisions: autumn, today: "2026-10-26"), 3)
+    /// D3 (#7) : la série vient du journal des journées, jamais des anciennes validations « au moins une séance ».
+    func testD3Streak() throws {
+        func day(_ date: String, _ status: RevisionDayStatus) -> RevisionDay {
+            let required = status == .rest ? [] : ["r-\(date)"]
+            return RevisionDay(date: date, requiredRevisionIds: required, completedRevisionIds: status == .earned ? required : [],
+                               frozenAt: "\(date)T17:00:00.000Z", finalizedAt: "\(date)T22:00:00.000Z", status: status)
+        }
+        let state = StreakState(trackingStartDate: "2026-11-13", lastReconciledDate: "2026-11-17", days: [
+            day("2026-11-13", .earned), day("2026-11-14", .missed), day("2026-11-15", .earned), day("2026-11-16", .rest), day("2026-11-17", .earned)])
+        try RevisionStreak.validate(state)
+        let legacy = ["2026-11-17", "2026-11-16", "2026-11-15"].enumerated().map { revision("r\($0.offset)", completed: $0.element) }
         let course = Course(id: "c", subjectId: "maths", chapter: "C", courseNumber: 1, title: "T", date: "2026-11-01", createdAt: "2026-11-01")
-        let empty = StatsScreen(courses: [course], revisions: [], subjects: Constants.defaultSubjects, today: today)
-        XCTAssertEqual(empty.streakLabel, "0 j")
-        XCTAssertEqual(empty.streakLine, "Valide une séance pour commencer")
-        let streak = StatsScreen(courses: [course], revisions: revisions, subjects: Constants.defaultSubjects, today: today)
-        XCTAssertEqual(streak.streakLabel, "3 j")
-        XCTAssertEqual(streak.streakLine, "Jours consécutifs avec une séance")
+        let empty = StatsScreen(courses: [course], revisions: legacy, subjects: Constants.defaultSubjects, today: today)
+        XCTAssertEqual(empty.streakDays, 0)
+        XCTAssertEqual(empty.streakLabel, "0")
+        XCTAssertEqual(empty.streakLine, "0 journée de révision · Record : 0 journée")
+        let model = StatsScreen(courses: [course], revisions: legacy, subjects: Constants.defaultSubjects, today: today, streakState: state)
+        XCTAssertEqual(model.streakDays, 2)
+        XCTAssertEqual(model.streakLabel, "2")
+        XCTAssertEqual(model.streakLine, "Flamme gagnée ! · Record : 2 journées")
+        XCTAssertEqual(RevisionStreak.days(1), "1 journée")
     }
 
     /// D4 à D7 : « — » sans note, séance non terminée ignorée, `null` sans note, accords.

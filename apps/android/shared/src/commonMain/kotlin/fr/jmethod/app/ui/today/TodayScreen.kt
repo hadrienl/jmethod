@@ -117,6 +117,7 @@ fun TodayScreen(
         ) {
             item(key = "header") { Header(model) }
             val hasCourses = state.document.courses.isNotEmpty()
+            item(key = "flame") { RevisionFlame(fr.jmethod.app.domain.RevisionStreak.summary(state.document.streakState, state.model.today)) }
             item(key = "hero") { Hero(model, hasCourses, onScore, onReview) }
             // Aujourd’hui montre seulement la carte pour démarrer et enchaîner, puis l’emploi du temps de demain ;
             // le détail du programme est replié par défaut.

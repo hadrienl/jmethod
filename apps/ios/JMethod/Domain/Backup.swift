@@ -24,6 +24,7 @@ enum Backup {
         var notebookImports: [String: NotebookImport]? = nil
         var programmes: [RevisionProgramme] = []
         var schemaVersion = 1
+        var streakState: StreakState? = nil
 
         func apply(to document: AppDocument) -> AppDocument {
             var result = document
@@ -35,6 +36,7 @@ enum Backup {
             result.initialized = true
             result.programmes = programmes
             result.schemaVersion = schemaVersion
+            result.streakState = streakState
             return RevisionProgrammes.migrate(NotebookCourses.migratingKeys(result))
         }
     }
@@ -77,7 +79,7 @@ enum Backup {
         }
         let root: [String: Any]
         if let payload = envelope["data"] {
-            guard envelope["schemaVersion"] as? Int == 2, envelope["version"] as? String == "2.0", let object = payload as? [String: Any], object["schemaVersion"] as? Int == 2 else {
+            guard let outer = envelope["schemaVersion"] as? Int, (2...3).contains(outer), envelope["version"] as? String == "\(outer).0", let object = payload as? [String: Any], object["schemaVersion"] as? Int == outer else {
                 return shapeError("cette version nécessite une app plus récente")
             }
             root = object
@@ -128,17 +130,24 @@ enum Backup {
             guard let number = raw as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID(), let value = raw as? Int else { return shapeError("la version du document est illisible") }
             schema = value
         } else { schema = 1 }
-        guard (1...2).contains(schema) else { return shapeError("cette version nécessite une app plus récente") }
+        guard (1...3).contains(schema) else { return shapeError("cette version nécessite une app plus récente") }
         var programmes: [RevisionProgramme] = []
-        if schema == 2 {
+        var streak: StreakState?
+        if schema >= 3 {
+            guard let raw = root["streakState"], let data = try? JSONSerialization.data(withJSONObject: raw),
+                  let decoded = try? JSONDecoder().decode(StreakState.self, from: data),
+                  (try? RevisionStreak.validate(decoded)) != nil else { return shapeError("le journal de révision est illisible ou incohérent") }
+            streak = decoded
+        }
+        if schema >= 2 {
             guard let raw = root["programmes"], let decoded = decodeList(RevisionProgramme.self, raw) else { return shapeError("les programmes sont illisibles") }
             programmes = decoded
             var candidate = AppDocument(settings: settings ?? Constants.defaultSettings, subjects: subjects ?? [], courses: courses, revisions: revisions, pronoteEvents: [], initialized: true)
-            candidate.programmes = programmes; candidate.schemaVersion = 2
+            candidate.programmes = programmes; candidate.schemaVersion = schema; candidate.streakState = streak
             do { try RevisionProgrammes.validateDocument(candidate, checkSubjects: subjects != nil) }
             catch { return shapeError("les feuilles, programmes ou rythmes sont incohérents") }
         }
-        return .accepted(Accepted(courses: courses, revisions: revisions, subjects: subjects, settings: settings, notebookImports: imports, programmes: programmes, schemaVersion: schema))
+        return .accepted(Accepted(courses: courses, revisions: revisions, subjects: subjects, settings: settings, notebookImports: imports, programmes: programmes, schemaVersion: schema, streakState: streak))
     }
 
     // MARK: Export
@@ -153,9 +162,9 @@ enum Backup {
             object.removeValue(forKey: "pronoteEvents")
             object.removeValue(forKey: "initialized")
             object.removeValue(forKey: "dataVersion")
-            object["version"] = "2.0"; object["exportDate"] = isoMillis(now)
+            object["version"] = document.schemaVersion >= 3 ? "3.0" : "2.0"; object["exportDate"] = isoMillis(now)
             if object["programmes"] == nil { object["programmes"] = [] }
-            let envelope: [String: Any] = ["version": "2.0", "schemaVersion": 2, "exportDate": isoMillis(now), "data": object]
+            let envelope: [String: Any] = ["version": document.schemaVersion >= 3 ? "3.0" : "2.0", "schemaVersion": document.schemaVersion, "exportDate": isoMillis(now), "data": object]
             guard let output = try? JSONSerialization.data(withJSONObject: envelope, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]),
                   let text = String(data: output, encoding: .utf8) else { return "{}" }
             return text

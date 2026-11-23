@@ -29,6 +29,7 @@ struct RootView: View {
         }
         .task {
             await app.load()
+            app.openRevisionDay()
             #if DEBUG
             let arguments = ProcessInfo.processInfo.arguments
             if arguments.contains("-JMethodPreviewSignIn") {

@@ -198,9 +198,22 @@ final class AppModel {
         }
     }
 
+    /// Le journal est gelé dans le document avant toute synchronisation de premier plan.
+    private func prepareRevisionDays(openCurrent: Bool = false) throws {
+        let updated = try RevisionStreak.reconcile(document, now: now(), openCurrent: openCurrent)
+        if updated != document { document = updated; persist() }
+    }
+
+    func openRevisionDay() {
+        guard loadState == .ready else { return }
+        do { try prepareRevisionDays(openCurrent: true) }
+        catch { showToast("Journée non enregistrée", error.localizedDescription, warning: true) }
+    }
+
     func refreshDay() {
         let current = SchoolDay.today(now: now())
         if current != today { today = current }
+        if loadState == .ready { openRevisionDay() }
     }
 
     // MARK: Séances
@@ -231,6 +244,7 @@ final class AppModel {
         refreshDay()
         let outcome: ScoreSubmission.Outcome
         do {
+            try prepareRevisionDays(openCurrent: true)
             outcome = try ScoreSubmission.submit(
                 revisions: document.revisions, courses: document.courses, settings: document.settings,
                 revisionId: revisionId, score: max(0, min(100, score)), now: now(), programmes: document.programmes
@@ -241,7 +255,9 @@ final class AppModel {
         }
         today = outcome.today
         guard !outcome.ignored, let explanation = outcome.explanation else { return nil }
-        document.revisions = outcome.revisions
+        var completed = document; completed.revisions = outcome.revisions
+        do { document = try RevisionStreak.completed(completed, revisionId: revisionId, now: now()) }
+        catch { showToast("Séance non enregistrée", error.localizedDescription, warning: true); return nil }
         persist()
         let next = RevisionSession.nextDue(revisions: document.revisions, courses: document.courses,
                                            subjects: document.subjects, today: today, excluding: revisionId)
@@ -308,6 +324,7 @@ final class AppModel {
     /// Création effective : cours, révisions initiales et, depuis une séance, source, documents et suivi d'import.
     private func insertCourse(_ draft: CourseDraft, notebook: NotebookCourseDraft?, documents staged: [StagedDocument]) throws
         -> (outcome: CourseCreation.Outcome, course: Course)? {
+        try prepareRevisionDays()
         // Identifiant `course-<ms>` unique même pour plusieurs créations dans la même milliseconde.
         var at = now()
         while document.courses.contains(where: { $0.id == "course-\(AdaptiveAlgorithm.epochMilliseconds(at))" }) {
@@ -385,6 +402,8 @@ final class AppModel {
             toast = .init(title: "Feuille conservée", message: "Cette feuille appartient à un programme. Son historique et ses documents sont conservés.", kind: .info)
             return
         }
+        do { try prepareRevisionDays(openCurrent: true) }
+        catch { showToast("Suppression impossible", error.localizedDescription, warning: true); return }
         let removed = course(id: id)
         let result = CourseDeletion.apply(courseId: id, courses: document.courses, revisions: document.revisions)
         document.courses = result.courses
@@ -445,6 +464,7 @@ final class AppModel {
 
     func saveRhythm(_ rhythm: RevisionRhythm, adaptive: Bool, applyToOngoing: Bool) {
         do {
+            try prepareRevisionDays(openCurrent: true)
             try RevisionProgrammes.validate(rhythm)
             var updated = document
             updated.settings.rhythm = rhythm
@@ -459,6 +479,7 @@ final class AppModel {
 
     func startProgramme(courseIds: [String], startDate: String) -> Bool {
         do {
+            try prepareRevisionDays(openCurrent: true)
             document = try RevisionProgrammes.start(document, courseIds: courseIds, startDate: startDate)
             persist()
             showToast("Programme créé", "Les feuilles sélectionnées ont leur propre rythme de révision.")
@@ -556,7 +577,8 @@ final class AppModel {
     /// Restauration confirmée : cours et séances remplacés, matières et réglages s'ils sont fournis, créneaux Pronote conservés.
     func restore(_ accepted: Backup.Accepted) {
         // Une sauvegarde ancienne peut porter des clés du cahier au format périmé.
-        document = NotebookCourses.migratingKeys(accepted.apply(to: document))
+        do { document = try RevisionStreak.reconcile(NotebookCourses.migratingKeys(accepted.apply(to: document)), now: now(), openCurrent: true) }
+        catch { showToast("Restauration impossible", error.localizedDescription, warning: true); return }
         presented = nil
         persist()
         toast = .init(title: "Sauvegarde restaurée", message: "\(accepted.courses.count) cours et \(accepted.revisions.count) séance\(accepted.revisions.count > 1 ? "s" : "") importé\(accepted.revisions.count > 1 ? "s" : "").", kind: .success)
@@ -569,6 +591,8 @@ final class AppModel {
     // MARK: Pronote
 
     func applyPronote(lessons: [PronoteLesson], syncedAt: Date, announce: Bool = true) {
+        do { try prepareRevisionDays() }
+        catch { showToast("Synchronisation non enregistrée", error.localizedDescription, warning: true); return }
         let events = LessonConverter.events(from: lessons, subjects: document.subjects)
         document.pronoteEvents = events
         document.settings.lastPronoteSync = Self.isoString(syncedAt)
@@ -591,6 +615,8 @@ final class AppModel {
     // MARK: Persistance
 
     private func persist() {
+        do { document = try RevisionStreak.reconcile(document, now: now()) }
+        catch { toast = .init(title: "Enregistrement impossible", message: error.localizedDescription, kind: .warning); return }
         version += 1
         let snapshot = document
         let currentVersion = version

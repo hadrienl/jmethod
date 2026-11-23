@@ -175,4 +175,5 @@ data class AppDocument(
     val notebookImports: Map<String, NotebookImport> = emptyMap(),
     val programmes: List<RevisionProgramme> = emptyList(),
     val schemaVersion: Int = 1,
+    val streakState: StreakState? = null,
 )

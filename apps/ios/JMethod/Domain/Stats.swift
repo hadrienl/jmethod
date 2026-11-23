@@ -40,7 +40,7 @@ struct StatsScreen: Equatable {
     var weakSubjects: [SubjectRow]
     var subjects: [SubjectRow]
 
-    init(courses: [Course], revisions: [Revision], subjects: [Subject], today: String) {
+    init(courses: [Course], revisions: [Revision], subjects: [Subject], today: String, streakState: StreakState? = nil) {
         let courseMap = Dictionary(courses.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let completed = revisions.filter { $0.status == .completed }.count
         let overall = Self.average(revisions)
@@ -61,7 +61,8 @@ struct StatsScreen: Equatable {
                 averageTone: average.map { $0 >= 50 ? .good : .weak }
             )
         }
-        let streak = Self.streak(revisions: revisions, today: today)
+        let flame = RevisionStreak.summary(streakState, date: today)
+        let streak = flame.count
         completionRate = revisions.isEmpty ? 0 : jsRound(Double(completed) / Double(revisions.count) * 100)
         completionLine = "\(completed) sur \(revisions.count) faites"
         overallAvgScore = overall
@@ -72,9 +73,8 @@ struct StatsScreen: Equatable {
         default: "Sous l’équilibre"
         }
         streakDays = streak
-        streakLabel = "\(streak) j"
-        streakLine = streak == 0 ? "Valide une séance pour commencer"
-            : "\(streak > 1 ? "Jours consécutifs" : "Jour consécutif") avec une séance"
+        streakLabel = "\(streak)"
+        streakLine = "\(flame.title) · Record : \(RevisionStreak.days(flame.record))"
         coursesCount = courses.count
         subjectsLine = "Sur \(rows.count) matière\(rows.count > 1 ? "s" : "")"
         weakSubjects = rows.filter { ($0.avgScore ?? 100) < 50 }
@@ -86,18 +86,5 @@ struct StatsScreen: Equatable {
         let scores = revisions.filter { $0.status == .completed }.compactMap(\.score)
         guard !scores.isEmpty else { return nil }
         return jsRound(Double(scores.reduce(0, +)) / Double(scores.count))
-    }
-
-    /// D3 : jours consécutifs ayant au moins une séance validée (`completedDate`), en remontant depuis aujourd'hui,
-    /// ou depuis hier si rien n'est encore validé aujourd'hui.
-    static func streak(revisions: [Revision], today: String) -> Int {
-        let days = Set(revisions.filter { $0.status == .completed }.compactMap(\.completedDate))
-        guard var day = days.contains(today) ? today : SchoolDay.adding(-1, to: today) else { return 0 }
-        var count = 0
-        while days.contains(day), let previous = SchoolDay.adding(-1, to: day) {
-            count += 1
-            day = previous
-        }
-        return count
     }
 }

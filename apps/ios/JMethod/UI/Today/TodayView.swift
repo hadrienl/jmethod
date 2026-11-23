@@ -18,6 +18,7 @@ struct TodayView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.l) {
                     TodayHeader(date: screen.headerDate)
+                    RevisionFlameCard(summary: RevisionStreak.summary(document.streakState, date: app.today))
                     HeroCard(hero: screen.hero, hasCourses: hasCourses, canReview: RevisionSession.hasDocuments(screen.hero.course),
                              onStart: { if let revision = screen.hero.revision { app.presented = .score(revisionId: revision.id) } },
                              onReview: { if let revision = screen.hero.revision { app.presented = .review(revisionId: revision.id) } })

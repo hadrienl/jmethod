@@ -172,9 +172,10 @@ struct AppDocument: Codable, Equatable, Sendable {
     var notebookImports: [String: NotebookImport] = [:]
     var programmes: [RevisionProgramme] = []
     var schemaVersion: Int = 1
+    var streakState: StreakState? = nil
 
     private enum CodingKeys: String, CodingKey {
-        case settings, subjects, courses, revisions, pronoteEvents, initialized, notebookImports, programmes, schemaVersion
+        case settings, subjects, courses, revisions, pronoteEvents, initialized, notebookImports, programmes, schemaVersion, streakState
     }
 
     init(settings: AppSettings, subjects: [Subject], courses: [Course], revisions: [Revision], pronoteEvents: [PronoteEvent], initialized: Bool,
@@ -199,8 +200,13 @@ struct AppDocument: Codable, Equatable, Sendable {
         initialized = try container.decodeIfPresent(Bool.self, forKey: .initialized) ?? true
         notebookImports = (try? container.decodeIfPresent([String: NotebookImport].self, forKey: .notebookImports)) ?? [:]
         programmes = try container.decodeIfPresent([RevisionProgramme].self, forKey: .programmes) ?? []
+        streakState = try container.decodeIfPresent(StreakState.self, forKey: .streakState)
         schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
-        guard (1...2).contains(schemaVersion) else { throw DecodingError.dataCorruptedError(forKey: .schemaVersion, in: container, debugDescription: "Cette sauvegarde nécessite une version plus récente de J-Method.") }
+        if schemaVersion >= 3 {
+            guard let streakState else { throw DecodingError.dataCorruptedError(forKey: .streakState, in: container, debugDescription: "Le journal de révision manque au document.") }
+            try RevisionStreak.validate(streakState)
+        }
+        guard (1...3).contains(schemaVersion) else { throw DecodingError.dataCorruptedError(forKey: .schemaVersion, in: container, debugDescription: "Cette sauvegarde nécessite une version plus récente de J-Method.") }
     }
 
     /// `notebookImports` n'est écrit que s'il contient des séances (fichier identique à celui du web sinon).
@@ -215,5 +221,6 @@ struct AppDocument: Codable, Equatable, Sendable {
         if !notebookImports.isEmpty { try container.encode(notebookImports, forKey: .notebookImports) }
         if !programmes.isEmpty { try container.encode(programmes, forKey: .programmes) }
         if schemaVersion > 1 { try container.encode(schemaVersion, forKey: .schemaVersion) }
+        try container.encodeIfPresent(streakState, forKey: .streakState)
     }
 }
