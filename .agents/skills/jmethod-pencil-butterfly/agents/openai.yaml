@@ -1,0 +1,4 @@
+interface:
+  display_name: "Papillon crayonné J-Method"
+  short_description: "Décliner fidèlement la mascotte papillon crayonnée"
+  default_prompt: "Utilise $jmethod-pencil-butterfly pour illustrer la mascotte dans une nouvelle pose sans changer son identité."
