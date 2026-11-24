@@ -128,7 +128,8 @@ struct RootView: View {
                     OfflineBanner(pronote: pronote)
                 }
                 TabView(selection: $tab) {
-                    TodayView(app: app)
+                    TodayView(app: app, offline: offline, refreshing: pronote.phase == .synchronizing || pronote.silentRelogin,
+                              onShowCourses: { tab = .courses })
                         .tabItem { Label("Aujourd’hui", systemImage: "checklist") }
                         .badge(app.programme.due.count)
                         .tag(Tab.today)

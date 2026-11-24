@@ -502,6 +502,7 @@ private fun AppContent(container: AppContainer, createConnection: (CoroutineScop
     LifecycleEventEffect(Lifecycle.Event.ON_START) {
         lifecycleScope.launch {
             container.repository.tryOpenRevisionDay()?.let { toast(ToastVisuals("Journée non enregistrée", it, ToastTone.WARNING)) }
+            todayViewModel.recordVisit()
             pronoteViewModel.controller.onForeground()
         }
     }
@@ -806,6 +807,10 @@ private fun TabContent(
                     onAddCourse = coursesViewModel::openCreateFrom,
                     onReview = onReview,
                     onViewCourse = coursesViewModel::openDetail,
+                    onShowCourses = { onSelectTab(Tab.COURSES) },
+                    onSaveSelection = todayViewModel::saveSelection,
+                    offline = pronote.access == AccessPhase.OFFLINE,
+                    refreshing = pronote.busy || pronote.reconnecting,
                 )
             }
         }
@@ -879,7 +884,10 @@ private fun SessionSheetHost(
     val documents = model.members.flatMap { it.documents.orEmpty() }.map { it to courseFiles.exists(it) }
     val page = session.page
     val next = (page as? SessionPage.Result)?.let { result -> document.revisions.firstOrNull { it.id == result.nextRevisionId } }
-    val remaining = state.model.due.size
+    val selection = document.todayWidgetVisit?.selection.orEmpty()
+    val remaining = if (session.revisionId in selection) {
+        state.model.due.count { it.id in selection }
+    } else state.model.due.size
     SessionSheet(
         state = session,
         presentation = presentation,

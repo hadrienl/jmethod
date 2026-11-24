@@ -125,12 +125,14 @@ object ImportExport {
             val programmes: List<fr.jmethod.app.model.RevisionProgramme> = emptyList(),
             val schemaVersion: Int = 1,
             val streakState: fr.jmethod.app.model.StreakState? = null,
+            val todayWidgetVisit: TodayWidgetVisit? = null,
         ) : Result {
             /** État après import : les créneaux Pronote de l’appareil sont conservés. */
             fun applyTo(document: AppDocument): AppDocument = document.copy(
                 courses = courses,
                 revisions = revisions,
                 programmes = programmes, schemaVersion = schemaVersion, streakState = streakState,
+                todayWidgetVisit = todayWidgetVisit,
                 subjects = subjects ?: document.subjects,
                 settings = settings ?: document.settings,
                 notebookImports = notebookImports ?: document.notebookImports,
@@ -219,6 +221,9 @@ object ImportExport {
             val candidate = AppDocument(courses = courses, revisions = revisions, subjects = subjects ?: emptyList(), settings = settings ?: AppSettings(), programmes = programmes, schemaVersion = schema, streakState = streak)
             if (runCatching { RevisionProgrammes.validateDocument(candidate, checkSubjects = subjects != null) }.isFailure) return shapeError("les feuilles, programmes ou rythmes sont incohérents")
         }
-        return Result.Accepted(courses, revisions, subjects, settings, imports, programmes, schema, streak)
+        val visit = root["todayWidgetVisit"]?.let { raw ->
+            runCatching { json.decodeFromJsonElement(TodayWidgetVisit.serializer(), raw) }.getOrNull()
+        }
+        return Result.Accepted(courses, revisions, subjects, settings, imports, programmes, schema, streak, visit)
     }
 }
