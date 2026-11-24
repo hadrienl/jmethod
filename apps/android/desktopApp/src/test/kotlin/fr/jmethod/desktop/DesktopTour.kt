@@ -37,6 +37,8 @@ import fr.jmethod.app.data.AppClock
 import fr.jmethod.app.documents.PendingDocument
 import fr.jmethod.app.documents.DocType
 import fr.jmethod.app.domain.CourseEditing
+import fr.jmethod.app.domain.FrenchDates
+import fr.jmethod.app.domain.sentenceCase
 import fr.jmethod.app.pronote.AccountType
 import fr.jmethod.app.pronote.FileThrottle
 import fr.jmethod.app.pronote.Lesson
@@ -125,6 +127,7 @@ class DesktopTour {
                 }
                 waitUntil(timeoutMillis = 90_000) { onAllNodesWithContentDescription("Planning").fetchSemanticsNodes().isNotEmpty() }
                 waitForIdle()
+                if (wideW >= 1280) assertTodayHeader(inline = true)
                 shot(dir, "wide-$wideW-today")
                 tab("Planning"); shot(dir, "wide-$wideW-planning")
                 tab("Mes cours"); shot(dir, "wide-$wideW-courses")
@@ -163,7 +166,9 @@ class DesktopTour {
                 shot(dir, "medium-720-today")
             }
             scene(390, 844, container, owners) {
-                waitForIdle(); shot(dir, "compact-390-today")
+                waitForIdle()
+                assertTodayHeader(inline = false)
+                shot(dir, "compact-390-today")
                 tab("Planning"); shot(dir, "compact-390-planning")
                 tab("Mes cours"); shot(dir, "compact-390-courses")
                 onAllNodesWithText("Additionner des fractions").onFirst().performClick()
@@ -224,6 +229,19 @@ class DesktopTour {
             }
             block()
         }
+
+    private fun DesktopComposeUiTest.assertTodayHeader(inline: Boolean) {
+        val date = FrenchDates.weekdayDayMonth(LocalDate.now(AppClock.ZONE)).sentenceCase()
+        val dateBounds = onNodeWithText(date).getUnclippedBoundsInRoot()
+        val flame = onAllNodesWithContentDescription("La flamme suit le programme", substring = true)
+            .onFirst().getUnclippedBoundsInRoot()
+        if (inline) {
+            assertTrue("La flamme est à droite de la date", flame.left >= dateBounds.right)
+            assertTrue("La flamme est à la hauteur de la date", flame.top < dateBounds.bottom)
+        } else {
+            assertTrue("La flamme passe sous la date", flame.top >= dateBounds.bottom)
+        }
+    }
 
     private fun DesktopComposeUiTest.waitForText(text: String) =
         waitUntil(timeoutMillis = 30_000) { onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty() }

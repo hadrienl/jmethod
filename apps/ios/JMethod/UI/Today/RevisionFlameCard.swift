@@ -16,8 +16,8 @@ struct RevisionFlameCard: View {
                 Text("La flamme suit le programme de ta première ouverture du jour.").font(.caption).foregroundStyle(Theme.textMuted)
             }.frame(maxWidth: .infinity, alignment: .leading)
         }
-        .surface()
+        .surface(padding: Spacing.l)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(RevisionStreak.days(summary.count)) de révision. \(summary.title). \(summary.message) Record : \(RevisionStreak.days(summary.record)).")
+        .accessibilityLabel("\(RevisionStreak.days(summary.count)) de révision. \(summary.title). \(summary.message) Record : \(RevisionStreak.days(summary.record)). La flamme suit le programme de ta première ouverture du jour.")
     }
 }
