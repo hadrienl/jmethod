@@ -208,7 +208,7 @@ final class JMethodUITests: XCTestCase {
     }
 
     private func moreTab(_ app: XCUIApplication) -> XCUIElement {
-        app.tabBars.buttons.matching(NSPredicate(format: "label IN %@", ["Plus", "More"])).firstMatch
+        app.tabBars.buttons.matching(NSPredicate(format: "label IN %@", ["Autre", "Plus", "More"])).firstMatch
     }
 
     private func tapTab(_ app: XCUIApplication, _ label: String) {
