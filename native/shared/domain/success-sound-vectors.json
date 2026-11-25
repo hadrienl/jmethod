@@ -1,0 +1,12 @@
+[
+  {"case":"validation simple","expected":"revision"},
+  {"case":"révision déjà validée","duplicate":true},
+  {"case":"écriture sans validation","unchanged":true},
+  {"case":"sons désactivés","muted":true,"evening":true},
+  {"case":"première flamme","flame":true,"expected":"flame"},
+  {"case":"soirée et flamme","flame":true,"evening":true,"expected":"evening"},
+  {"case":"reprise et flamme","flame":true,"resume":true,"expected":"resume"},
+  {"case":"record et soirée","prior":true,"flame":true,"evening":true,"expected":"record"},
+  {"case":"dernier J et record","programme":true,"prior":true,"flame":true,"evening":true,"expected":"programme"},
+  {"case":"dernière séance de reprise","resume":true,"expected":"resume"}
+]

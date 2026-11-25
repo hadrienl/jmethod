@@ -3,6 +3,7 @@ package fr.jmethod.app.ui.platform
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
+import fr.jmethod.app.domain.SuccessSound
 import fr.jmethod.app.pronote.PronoteUiState
 import fr.jmethod.app.ui.pronote.PronoteViewModel
 import java.io.File
@@ -35,6 +36,9 @@ interface PlatformServices {
 
     /** Version affichée dans « À propos ». */
     val appVersion: String
+
+    fun playSuccessSound(sound: SuccessSound)
+    fun stopSuccessSound()
 
     /** Ouvre un document local en lecture seule avec l’app par défaut ; faux si aucune ne convient. */
     fun openFile(file: File): Boolean

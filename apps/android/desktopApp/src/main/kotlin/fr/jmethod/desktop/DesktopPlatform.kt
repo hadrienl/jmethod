@@ -1,5 +1,10 @@
 package fr.jmethod.desktop
 
+import fr.jmethod.app.domain.SuccessSound
+import java.util.concurrent.Executors
+import javax.sound.sampled.AudioSystem
+import javax.sound.sampled.Clip
+import javax.sound.sampled.LineEvent
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
@@ -21,6 +26,40 @@ class DesktopPlatform(private val window: () -> Frame?, private val cacheDir: Fi
     override val isDesktop = true
     override val backupNote = ""
     override val appVersion: String = System.getProperty("jmethod.version") ?: "—"
+
+    private val audioExecutor = Executors.newSingleThreadExecutor { work ->
+        Thread(work, "J-Method audio").apply { isDaemon = true }
+    }
+    private var successAudio: Clip? = null
+
+    override fun playSuccessSound(sound: SuccessSound) {
+        if (window()?.isActive != true) return
+        audioExecutor.execute {
+            closeClip()
+            val asset = javaClass.getResource("/raw/${sound.asset}.wav") ?: return@execute
+            runCatching {
+                val clip = AudioSystem.getClip()
+                successAudio = clip
+                AudioSystem.getAudioInputStream(asset).use(clip::open)
+                clip.addLineListener { event ->
+                    if (event.type == LineEvent.Type.STOP) audioExecutor.execute {
+                        if (successAudio == clip) closeClip()
+                    }
+                }
+                clip.start()
+            }.onFailure { closeClip() }
+        }
+    }
+
+    override fun stopSuccessSound() {
+        audioExecutor.execute { closeClip() }
+    }
+
+    private fun closeClip() {
+        val clip = successAudio
+        successAudio = null
+        clip?.close()
+    }
 
     private fun desktop(action: Desktop.Action): Desktop? =
         if (Desktop.isDesktopSupported()) Desktop.getDesktop().takeIf { it.isSupported(action) } else null

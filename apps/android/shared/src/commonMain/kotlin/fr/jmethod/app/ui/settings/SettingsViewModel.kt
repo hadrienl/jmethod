@@ -31,8 +31,9 @@ data class SettingsDraft(
     val emergencyThreshold: Int,
     val intervals: List<Int>,
     val newInterval: String = "",
+    val soundEnabled: Boolean = base.soundEnabled,
 ) {
-    val dirty: Boolean get() = sensitivity != base.sensitivity || emergencyThreshold != base.emergencyThreshold || intervals != base.intervals
+    val dirty: Boolean get() = sensitivity != base.sensitivity || emergencyThreshold != base.emergencyThreshold || intervals != base.intervals || soundEnabled != base.soundEnabled
 
     companion object {
         fun of(settings: AppSettings) = SettingsDraft(settings, settings.sensitivity, settings.emergencyThreshold, settings.intervals)
@@ -86,6 +87,7 @@ class SettingsViewModel internal constructor(
         draft.value = transform(current)
     }
 
+    fun setSoundEnabled(value: Boolean) = edit { it.copy(soundEnabled = value) }
     fun setSensitivity(value: Double) = edit { it.copy(sensitivity = SettingsLogic.snapSensitivity(value)) }
     fun setThreshold(value: Int) = edit { it.copy(emergencyThreshold = value.coerceIn(SettingsLogic.THRESHOLD_MIN, SettingsLogic.THRESHOLD_MAX)) }
     fun setNewInterval(value: String) = edit { it.copy(newInterval = value) }
@@ -107,7 +109,7 @@ class SettingsViewModel internal constructor(
                 document.copy(
                     settings = SettingsLogic.save(
                         document.settings, document.settings.pronoteIcalUrl, current.sensitivity, current.emergencyThreshold, current.intervals,
-                    ),
+                    ).copy(soundEnabled = current.soundEnabled),
                 )
             }
             draft.value = null

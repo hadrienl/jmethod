@@ -29,6 +29,7 @@ val sharedScript = tasks.register<SharedScriptTask>("sharedPronoteAutomation") {
 
 android {
     namespace = "fr.jmethod.app"
+    sourceSets.getByName("main").res.srcDir(sharedDir.dir("sound-assets"))
     compileSdk = 36
     defaultConfig {
         applicationId = "fr.jmethod.app"

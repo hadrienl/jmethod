@@ -1,5 +1,10 @@
 package fr.jmethod.app.ui
 
+import android.media.AudioAttributes
+import android.media.AudioManager
+import android.media.MediaPlayer
+import fr.jmethod.app.R
+import fr.jmethod.app.domain.SuccessSound
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -51,6 +56,41 @@ class AndroidPlatform(private val context: Context) : PlatformServices {
     override val backupNote = "Les sauvegardes Android sont désactivées."
     override val appVersion: String
         get() = runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "—"
+
+    private var successAudio: MediaPlayer? = null
+
+    override fun playSuccessSound(sound: SuccessSound) {
+        val audio = context.getSystemService(AudioManager::class.java) ?: return
+        if (audio.ringerMode != AudioManager.RINGER_MODE_NORMAL || audio.getStreamVolume(AudioManager.STREAM_SYSTEM) == 0) return
+        stopSuccessSound()
+        val asset = when (sound) {
+            SuccessSound.REVISION -> R.raw.success_revision
+            SuccessSound.HOMEWORK -> R.raw.success_homework
+            SuccessSound.EVENING -> R.raw.success_evening
+            SuccessSound.RESUME -> R.raw.success_resume
+            SuccessSound.FLAME -> R.raw.success_flame
+            SuccessSound.RECORD -> R.raw.success_record
+            SuccessSound.PROGRAMME -> R.raw.success_programme
+        }
+        val attributes = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build()
+        runCatching {
+            val player = MediaPlayer.create(context, asset, attributes, AudioManager.AUDIO_SESSION_ID_GENERATE)
+                ?: return@runCatching
+            successAudio = player
+            player.setOnCompletionListener { if (successAudio == it) stopSuccessSound() }
+            player.setOnErrorListener { failed, _, _ ->
+                if (successAudio == failed) stopSuccessSound()
+                true
+            }
+            player.start()
+        }.onFailure { stopSuccessSound() }
+    }
+
+    override fun stopSuccessSound() {
+        successAudio?.release()
+        successAudio = null
+    }
 
     /**
      * Ouvre une pièce jointe téléchargée par une URI `content://` en lecture seule. Un document actif
