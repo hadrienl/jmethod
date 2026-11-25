@@ -61,6 +61,20 @@ class TodayViewModel(
     private val clock: AppClock,
 ) : ViewModel() {
 
+    fun recordVisit() = updateWidget { repository.recordTodayVisit() }
+
+    fun saveSelection(ids: List<String>) = updateWidget { repository.saveTodaySelection(ids) }
+
+    private fun updateWidget(action: suspend () -> Unit) {
+        viewModelScope.launch {
+            try { action() }
+            catch (error: kotlinx.coroutines.CancellationException) { throw error }
+            catch (error: Exception) {
+                events.send(TodayEvent.Toast("Reprise non enregistrée", error.localizedMessage ?: "Réessaie dans un instant.", true))
+            }
+        }
+    }
+
     /** Date réelle, recalculée toutes les 30 s tant que l’écran est actif (changement de jour). */
     private val todayFlow: Flow<String> = flow {
         var previous: String? = null
@@ -69,6 +83,7 @@ class TodayViewModel(
             if (date != previous) {
                 // Un échec d’écriture ne fige pas l’écran : la date change quand même, le gel sera retenté.
                 repository.tryOpenRevisionDay()
+                recordVisit()
                 previous = date
                 emit(date)
             }
@@ -121,8 +136,13 @@ class TodayViewModel(
                 )
                 outcome = result
                 if (!result.ignored) {
-                    // Première séance due dans l’ordre affiché d’Aujourd’hui (comme iOS).
-                    next = RevisionSession.nextInDisplayOrder(result.revisions, document.courses, document.subjects, result.today, revisionId)?.id
+                    val selection = document.todayWidgetVisit?.selection.orEmpty()
+                    next = if (revisionId in selection) {
+                        val due = fr.jmethod.app.domain.EveningProgramme.of(result.revisions, document.courses, result.today).due
+                        fr.jmethod.app.domain.TodayWidgetState.orderedSelection(selection, due).firstOrNull()?.id
+                    } else {
+                        RevisionSession.nextInDisplayOrder(result.revisions, document.courses, document.subjects, result.today, revisionId)?.id
+                    }
                 }
                 if (result.ignored) document else fr.jmethod.app.domain.RevisionStreak.releaseMovedByApp(document,
                     fr.jmethod.app.domain.RevisionStreak.completed(document.copy(revisions = result.revisions), revisionId, clock.now()), clock.now())

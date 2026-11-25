@@ -25,6 +25,7 @@ enum Backup {
         var programmes: [RevisionProgramme] = []
         var schemaVersion = 1
         var streakState: StreakState? = nil
+        var todayWidgetVisit: TodayWidgetVisit? = nil
 
         func apply(to document: AppDocument) -> AppDocument {
             var result = document
@@ -37,6 +38,7 @@ enum Backup {
             result.programmes = programmes
             result.schemaVersion = schemaVersion
             result.streakState = streakState
+            result.todayWidgetVisit = todayWidgetVisit
             return RevisionProgrammes.migrate(NotebookCourses.migratingKeys(result))
         }
     }
@@ -148,7 +150,12 @@ enum Backup {
             do { try RevisionProgrammes.validateDocument(candidate, checkSubjects: subjects != nil) }
             catch { return shapeError("les feuilles, programmes ou rythmes sont incohérents") }
         }
-        return .accepted(Accepted(courses: courses, revisions: revisions, subjects: subjects, settings: settings, notebookImports: imports, programmes: programmes, schemaVersion: schema, streakState: streak))
+        let visit = root["todayWidgetVisit"]
+            .flatMap { try? JSONSerialization.data(withJSONObject: $0, options: .fragmentsAllowed) }
+            .flatMap { try? JSONDecoder().decode(TodayWidgetVisit.self, from: $0) }
+        return .accepted(Accepted(courses: courses, revisions: revisions, subjects: subjects, settings: settings,
+                                  notebookImports: imports, programmes: programmes, schemaVersion: schema,
+                                  streakState: streak, todayWidgetVisit: visit))
     }
 
     // MARK: Export

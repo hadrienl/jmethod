@@ -114,6 +114,10 @@
 		F32A9C3626CA76DAB5E8CC3B /* SessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE6A6A2D229FE8539E3E168A /* SessionTests.swift */; };
 		F519DB02124D32285255E326 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = D311AA7F6E6072898C8768E8 /* Models.swift */; };
 		F8725271A6E91CE859F34A79 /* PronoteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3A2B461DB3494BB11F44C33 /* PronoteTests.swift */; };
+		06C1E72BE8496C68E02B902F /* TodayWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DA747958CAE39F0A096556E /* TodayWidget.swift */; };
+		7A3F846422BA24138C50D61D /* TodayWidgetCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = D379D5C4D73DCF51D05C1A86 /* TodayWidgetCard.swift */; };
+		1C7322891EE5D6CF524D9357 /* TodayWidgetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E5A19BAF1820975816B354D /* TodayWidgetTests.swift */; };
+		BD245D69AEDAF7284639A1F4 /* today-widget-vectors.json in Resources */ = {isa = PBXBuildFile; fileRef = F28B50549166622EA8D647D4 /* today-widget-vectors.json */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -245,6 +249,10 @@
 		F8E34816E73E4409329A6BFA /* ProtocolJSON.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolJSON.swift; sourceTree = "<group>"; };
 		F9BD5B9E2BB15609E827AC59 /* RevisionSessionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RevisionSessionSheet.swift; sourceTree = "<group>"; };
 		FE6A6A2D229FE8539E3E168A /* SessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTests.swift; sourceTree = "<group>"; };
+		8DA747958CAE39F0A096556E /* TodayWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayWidget.swift; sourceTree = "<group>"; };
+		D379D5C4D73DCF51D05C1A86 /* TodayWidgetCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayWidgetCard.swift; sourceTree = "<group>"; };
+		7E5A19BAF1820975816B354D /* TodayWidgetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayWidgetTests.swift; sourceTree = "<group>"; };
+		F28B50549166622EA8D647D4 /* today-widget-vectors.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "today-widget-vectors.json"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -266,6 +274,7 @@
 				F9BD5B9E2BB15609E827AC59 /* RevisionSessionSheet.swift */,
 				F4CBDA3466B400C0ABA8FC9F /* ScoreForm.swift */,
 				E4ED7B4DEEEF9E67797B91AA /* TodayView.swift */,
+				D379D5C4D73DCF51D05C1A86 /* TodayWidgetCard.swift */,
 			);
 			path = Today;
 			sourceTree = "<group>";
@@ -366,6 +375,7 @@
 				EF6F0AAD5BA325C5D09C9FC2 /* RevisionProgrammesTests.swift */,
 				C7C49024E23E31187B90E824 /* RevisionSessionTests.swift */,
 				D181261244271F62DE318FAC /* RevisionStreakTests.swift */,
+				7E5A19BAF1820975816B354D /* TodayWidgetTests.swift */,
 				967C27C9DDEDDECB71672EFA /* ScreenVectorTests.swift */,
 				EBB46640DD61EF9167363679 /* SessionExpiryTests.swift */,
 				FE6A6A2D229FE8539E3E168A /* SessionTests.swift */,
@@ -416,6 +426,7 @@
 				2C1373B449969B75C7D71654 /* domain-vectors.json */,
 				563BB7995CED87BD73910188 /* programme-vectors.json */,
 				41A3EA558510B954672840FB /* streak-vectors.json */,
+				F28B50549166622EA8D647D4 /* today-widget-vectors.json */,
 			);
 			path = domain;
 			sourceTree = "<group>";
@@ -478,6 +489,7 @@
 				F230295DB7092F04CE8591B8 /* SubjectColorDraft.swift */,
 				4272D901F7FE229470402FF0 /* SubjectMatcher.swift */,
 				CAC3D4FBEBC30EA698B50046 /* TodayScreen.swift */,
+				8DA747958CAE39F0A096556E /* TodayWidget.swift */,
 				2F0D53934406A6981AA49AAD /* Documents */,
 			);
 			path = Domain;
@@ -685,6 +697,7 @@
 				301D2757AA21C52D97E8F159 /* programme-vectors.json in Resources */,
 				DCA5E4B5B9ADCB94B416C61C /* protocol-vectors.json in Resources */,
 				8D8677449EF10DFF15025F29 /* streak-vectors.json in Resources */,
+				BD245D69AEDAF7284639A1F4 /* today-widget-vectors.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -767,7 +780,9 @@
 				E2012BA049A2ED0DB0780249 /* SubjectMatcher.swift in Sources */,
 				A515FBEECD796F28A24CE072 /* Theme.swift in Sources */,
 				9365835E87F9C37A46C7FB14 /* TodayScreen.swift in Sources */,
+				06C1E72BE8496C68E02B902F /* TodayWidget.swift in Sources */,
 				2DE1DE7BAA674E1EEA1A3290 /* TodayView.swift in Sources */,
+				7A3F846422BA24138C50D61D /* TodayWidgetCard.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -789,6 +804,7 @@
 				79966E40AC6DF69D93B7ED08 /* RevisionProgrammesTests.swift in Sources */,
 				C3074AF6C5CAC3F782636256 /* RevisionSessionTests.swift in Sources */,
 				2E5A0E920E1DA6203B351105 /* RevisionStreakTests.swift in Sources */,
+				1C7322891EE5D6CF524D9357 /* TodayWidgetTests.swift in Sources */,
 				6A3665D665D310D864F0340F /* ScreenVectorTests.swift in Sources */,
 				B24F3DDFEFF816E4D351A529 /* SessionExpiryTests.swift in Sources */,
 				F32A9C3626CA76DAB5E8CC3B /* SessionTests.swift in Sources */,

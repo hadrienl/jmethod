@@ -38,6 +38,7 @@ import fr.jmethod.app.documents.PendingDocument
 import fr.jmethod.app.documents.DocType
 import fr.jmethod.app.domain.CourseEditing
 import fr.jmethod.app.domain.FrenchDates
+import fr.jmethod.app.domain.TodayWidgetVisit
 import fr.jmethod.app.domain.sentenceCase
 import fr.jmethod.app.pronote.AccountType
 import fr.jmethod.app.pronote.FileThrottle
@@ -129,6 +130,24 @@ class DesktopTour {
                 waitForIdle()
                 if (wideW >= 1280) assertTodayHeader(inline = true)
                 shot(dir, "wide-$wideW-today")
+                if (!demo) {
+                    val day = LocalDate.now(AppClock.ZONE)
+                    runBlocking {
+                        container.repository.update { it.copy(todayWidgetVisit = TodayWidgetVisit(day.minusDays(4).toString())) }
+                        container.repository.recordTodayVisit()
+                    }
+                    waitForText("Préparer ma reprise")
+                    onNodeWithText("Préparer ma reprise").performClick()
+                    waitForText("Enregistrer (3)")
+                    shot(dir, "wide-$wideW-resume-selection")
+                    onNodeWithText("Enregistrer (3)").performClick()
+                    waitForText("Continuer")
+                    assertEquals(3, runBlocking { container.repository.current() }.todayWidgetVisit?.selection?.size)
+                    shot(dir, "wide-$wideW-resume-started")
+                    runBlocking {
+                        container.repository.update { it.copy(todayWidgetVisit = TodayWidgetVisit(day.toString())) }
+                    }
+                }
                 tab("Planning"); shot(dir, "wide-$wideW-planning")
                 tab("Mes cours"); shot(dir, "wide-$wideW-courses")
                 onAllNodesWithText("Additionner des fractions").onFirst().performClick()

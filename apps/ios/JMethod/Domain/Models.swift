@@ -173,9 +173,10 @@ struct AppDocument: Codable, Equatable, Sendable {
     var programmes: [RevisionProgramme] = []
     var schemaVersion: Int = 1
     var streakState: StreakState? = nil
+    var todayWidgetVisit: TodayWidgetVisit? = nil
 
     private enum CodingKeys: String, CodingKey {
-        case settings, subjects, courses, revisions, pronoteEvents, initialized, notebookImports, programmes, schemaVersion, streakState
+        case settings, subjects, courses, revisions, pronoteEvents, initialized, notebookImports, programmes, schemaVersion, streakState, todayWidgetVisit
     }
 
     init(settings: AppSettings, subjects: [Subject], courses: [Course], revisions: [Revision], pronoteEvents: [PronoteEvent], initialized: Bool,
@@ -203,6 +204,7 @@ struct AppDocument: Codable, Equatable, Sendable {
         // Un journal illisible ou incohérent ne doit pas coûter tout le document : un nouveau suivi démarre à la prochaine ouverture.
         streakState = (try? container.decodeIfPresent(StreakState.self, forKey: .streakState)) ?? nil
         if let streakState, (try? RevisionStreak.validate(streakState)) == nil { self.streakState = nil }
+        todayWidgetVisit = try? container.decodeIfPresent(TodayWidgetVisit.self, forKey: .todayWidgetVisit)
         schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
         guard (1...3).contains(schemaVersion) else { throw DecodingError.dataCorruptedError(forKey: .schemaVersion, in: container, debugDescription: "Cette sauvegarde nécessite une version plus récente de J-Method.") }
     }
@@ -220,5 +222,6 @@ struct AppDocument: Codable, Equatable, Sendable {
         if !programmes.isEmpty { try container.encode(programmes, forKey: .programmes) }
         if schemaVersion > 1 { try container.encode(schemaVersion, forKey: .schemaVersion) }
         try container.encodeIfPresent(streakState, forKey: .streakState)
+        try container.encodeIfPresent(todayWidgetVisit, forKey: .todayWidgetVisit)
     }
 }

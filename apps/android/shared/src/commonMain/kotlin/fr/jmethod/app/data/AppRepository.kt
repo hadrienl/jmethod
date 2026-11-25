@@ -54,6 +54,26 @@ class AppRepository(
     /** Première ouverture fonctionnelle ou retour au premier plan : avant toute reprise Pronote. */
     suspend fun openRevisionDay(): AppDocument = update { fr.jmethod.app.domain.RevisionStreak.reconcile(it, clock.now(), openCurrent = true) }
 
+    suspend fun recordTodayVisit() = update { document ->
+        val day = clock.today().toString()
+        val previous = document.todayWidgetVisit
+        val visit = (previous ?: fr.jmethod.app.domain.TodayWidgetVisit(day)).opened(day)
+        val due = fr.jmethod.app.domain.EveningProgramme.of(document.revisions, document.courses, day).due
+        val advancing = previous != null && visit.lastVisit != previous.lastVisit
+        val selection = if (advancing && visit.selection.none { id -> due.any { it.id == id } }) emptyList() else visit.selection
+        document.copy(todayWidgetVisit = visit.copy(selection = selection, removedCount = if (advancing && selection.isEmpty()) 0 else visit.removedCount))
+    }
+
+    suspend fun saveTodaySelection(ids: List<String>) = update { document ->
+        val day = clock.today().toString()
+        val due = fr.jmethod.app.domain.EveningProgramme.of(document.revisions, document.courses, day).due.mapTo(mutableSetOf()) { it.id }
+        val visit = document.todayWidgetVisit ?: fr.jmethod.app.domain.TodayWidgetVisit(day)
+        val checked = ids.distinct().filter { it in due }
+        if (checked.isEmpty()) return@update document
+        val completed = document.revisions.filter { it.status == fr.jmethod.app.model.RevisionStatus.COMPLETED }.mapTo(mutableSetOf()) { it.id }
+        document.copy(todayWidgetVisit = visit.copy(selection = visit.selection.filter { it in completed } + checked, removedCount = 0))
+    }
+
     /** Comme [openRevisionDay], sans jamais lever : l’échec (disque plein…) est rendu en message et la journée sera figée au prochain essai. */
     suspend fun tryOpenRevisionDay(): String? = try { openRevisionDay(); null }
         catch (error: kotlinx.coroutines.CancellationException) { throw error }
@@ -64,7 +84,12 @@ class AppRepository(
         current()
         return mutex.withLock {
             val before = fr.jmethod.app.domain.RevisionStreak.reconcile(state.value!!, clock.now())
-            val updated = transform(before)
+            val changed = transform(before)
+            val visit = changed.todayWidgetVisit
+            val updated = if (visit == null || visit.selection.isEmpty()) changed else {
+                val due = fr.jmethod.app.domain.EveningProgramme.of(changed.revisions, changed.courses, clock.today().toString()).due
+                changed.copy(todayWidgetVisit = visit.reconcile(due, changed.revisions, changed.courses.mapTo(mutableSetOf()) { it.id }))
+            }
             if (updated == state.value) return@withLock updated
             withContext(io) { store.write(updated) }
             state.value = updated

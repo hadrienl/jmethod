@@ -176,4 +176,5 @@ data class AppDocument(
     val programmes: List<RevisionProgramme> = emptyList(),
     val schemaVersion: Int = 1,
     val streakState: StreakState? = null,
+    val todayWidgetVisit: fr.jmethod.app.domain.TodayWidgetVisit? = null,
 )

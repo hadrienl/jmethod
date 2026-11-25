@@ -10,9 +10,10 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import fr.jmethod.app.ui.components.LocalScreenGutter
 import fr.jmethod.app.ui.components.ScrollbarBox
-import fr.jmethod.app.ui.platform.LocalPlatform
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.OutlinedButton
 import fr.jmethod.app.domain.RevisionSession
@@ -115,10 +116,27 @@ fun TodayScreen(
     onReview: (String) -> Unit = {},
     /** « Voir le cours » d’un créneau de demain déjà importé. */
     onViewCourse: (String) -> Unit = {},
+    onShowCourses: () -> Unit,
+    onSaveSelection: (List<String>) -> Unit,
+    offline: Boolean,
+    refreshing: Boolean,
 ) {
     val model = state.model
+    val flame = RevisionStreak.summary(state.document.streakState, model.today)
+    val widget = fr.jmethod.app.domain.TodayWidgetState.build(
+        model.today, model.due, model.completed, model.overdue,
+        state.document.revisions.filter { it.status == fr.jmethod.app.model.RevisionStatus.COMPLETED }.mapTo(mutableSetOf()) { it.id },
+        state.document.todayWidgetVisit, flame.status == "earned",
+    )
+    var preparing by rememberSaveable { mutableStateOf(false) }
+    if (preparing) {
+        ResumeDialog(model, state.document.courses, state.document.subjects, state.document.todayWidgetVisit?.selection.orEmpty(),
+            onDismiss = { preparing = false }, onSave = { onSaveSelection(it); preparing = false })
+    }
+
     var programmeOpen by rememberSaveable { mutableStateOf(false) }
     val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
     val timetableScroll = rememberScrollState()
     val twoColumns = LocalContentWidth.current >= TwoColumnWidth && LocalDensity.current.fontScale <= 1.3f
     val padding = screenPadding(contentPadding, 24.dp)
@@ -139,10 +157,17 @@ fun TodayScreen(
                     verticalArrangement = Arrangement.spacedBy(JSpacing.l),
                 ) {
                     item(key = "header") {
-                        Header(model.headerDate, RevisionStreak.summary(state.document.streakState, model.today))
+                        Header(model.headerDate, flame)
                     }
                     val hasCourses = state.document.courses.isNotEmpty()
-                    item(key = "hero") { Hero(model, hasCourses, onScore, onReview) }
+                    item(key = "hero") {
+                        TodayWidgetCard(widget, state.document.courses, state.document.subjects, offline, refreshing,
+                            onScore, onReview, onShowCourses, onPrepare = { preparing = true },
+                            onShowProgramme = {
+                                programmeOpen = true
+                                scope.launch { listState.scrollToItem(if (twoColumns) 2 else 3) }
+                            })
+                    }
                     // Aujourd’hui montre seulement la carte pour démarrer et enchaîner, puis l’emploi du temps de demain ;
                     // le détail du programme est replié par défaut.
                     if (!twoColumns) item(key = "tomorrow") { tomorrow() }
@@ -239,80 +264,6 @@ private fun TodayIntro() {
     }
 }
 
-@Composable
-private fun Hero(model: TodayModel, hasCourses: Boolean, onScore: (String) -> Unit, onReview: (String) -> Unit) {
-    val hero = model.hero
-    Column(
-        Modifier.fillMaxWidth().clip(CardShape).background(JColors.Violet700).padding(24.dp),
-    ) {
-        Row(
-            Modifier.clip(JShapes.pill).background(Color.White.copy(alpha = 0.15f)).padding(horizontal = JSpacing.m, vertical = JSpacing.s),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(Icons.Filled.Star, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-            Spacer(Modifier.width(8.dp))
-            Text("POUR DEMAIN", color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-        }
-        Spacer(Modifier.height(JSpacing.l))
-        Text(
-            if (hasCourses) hero.title else "Rien à préparer ce soir.",
-            color = Color.White,
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.ExtraBold,
-            modifier = Modifier.semantics { heading() },
-        )
-        Spacer(Modifier.height(12.dp))
-        if (hero.course != null) {
-            Text(
-                buildAnnotatedString {
-                    append("Commence par ")
-                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = Color.White)) { append(hero.subjectLabel.orEmpty()) }
-                    append(".\n")
-                    append(hero.courseTitle.orEmpty())
-                },
-                color = JColors.Violet100,
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        } else if (hasCourses) {
-            Text("Tes révisions pour demain sont à jour. Bonne soirée !", color = JColors.Violet100, style = MaterialTheme.typography.bodyMedium)
-        } else {
-            Text(
-                "Aucun cours n’est enregistré sur ${LocalPlatform.current.device}. Ajoute ton premier cours depuis ton emploi du temps de demain, juste en dessous, ou depuis Mes cours.",
-                color = JColors.Violet100, style = MaterialTheme.typography.bodyMedium,
-            )
-        }
-        val revision = hero.revision
-        if (revision != null) {
-            Spacer(Modifier.height(JSpacing.l))
-            Button(
-                onClick = { onScore(revision.id) },
-                colors = ButtonDefaults.buttonColors(containerColor = JColors.Lime200, contentColor = JColors.Violet950),
-                shape = JShapes.control,
-                contentPadding = PaddingValues(horizontal = JSpacing.l, vertical = JSpacing.m),
-                modifier = Modifier.heightIn(min = 48.dp),
-            ) {
-                Text("Faire le point sur ce cours", fontWeight = FontWeight.Bold)
-                Spacer(Modifier.width(8.dp))
-                Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp))
-            }
-            if (RevisionSession.hasDocuments(hero.course)) {
-                Spacer(Modifier.height(JSpacing.s))
-                OutlinedButton(
-                    onClick = { onReview(revision.id) },
-                    shape = JShapes.control,
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.6f)),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
-                    contentPadding = PaddingValues(horizontal = JSpacing.l, vertical = JSpacing.m),
-                    modifier = Modifier.heightIn(min = 48.dp),
-                ) {
-                    Icon(JIcons.Book, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Revoir le cours", fontWeight = FontWeight.SemiBold)
-                }
-            }
-        }
-    }
-}
 
 @Composable
 private fun Progress(model: TodayModel) {

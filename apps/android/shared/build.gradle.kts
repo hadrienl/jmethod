@@ -27,6 +27,7 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             implementation(libs.mp.compose.runtime)
+            implementation(compose.components.resources)
             implementation(libs.mp.compose.foundation)
             implementation(libs.mp.compose.ui)
             implementation(libs.mp.compose.material3)
@@ -57,6 +58,10 @@ kotlin {
             resources.srcDir(sharedDir)
         }
     }
+}
+
+compose.resources {
+    packageOfResClass = "fr.jmethod.app.resources"
 }
 
 android {

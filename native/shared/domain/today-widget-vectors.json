@@ -1,0 +1,17 @@
+{
+  "day": "2026-11-24",
+  "cases": [
+    { "name": "repos", "due": [], "state": "rest" },
+    { "name": "petite charge", "due": ["a","b","c"], "state": "ready", "next":"a" },
+    { "name": "charge importante", "due": ["a","b","c","d"], "state": "focus", "next":"a" },
+    { "name": "programme commencé", "due": ["b"], "done":["a"], "state": "progress", "next":"b" },
+    { "name": "programme terminé", "due": [], "done":["a"], "state": "done" },
+    { "name": "retour sans retard", "due": [], "returning":true, "state": "returned" },
+    { "name": "quelques retards en priorité", "due": ["a","b","c"], "overdue":["b"], "returning":true, "state":"resume", "next":"b" },
+    { "name": "quatre retards", "due": ["a","b","c","d","e"], "overdue":["a","b","c","d"], "returning":true, "state":"plan" },
+    { "name": "ordre de reprise après redémarrage", "due":["a","b","c"], "done":["d"], "selection":["d","c","absente","b","b"], "state":"planActive", "next":"c", "remaining":2, "outside":1 },
+    { "name": "reprise terminée, séances hors sélection", "due":["b","c"], "done":["a"], "selection":["a"], "state":"planDone", "outside":2 },
+    { "name": "sélection devenue invalide", "due":["b"], "selection":["absente"], "state":"ready", "next":"b" },
+    { "name": "import après la flamme", "due":["b"], "done":["a"], "flameEarned":true, "state":"newWork", "next":"b" }
+  ]
+}

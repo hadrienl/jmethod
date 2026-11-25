@@ -212,10 +212,33 @@ final class AppModel {
         catch { showToast("Journée non enregistrée", error.localizedDescription, warning: true) }
     }
 
+    func recordTodayVisit() {
+        guard loadState == .ready, sceneVisible else { return }
+        var visit = document.todayWidgetVisit ?? TodayWidgetVisit(lastVisit: today)
+        visit.open(today, programme: programme, document: document)
+        if visit != document.todayWidgetVisit {
+            document.todayWidgetVisit = visit
+            persist()
+        }
+    }
+
+    func saveTodaySelection(_ ids: [String]) {
+        let eligible = Set(programme.due.map(\.id))
+        var seen = Set<String>()
+        var visit = document.todayWidgetVisit ?? TodayWidgetVisit(lastVisit: today)
+        let checked = ids.filter { eligible.contains($0) && seen.insert($0).inserted }
+        guard !checked.isEmpty else { return }
+        let completed = Set(document.revisions.filter { $0.status == .completed }.map(\.id))
+        visit.selection = visit.selection.filter(completed.contains) + checked
+        visit.removedCount = 0
+        document.todayWidgetVisit = visit
+        persist()
+    }
+
     func refreshDay() {
         let current = SchoolDay.today(now: now())
         if current != today { today = current }
-        if loadState == .ready { openRevisionDay() }
+        if loadState == .ready { openRevisionDay(); recordTodayVisit() }
     }
 
     // MARK: Séances
@@ -261,8 +284,13 @@ final class AppModel {
         do { document = try RevisionStreak.releaseMovedByApp(before: document, after: RevisionStreak.completed(completed, revisionId: revisionId, now: now()), now: now()) }
         catch { showToast("Séance non enregistrée", error.localizedDescription, warning: true); return nil }
         persist()
-        let next = RevisionSession.nextDue(revisions: document.revisions, courses: document.courses,
-                                           subjects: document.subjects, today: today, excluding: revisionId)
+        let selection = document.todayWidgetVisit?.selection ?? []
+        let due = programme.due
+        let inSelection = selection.contains(revisionId)
+        let remainingInSelection = TodayWidgetState.orderedSelection(selection, due: due)
+        let next = inSelection ? remainingInSelection.first :
+            RevisionSession.nextDue(revisions: document.revisions, courses: document.courses,
+                                    subjects: document.subjects, today: today, excluding: revisionId)
         let warning = outcome.toast?.kind == .warning
         let title = outcome.toast?.title ?? "Révision validée (\(score)/100)"
         let message = outcome.toast?.message ?? explanation.message
@@ -276,7 +304,7 @@ final class AppModel {
                 toast = .init(title: outcome.celebrate ? "Programme terminé" : title, message: message, kind: warning ? .warning : .success)
             }
         }
-        return Validation(explanation: explanation, title: title, message: message, warning: warning, next: next, remaining: programme.due.count)
+        return Validation(explanation: explanation, title: title, message: message, warning: warning, next: next, remaining: inSelection ? remainingInSelection.count : due.count)
     }
 
     /// « Encore N séances au programme ce soir. » (Android `JMethodApp.kt`) ; nil s'il n'en reste aucune.
@@ -649,6 +677,10 @@ final class AppModel {
     /// Document réconcilié et numéro de version de la prochaine écriture.
     private func nextSnapshot() throws -> (document: AppDocument, version: Int) {
         document = try RevisionStreak.reconcile(document, now: now())
+        if var visit = document.todayWidgetVisit, !visit.selection.isEmpty {
+            visit.reconcile(programme: programme, document: document)
+            document.todayWidgetVisit = visit
+        }
         version += 1
         return (document, version)
     }

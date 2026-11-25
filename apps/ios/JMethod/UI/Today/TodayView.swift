@@ -5,6 +5,10 @@ import SwiftUI
 /// « Dans ton programme » (progrès, étapes, séances à reprendre et liste), repliée à chaque lancement.
 struct TodayView: View {
     let app: AppModel
+    let offline: Bool
+    let refreshing: Bool
+    let onShowCourses: () -> Void
+    @State private var preparing = false
     /// Section du programme dépliée : mémorisée le temps de la session seulement.
     @State private var programmeExpanded = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -15,40 +19,53 @@ struct TodayView: View {
                                  subjects: document.subjects, pronoteEvents: document.pronoteEvents)
         let hasCourses = !document.courses.isEmpty
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: Spacing.l) {
-                    TodayHeader(date: screen.headerDate,
-                                flame: RevisionStreak.summary(document.streakState, date: app.today))
-                    HeroCard(hero: screen.hero, hasCourses: hasCourses, canReview: RevisionSession.hasDocuments(screen.hero.course),
-                             onStart: { if let revision = screen.hero.revision { app.presented = .score(revisionId: revision.id) } },
-                             onReview: { if let revision = screen.hero.revision { app.presented = .review(revisionId: revision.id) } })
-                    TomorrowSection(screen: screen, courseFor: { RevisionSession.courseForSlot($0, courses: document.courses, subjects: document.subjects) },
-                                    onAddCourse: { app.openAddCourse(from: $0) }, onOpenCourse: { app.presented = .course(courseId: $0.id) })
-                    VStack(alignment: .leading, spacing: Spacing.s) {
-                        ProgrammeToggle(summary: screen.programme.due.isEmpty ? "Tout est fait" : screen.dueLabel, expanded: programmeExpanded) {
-                            if reduceMotion {
-                                programmeExpanded.toggle()
-                            } else {
-                                withAnimation(.easeInOut(duration: 0.2)) { programmeExpanded.toggle() }
+            ScrollViewReader { reader in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: Spacing.l) {
+                        TodayHeader(date: screen.headerDate,
+                                    flame: RevisionStreak.summary(document.streakState, date: app.today))
+                        TodayWidgetCard(state: TodayWidgetState(day: app.today, programme: screen.programme, document: document),
+                                        document: document, offline: offline, refreshing: refreshing,
+                                        onStart: { app.presented = .score(revisionId: $0) },
+                                        onReview: { app.presented = .review(revisionId: $0) },
+                                        onShowCourses: onShowCourses, onPrepare: { preparing = true },
+                                        onShowProgramme: {
+                                            programmeExpanded = true
+                                            reader.scrollTo("programme", anchor: .top)
+                                        })
+                        TomorrowSection(screen: screen, courseFor: { RevisionSession.courseForSlot($0, courses: document.courses, subjects: document.subjects) },
+                                        onAddCourse: { app.openAddCourse(from: $0) }, onOpenCourse: { app.presented = .course(courseId: $0.id) })
+                        VStack(alignment: .leading, spacing: Spacing.s) {
+                            ProgrammeToggle(summary: screen.programme.due.isEmpty ? "Tout est fait" : screen.dueLabel, expanded: programmeExpanded) {
+                                if reduceMotion {
+                                    programmeExpanded.toggle()
+                                } else {
+                                    withAnimation(.easeInOut(duration: 0.2)) { programmeExpanded.toggle() }
+                                }
+                            }
+                            if programmeExpanded {
+                                VStack(alignment: .leading, spacing: Spacing.l) {
+                                    if screen.allDoneBanner { AllDoneBanner() }
+                                    // Aucun cours : pas de compteur de progrès (comme Android).
+                                    if hasCourses { ProgressCard(screen: screen) }
+                                    PhaseGuide()
+                                    ProgrammeSection(screen: screen, hasCourses: hasCourses, onScore: { app.presented = .score(revisionId: $0.id) },
+                                                     onDetail: { app.presented = .revision(revisionId: $0.id) })
+                                }
+                                .transition(.opacity)
                             }
                         }
-                        if programmeExpanded {
-                            VStack(alignment: .leading, spacing: Spacing.l) {
-                                if screen.allDoneBanner { AllDoneBanner() }
-                                // Aucun cours : pas de compteur de progrès (comme Android).
-                                if hasCourses { ProgressCard(screen: screen) }
-                                PhaseGuide()
-                                ProgrammeSection(screen: screen, hasCourses: hasCourses, onScore: { app.presented = .score(revisionId: $0.id) },
-                                                 onDetail: { app.presented = .revision(revisionId: $0.id) })
-                            }
-                            .transition(.opacity)
-                        }
+                        .id("programme")
                     }
+                    .padding(.top, Spacing.s)
+                    .screenContent()
                 }
-                .padding(.top, Spacing.s)
-                .screenContent()
             }
             .background(Theme.background)
+            .onAppear { app.recordTodayVisit() }
+            .sheet(isPresented: $preparing) {
+                TodayResumeSheet(programme: screen.programme, document: document, onSave: app.saveTodaySelection)
+            }
             .toolbar(.hidden, for: .navigationBar)
         }
     }
@@ -152,103 +169,6 @@ private struct TodayHeader: View {
                 .font(.body)
                 .foregroundStyle(Theme.textSecondary)
         }
-    }
-}
-
-private struct HeroCard: View {
-    let hero: TodayScreen.Hero
-    /// Aucun cours enregistré : « Rien à préparer ce soir. » et comment en ajouter un (comme Android).
-    let hasCourses: Bool
-    /// Le cours a au moins un document : « Revoir le cours » ouvre le document principal dans la fiche (§8.3).
-    let canReview: Bool
-    let onStart: () -> Void
-    let onReview: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.s) {
-            Label("Pour demain", systemImage: "sparkles")
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(Theme.violetDeep)
-                .padding(.horizontal, Spacing.s)
-                .padding(.vertical, Spacing.xxs + 2)
-                .background(Theme.lime, in: Capsule())
-            Text(hasCourses ? hero.title : "Rien à préparer ce soir.")
-                .font(.title.weight(.bold))
-                .padding(.top, Spacing.xxs)
-                .accessibilityAddTraits(.isHeader)
-            if let course = hero.course {
-                VStack(alignment: .leading, spacing: 2) {
-                    (Text("Commence par ") + Text(hero.subjectLabel ?? "ton cours").bold() + Text("."))
-                    Text(course.title)
-                }
-                .font(.callout)
-                .foregroundStyle(Theme.violetTrack)
-                Button(action: onStart) {
-                    HStack(spacing: Spacing.s) {
-                        Text("Faire le point sur ce cours")
-                        Image(systemName: "arrow.right").accessibilityHidden(true)
-                    }
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(Theme.violetDeep)
-                    .padding(.horizontal, Spacing.l - 4)
-                    .padding(.vertical, Spacing.xs)
-                    .frame(minHeight: 50)
-                    .background(Theme.lime, in: RoundedRectangle(cornerRadius: Radius.panel, style: .continuous))
-                    .contentShape(RoundedRectangle(cornerRadius: Radius.panel, style: .continuous))
-                }
-                .buttonStyle(.plain)
-                .padding(.top, Spacing.xs)
-                if canReview {
-                    Button(action: onReview) {
-                        Label("Revoir le cours", systemImage: "book")
-                            .font(.body.weight(.semibold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, Spacing.l - 4)
-                            .padding(.vertical, Spacing.xs)
-                            .frame(minHeight: 44)
-                            .overlay(RoundedRectangle(cornerRadius: Radius.panel, style: .continuous).strokeBorder(.white.opacity(0.7), lineWidth: 1.5))
-                            .contentShape(RoundedRectangle(cornerRadius: Radius.panel, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityHint("Ouvre le document principal du cours")
-                }
-            } else {
-                Text(hasCourses ? "Tes révisions pour demain sont à jour. Bonne soirée !"
-                     : "Aucun cours n’est enregistré sur ce téléphone. Ajoute ton premier cours depuis ton emploi du temps de demain, juste en dessous, ou depuis Mes cours.")
-                    .font(.callout)
-                    .foregroundStyle(Theme.violetTrack)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .foregroundStyle(.white)
-        .padding(Spacing.l)
-        .background(alignment: .bottomTrailing) { HeroArt().offset(x: 36, y: 28).opacity(0.22) }
-        .background(LinearGradient(colors: [Color(hex: "#7C3AED"), Theme.violet], startPoint: .topLeading, endPoint: .bottomTrailing))
-        .clipShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
-    }
-}
-
-/// Illustration décorative du web (livre incliné et coche citron), en bas à droite de la carte.
-private struct HeroArt: View {
-    var body: some View {
-        ZStack(alignment: .bottomLeading) {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Theme.violetTrack)
-                .overlay(Image(systemName: "book.closed").font(.system(size: 44, weight: .light)).foregroundStyle(Theme.violet))
-                .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Color(hex: "#C4B5FD"), lineWidth: 4))
-                .frame(width: 96, height: 112)
-                .rotationEffect(.degrees(-13))
-                .padding(.leading, 24)
-                .padding(.bottom, 16)
-            Image(systemName: "checkmark")
-                .font(.title3.bold())
-                .foregroundStyle(Theme.violetDeep)
-                .padding(Spacing.s)
-                .background(Theme.lime, in: RoundedRectangle(cornerRadius: Radius.panel, style: .continuous))
-                .rotationEffect(.degrees(10))
-        }
-        .accessibilityHidden(true)
     }
 }
 

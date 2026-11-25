@@ -30,7 +30,12 @@ object AppDocumentCodec {
 
     class UnsupportedVersion : IllegalStateException("Ces données nécessitent une version plus récente de J-Method. Elles n’ont pas été modifiées.")
     fun decode(text: String): AppDocument {
-        val document = json.decodeFromString(AppDocument.serializer(), text)
+        val root = json.parseToJsonElement(text).jsonObject
+        val visit = root["todayWidgetVisit"]?.let { value ->
+            runCatching { json.decodeFromJsonElement(fr.jmethod.app.domain.TodayWidgetVisit.serializer(), value) }.getOrNull()
+        }
+        val document = json.decodeFromJsonElement(AppDocument.serializer(), JsonObject(root - "todayWidgetVisit"))
+            .copy(todayWidgetVisit = visit)
         if (document.schemaVersion !in 1..3) throw UnsupportedVersion()
         // Un journal incohérent ne doit pas coûter tout le document : un nouveau suivi démarre à la prochaine ouverture.
         val streak = document.streakState
@@ -50,7 +55,10 @@ object AppDocumentCodec {
             if (document.schemaVersion >= 2) {
                 put("schemaVersion", kotlinx.serialization.json.JsonPrimitive(document.schemaVersion))
                 put("programmes", full.getValue("programmes"))
-                if (document.schemaVersion >= 3) full["streakState"]?.let { put("streakState", it) }
+                if (document.schemaVersion >= 3) {
+                    full["streakState"]?.let { put("streakState", it) }
+                    if (document.todayWidgetVisit != null) put("todayWidgetVisit", full.getValue("todayWidgetVisit"))
+                }
             }
             // `notebookImports` (cahier de textes → cours) seulement s’il existe : ignoré par le web.
             val keys = listOf("courses", "revisions", "subjects", "settings") + if (document.notebookImports.isEmpty()) emptyList() else listOf("notebookImports")
