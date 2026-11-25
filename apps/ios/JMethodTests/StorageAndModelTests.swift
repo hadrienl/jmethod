@@ -2,6 +2,54 @@ import XCTest
 @testable import JMethod
 
 final class StorageTests: XCTestCase {
+    func testAgendaStoredOutsideSystemBackupAndMainDocument() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appendingPathComponent("data.json")
+        let store = DocumentStore(url: file)
+        var document = try Fixture.document(today: "2026-11-25")
+        let task = PersonalHomework(id: "local", subjectId: "maths", description: "Consigne privée", due: "2026-11-25")
+        document.agendaFollowUp = ["student": AgendaFollowUp(personal: [task])]
+        try await store.save(document, version: 1)
+        let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.isExcludedFromBackupKey])
+        let main = try XCTUnwrap(files.first { $0.pathExtension == "json" })
+        XCTAssertFalse(try String(contentsOf: main, encoding: .utf8).contains(task.description))
+        let agenda = try XCTUnwrap(files.first { $0.lastPathComponent == "data-agenda" })
+        XCTAssertEqual(try agenda.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup, true)
+        let loaded = try await DocumentStore(url: file).load()
+        XCTAssertEqual(loaded?.agendaFollowUp, document.agendaFollowUp)
+    }
+
+    func testUnreadableAgendaIsPreservedAndCanBeArchivedIndependently() async throws {
+        let file = directory.appendingPathComponent("data.json")
+        let store = DocumentStore(url: file)
+        let document = try sampleDocument()
+        try await store.save(document, version: 1)
+        let sidecar = directory.appendingPathComponent("data-agenda/local.json")
+        let corrupted = Data("Agenda illisible".utf8)
+        try corrupted.write(to: sidecar)
+        do {
+            _ = try await store.load()
+            XCTFail("La lecture de l’Agenda aurait dû échouer.")
+        } catch let error as DocumentStore.Failure {
+            XCTAssertEqual(error, .agendaUnreadable)
+        }
+        do {
+            try await store.save(document, version: 2)
+            XCTFail("Un Agenda illisible doit être préservé.")
+        } catch let error as DocumentStore.Failure {
+            XCTAssertEqual(error, .agendaUnreadable)
+        }
+        XCTAssertEqual(try Data(contentsOf: sidecar), corrupted)
+        try await store.archiveUnreadable()
+        let loaded = try await store.load()
+        XCTAssertEqual(loaded, document)
+        let archived = try XCTUnwrap(FileManager.default.contentsOfDirectory(
+            at: sidecar.deletingLastPathComponent(), includingPropertiesForKeys: nil
+        ).first { $0.lastPathComponent.hasPrefix("illisible-") })
+        XCTAssertEqual(try Data(contentsOf: archived), corrupted)
+    }
+
     private var directory: URL!
 
     override func setUpWithError() throws {

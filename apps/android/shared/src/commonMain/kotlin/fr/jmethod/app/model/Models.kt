@@ -177,4 +177,5 @@ data class AppDocument(
     val schemaVersion: Int = 1,
     val streakState: StreakState? = null,
     val todayWidgetVisit: fr.jmethod.app.domain.TodayWidgetVisit? = null,
+    val agendaFollowUp: Map<String, AgendaFollowUp> = emptyMap(),
 )

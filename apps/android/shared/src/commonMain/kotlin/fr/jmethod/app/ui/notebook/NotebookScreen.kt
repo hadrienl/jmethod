@@ -1,5 +1,17 @@
 package fr.jmethod.app.ui.notebook
 
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Switch
+import androidx.compose.runtime.key
+import fr.jmethod.app.model.PersonalHomework
+import fr.jmethod.app.model.Subject
+import fr.jmethod.app.pronote.agendaKey
+import fr.jmethod.app.pronote.agendaSourceTag
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.material3.OutlinedTextField
 import fr.jmethod.app.ui.components.DesktopSelection
 import androidx.compose.foundation.lazy.rememberLazyListState
 import fr.jmethod.app.ui.components.ScrollbarBox
@@ -22,7 +34,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
@@ -37,8 +48,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SecondaryTabRow
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -72,32 +81,45 @@ import fr.jmethod.app.ui.theme.JIcons
 import fr.jmethod.app.ui.theme.JShapes
 import fr.jmethod.app.ui.theme.JSpacing
 import fr.jmethod.app.ui.components.EmptyState
-import fr.jmethod.app.ui.components.fullScreenGutter
 import androidx.compose.foundation.layout.offset
 import fr.jmethod.app.ui.platform.LocalPlatform
-import fr.jmethod.app.ui.platform.SystemBackHandler
 import java.io.File
 import java.time.LocalDate
 import java.util.Locale
 
 private fun dayLabel(date: LocalDate) = FrenchDates.weekdayDayMonth(date).sentenceCase()
 
+private enum class HomeworkFilter(val label: String) { TODO("À faire"), DONE("Faits"), ALL("Tous") }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NotebookScreen(ui: NotebookUiState, viewModel: NotebookViewModel, snackbar: SnackbarHostState, modifier: Modifier = Modifier) {
+fun NotebookScreen(ui: NotebookUiState, viewModel: NotebookViewModel, modifier: Modifier = Modifier) {
     val state = ui.state
+    var search by rememberSaveable { mutableStateOf("") }
+    var filter by rememberSaveable { mutableStateOf(HomeworkFilter.TODO) }
+    var period by rememberSaveable { mutableStateOf<Int?>(null) }
+    val today = LocalDate.now(fr.jmethod.app.data.AppClock.ZONE)
+    var editing by rememberSaveable(ui.agendaScope) { mutableStateOf<String?>(null) }
+    var deleting by rememberSaveable(ui.agendaScope) { mutableStateOf<String?>(null) }
+    editing?.let { id ->
+        key(id) {
+            PersonalHomeworkEditor(ui.followUp.personal.firstOrNull { it.id == id }, ui.subjects, today,
+                onDismiss = { editing = null },
+                onSave = { subject, text, due -> viewModel.savePersonal(id.takeIf { it.isNotEmpty() }, subject, text, due); editing = null })
+        }
+    }
+    deleting?.let { id ->
+        AlertDialog(onDismissRequest = { deleting = null }, title = { Text("Supprimer ce devoir personnel ?") },
+            confirmButton = { TextButton(onClick = { viewModel.deletePersonal(id); deleting = null }) { Text("Supprimer") } },
+            dismissButton = { TextButton(onClick = { deleting = null }) { Text("Annuler") } })
+    }
     val platform = LocalPlatform.current
-    SystemBackHandler(onBack = viewModel::close)
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = JColors.Slate50,
-        snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
-                title = { Text("Cahier de textes", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = viewModel::close) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Fermer le cahier de textes") }
-                },
+                title = { Text("Agenda", fontWeight = FontWeight.Bold) },
                 actions = {
                     IconButton(onClick = viewModel::refresh, enabled = !state.loading) {
                         Icon(Icons.Filled.Refresh, contentDescription = "Actualiser le cahier de textes")
@@ -107,10 +129,43 @@ fun NotebookScreen(ui: NotebookUiState, viewModel: NotebookViewModel, snackbar: 
             )
         },
     ) { padding ->
-        val snapshot = state.snapshot
+        val snapshot = state.snapshot?.takeIf { state.snapshotScope == ui.agendaScope }
         val subjectId = state.subjectId
-        val sessions = snapshot?.sessions.orEmpty().filter { subjectId == null || NotebookViewModel.matches(it.subject, subjectId, ui.subjects) }
-        val homework = snapshot?.homework.orEmpty().filter { subjectId == null || NotebookViewModel.matches(it.subject, subjectId, ui.subjects) }
+        fun subjectMatches(subject: String) = subjectId == null || NotebookViewModel.matches(subject, subjectId, ui.subjects)
+        fun matchesDate(date: LocalDate) = period?.let { date <= today.plusDays(it.toLong()) } ?: true
+        val sessions = snapshot?.sessions.orEmpty().filter { item ->
+            subjectMatches(item.subject) && matchesDate(item.date) && (search.isBlank() ||
+                item.subject.contains(search.trim(), ignoreCase = true) ||
+                item.contents.any { it.description.contains(search.trim(), ignoreCase = true) })
+        }
+        val byKey = snapshot?.homework.orEmpty().groupingBy(HomeworkItem::agendaKey).eachCount()
+        fun canTrack(item: HomeworkItem): Boolean {
+            val key = item.agendaKey()
+            val tag = item.agendaSourceTag()
+            return ui.agendaScope != null && state.snapshotScope == ui.agendaScope && byKey[key] == 1 &&
+                tag != null && ui.followUp.cached[key]?.sourceTag == tag
+        }
+        fun local(item: HomeworkItem) = ui.followUp.localChecks[item.agendaKey()].takeIf { canTrack(item) }
+        fun done(item: HomeworkItem) = local(item) ?: (item.remoteDone == true)
+        fun statusMatches(done: Boolean) = filter == HomeworkFilter.ALL || (filter == HomeworkFilter.DONE) == done
+        val personal = ui.followUp.personal.mapNotNull { item ->
+            val date = runCatching { LocalDate.parse(item.due) }.getOrNull() ?: return@mapNotNull null
+            val subject = ui.subjects.firstOrNull { it.id == item.subjectId }?.name ?: "Matière supprimée"
+            if ((subjectId != null && subjectId != item.subjectId) || !matchesDate(date) || !statusMatches(item.done) ||
+                (!item.description.contains(search.trim(), ignoreCase = true) && !subject.contains(search.trim(), ignoreCase = true))) null
+            else Triple(item, date, subject)
+        }.sortedBy { it.second }
+        val homework = snapshot?.homework.orEmpty().filter { item ->
+            subjectMatches(item.subject) && matchesDate(item.dueDate) &&
+                (search.isBlank() || item.description.contains(search.trim(), ignoreCase = true) || item.subject.contains(search.trim(), ignoreCase = true)) &&
+                statusMatches(done(item))
+        }
+        val cached = ui.followUp.cached.values.filter { item ->
+            val due = runCatching { LocalDate.parse(item.due) }.getOrNull() ?: return@filter false
+            item.key !in byKey && subjectMatches(item.subject) && matchesDate(due) &&
+                statusMatches(ui.followUp.localChecks[item.key] ?: (item.remoteDone == true)) &&
+                (item.description.contains(search.trim(), ignoreCase = true) || item.subject.contains(search.trim(), ignoreCase = true))
+        }.sortedBy { it.due }
         val attachmentCount = if (subjectId == null) snapshot?.attachmentCount ?: 0
         else sessions.sumOf { s -> s.contents.sumOf { it.attachments.size } } + homework.sumOf { it.attachments.size }
         val listState = rememberLazyListState()
@@ -119,7 +174,7 @@ fun NotebookScreen(ui: NotebookUiState, viewModel: NotebookViewModel, snackbar: 
 LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize().consumeWindowInsets(padding),
-                contentPadding = PaddingValues(horizontal = JSpacing.l + fullScreenGutter(), vertical = JSpacing.l),
+                contentPadding = PaddingValues(horizontal = JSpacing.l + fr.jmethod.app.ui.components.LocalScreenGutter.current, vertical = JSpacing.l),
                 verticalArrangement = Arrangement.spacedBy(JSpacing.m),
             ) {
                 item(key = "intro") {
@@ -165,6 +220,70 @@ LazyColumn(
                         }
                     }
                 }
+                item(key = "tabs") {
+                    SecondaryTabRow(selectedTabIndex = if (state.tab == NotebookTab.HOMEWORK) 0 else 1, containerColor = Color.Transparent) {
+                        Tab(selected = state.tab == NotebookTab.HOMEWORK, onClick = { search = ""; viewModel.setTab(NotebookTab.HOMEWORK) },
+                            text = { Text("Devoirs") })
+                        Tab(selected = state.tab == NotebookTab.CONTENTS, onClick = { search = ""; viewModel.setTab(NotebookTab.CONTENTS) },
+                            text = { Text("Contenus et documents") })
+                    }
+                }
+                item(key = "filters") {
+                    Column(verticalArrangement = Arrangement.spacedBy(JSpacing.s)) {
+                        OutlinedTextField(search, { search = it }, label = { Text("Rechercher") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                        androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(JSpacing.s)) {
+                            item { FilterChip(subjectId == null, { viewModel.setSubject(null) }, label = { Text("Toutes les matières") }) }
+                            items(ui.subjects, key = { it.id }) { subject ->
+                                FilterChip(subjectId == subject.id, { viewModel.setSubject(subject.id) }, label = { Text(subject.name) })
+                            }
+                        }
+                        androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(JSpacing.s)) {
+                            item { FilterChip(period == null, { period = null }, label = { Text("Toute la période lue") }) }
+                            item { FilterChip(period == 7, { period = 7 }, label = { Text("Jusqu’à 7 jours") }) }
+                            if (state.tab == NotebookTab.HOMEWORK) items(HomeworkFilter.entries) {
+                                FilterChip(filter == it, { filter = it }, label = { Text(it.label) })
+                            }
+                        }
+                    }
+                }
+                if (state.tab == NotebookTab.HOMEWORK) {
+                    item(key = "new-personal") {
+                        Button(onClick = { editing = "" }, enabled = ui.agendaScope != null && ui.subjects.isNotEmpty()) {
+                            Text("Ajouter un devoir personnel")
+                        }
+                    }
+                    if (personal.isNotEmpty()) item(key = "personal-title") {
+                        Text("Devoirs personnels", style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
+                    }
+                    items(personal, key = { "personnel-" + it.first.id }) { (item, date, subject) ->
+                        Card {
+                            Text("$subject · ${if (date < today && !item.done) "En retard · " else ""}${dayLabel(date)}")
+                            Text(item.description)
+                            LocalHomeworkCheck(item.done) { viewModel.setPersonalDone(item.id, it) }
+                            Row {
+                                TextButton(onClick = { editing = item.id }) { Text("Modifier") }
+                                TextButton(onClick = { deleting = item.id }) { Text("Supprimer") }
+                            }
+                        }
+                    }
+                }
+                if (state.tab == NotebookTab.HOMEWORK && cached.isNotEmpty()) {
+                    item(key = "cache-title") { Text("Devoirs connus · cache local", style = MaterialTheme.typography.titleMedium) }
+                    items(cached, key = { "cache-" + it.key }) { item ->
+                        val done = ui.followUp.localChecks[item.key] ?: (item.remoteDone == true)
+                        Card {
+                            Text(item.subject + " · " + (if (!done && item.due < today.toString()) "En retard · " else "") + dayLabel(LocalDate.parse(item.due)))
+                            Text(item.description)
+                            Text(if (item.unavailable) "Source indisponible sur la dernière lecture" else "Dernière lecture : " + item.observedAt.take(10),
+                                style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
+                            Text("Statut Pronote connu : " + when (item.remoteDone) { true -> "fait"; false -> "à faire"; null -> "inconnu" })
+                            if (item.documentNames.isNotEmpty()) Text("Documents à actualiser : " + item.documentNames.joinToString())
+                            if (!item.unavailable && item.sourceTag != null) {
+                                LocalHomeworkCheck(done) { viewModel.setCachedLocalDone(item.key, it) }
+                            }
+                        }
+                    }
+                }
                 if (snapshot != null) {
                     item(key = "summary") {
                         Column(
@@ -189,17 +308,14 @@ LazyColumn(
                                     style = MaterialTheme.typography.bodySmall, color = JColors.Amber900,
                                 )
                             }
+                            state.refreshedAt?.let {
+                                Text("Lu le " + java.time.format.DateTimeFormatter.ofPattern("dd/MM à HH:mm")
+                                    .withZone(fr.jmethod.app.data.AppClock.ZONE).format(it),
+                                    style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
+                            }
                             if (!snapshot.homeworkAvailable) {
                                 Text("Le travail à faire n’est pas disponible pour ce compte.", style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
                             }
-                        }
-                    }
-                    item(key = "tabs") {
-                        SecondaryTabRow(selectedTabIndex = state.tab.ordinal, containerColor = Color.Transparent) {
-                            Tab(selected = state.tab == NotebookTab.CONTENTS, onClick = { viewModel.setTab(NotebookTab.CONTENTS) },
-                                text = { Text("Cours publiés (${sessions.size})") })
-                            Tab(selected = state.tab == NotebookTab.HOMEWORK, onClick = { viewModel.setTab(NotebookTab.HOMEWORK) },
-                                text = { Text("Devoirs (${homework.size})") })
                         }
                     }
                     if (state.tab == NotebookTab.CONTENTS) {
@@ -211,8 +327,18 @@ LazyColumn(
                             }
                         }
                     } else {
-                        if (homework.isEmpty()) item(key = "no-homework") { Empty("Aucun devoir publié sur cette période.") }
-                        items(homework, key = { "h-" + it.id }) { HomeworkCard(it, state.downloadingId, viewModel::download) { url -> platform.openLink(url) } }
+                        if (homework.isEmpty() && personal.isEmpty() && cached.isEmpty() && snapshot.homeworkAvailable && !state.loading && state.error == null) {
+                            item(key = "no-homework") { Empty("Aucun devoir ne correspond aux filtres de la période chargée.") }
+                        }
+                        homework.groupBy { if (it.dueDate < today && !done(it)) null else it.dueDate }
+                            .toList().sortedBy { it.first ?: LocalDate.MIN }.forEach { (date, group) ->
+                                item(key = "date-$date") { Text(date?.let(::dayLabel) ?: "En retard", style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() }) }
+                                items(group) { item ->
+                                    HomeworkCard(item, state.downloadingId, viewModel::download, platform::openLink) {
+                                        if (canTrack(item)) LocalHomeworkCheck(done(item)) { viewModel.setLocalDone(item, it) }
+                                    }
+                                }
+                            }
                     }
                 }
             }
@@ -301,7 +427,7 @@ internal fun NotebookContentBlock(content: NotebookContent, downloading: String?
 }
 
 @Composable
-private fun HomeworkCard(item: HomeworkItem, downloading: String?, onDownload: (NotebookAttachment) -> Unit, onLink: (String) -> Unit) {
+private fun HomeworkCard(item: HomeworkItem, downloading: String?, onDownload: (NotebookAttachment) -> Unit, onLink: (String) -> Unit, tracking: @Composable () -> Unit) {
     Card {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.semantics(mergeDescendants = true) { heading() }) {
             Text(item.subject, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
@@ -312,13 +438,55 @@ private fun HomeworkCard(item: HomeworkItem, downloading: String?, onDownload: (
             if (item.done) Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = JColors.Emerald700, modifier = Modifier.size(16.dp))
             if (item.done) Spacer(Modifier.width(JSpacing.xs))
             Text(
-                "Statut Pronote : ${if (item.done) "fait" else "à faire"}",
+                when (item.remoteDone) {
+                    true -> "Statut Pronote : fait"
+                    false -> "Statut Pronote : à faire"
+                    null -> "Statut Pronote : inconnu"
+                },
                 style = MaterialTheme.typography.bodySmall, color = if (item.done) JColors.Emerald800 else JColors.Slate600,
             )
         }
         Links(item.links, onLink)
         Attachments(item.attachments, downloading, onDownload, onLink)
+        tracking()
     }
+}
+
+@Composable
+private fun LocalHomeworkCheck(done: Boolean, onChange: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(if (done) "Fait sur cet appareil" else "Suivi sur cet appareil", Modifier.weight(1f))
+        Switch(done, onChange, modifier = Modifier.semantics { contentDescription = "Suivi sur cet appareil" })
+    }
+}
+
+@Composable
+private fun PersonalHomeworkEditor(item: PersonalHomework?, subjects: List<Subject>, today: LocalDate,
+    onDismiss: () -> Unit, onSave: (String, String, String) -> Unit) {
+    var subject by rememberSaveable { mutableStateOf(item?.subjectId ?: subjects.firstOrNull()?.id) }
+    var text by rememberSaveable { mutableStateOf(item?.description.orEmpty()) }
+    var due by rememberSaveable { mutableStateOf(item?.due ?: today.toString()) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (item == null) "Ajouter un devoir personnel" else "Modifier le devoir personnel") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(JSpacing.m)) {
+                androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(JSpacing.s)) {
+                    items(subjects, key = { it.id }) {
+                        FilterChip(subject == it.id, { subject = it.id }, label = { Text(it.name) })
+                    }
+                }
+                OutlinedTextField(text, { text = it }, label = { Text("Consigne") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(due, { due = it }, label = { Text("Échéance (AAAA-MM-JJ)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            }
+        },
+        confirmButton = {
+            Button(enabled = subject != null && text.isNotBlank() && text.trim().length <= 4000 &&
+                runCatching { LocalDate.parse(due) }.isSuccess,
+                onClick = { subject?.let { onSave(it, text, due) } }) { Text("Enregistrer") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Annuler") } },
+    )
 }
 
 @Composable

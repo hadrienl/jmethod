@@ -99,6 +99,7 @@ class CourseCreator(private val repository: AppRepository, private val clock: Ap
         source: CourseSource?,
         documents: List<PendingDocument>,
         expectation: Expectation = Expectation.Manual(null),
+        stillCurrent: () -> Boolean = { true },
     ): CourseEditing.Created? {
         val state = repository.current()
         val nextNumber = (state.courses.filter { it.subjectId == form.subjectId }.maxOfOrNull { it.courseNumber } ?: 0) + 1
@@ -119,7 +120,7 @@ class CourseCreator(private val repository: AppRepository, private val clock: Ap
         repository.update { document ->
             // Idempotence : une séance déjà créée, supprimée entre-temps ou traitée par un autre chemin
             // (double soumission, création automatique concurrente) n’est jamais recréée.
-            if (source != null && !allowed(document, source, expectation)) {
+            if (!stillCurrent() || (source != null && !allowed(document, source, expectation))) {
                 refused = true
                 return@update document
             }

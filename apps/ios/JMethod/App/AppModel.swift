@@ -600,6 +600,50 @@ final class AppModel {
         persist()
     }
 
+    func updateAgenda(scope: String, _ change: (inout AgendaFollowUp) -> Void) {
+        var new = document.agendaFollowUp[scope] ?? AgendaFollowUp()
+        let old = new
+        change(&new)
+        guard new != old else { return }
+        let checked = new.localChecks.contains { key, value in value && old.localChecks[key] != true } ||
+            new.personal.contains { task in task.done && old.personal.contains { $0.id == task.id && !$0.done } }
+        document.agendaFollowUp[scope] = new
+        persist(successSound: checked ? .homework : nil)
+    }
+
+    func clearAgendaCaches() {
+        let stripped = document.agendaFollowUp.mapValues { AgendaFollowUp(personal: $0.personal) }
+        guard stripped != document.agendaFollowUp else { return }
+        document.agendaFollowUp = stripped
+        persist()
+    }
+
+    func cacheAgenda(_ snapshot: NotebookSnapshot, scope: String, at: Date) {
+        guard snapshot.homeworkAvailable else { return }
+        let groups = Dictionary(grouping: snapshot.homework, by: \.agendaKey)
+        let stamp = Self.isoString(at)
+        updateAgenda(scope: scope) { data in
+            data.cached = data.cached.filter { (groups[$0.key]?.count ?? 0) <= 1 }
+            for key in Array(data.cached.keys) {
+                guard snapshot.skippedEntries == 0, var item = data.cached[key], groups[key] == nil,
+                      (snapshot.from...snapshot.to).contains(item.due) else { continue }
+                item.unavailable = true
+                data.cached[key] = item
+            }
+            for (key, entries) in groups where entries.count == 1 {
+                let item = entries[0]
+                if data.cached[key]?.sourceTag != item.agendaSourceTag { data.localChecks.removeValue(forKey: key) }
+                data.cached[key] = CachedHomework(key: key, due: item.dueDate, subject: item.subject, description: item.description,
+                                                 remoteDone: item.remoteDone, observedAt: stamp,
+                                                 documentNames: item.attachments.map(\.name), sourceTag: item.agendaSourceTag)
+            }
+            data.localChecks = data.localChecks.filter { key, _ in
+                guard let item = data.cached[key] else { return false }
+                return item.sourceTag != nil && !item.unavailable
+            }
+        }
+    }
+
     // MARK: Réglages et sauvegarde
 
     /// « Enregistrer » des réglages : appliqués aux prochaines validations et aux nouveaux cours.

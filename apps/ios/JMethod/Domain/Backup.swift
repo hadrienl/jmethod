@@ -170,6 +170,7 @@ enum Backup {
             object.removeValue(forKey: "pronoteEvents")
             object.removeValue(forKey: "initialized")
             object.removeValue(forKey: "dataVersion")
+            object.removeValue(forKey: "agendaFollowUp")
             object["version"] = document.schemaVersion >= 3 ? "3.0" : "2.0"; object["exportDate"] = isoMillis(now)
             if object["programmes"] == nil { object["programmes"] = [] }
             let envelope: [String: Any] = ["version": document.schemaVersion >= 3 ? "3.0" : "2.0", "schemaVersion": document.schemaVersion, "exportDate": isoMillis(now), "data": object]

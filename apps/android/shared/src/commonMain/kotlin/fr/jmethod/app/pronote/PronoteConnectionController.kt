@@ -16,6 +16,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.IOException
 import java.net.URI
+import java.nio.file.Files
 import java.security.SecureRandom
 import java.time.Duration
 import java.time.Instant
@@ -846,7 +847,7 @@ class PronoteConnectionController(
     }
 
     /** Lecture du cahier de textes : instantané et marque de la session qui l’a lu. */
-    class NotebookRead(val snapshot: NotebookSnapshot, val stamp: Any)
+    class NotebookRead(val snapshot: NotebookSnapshot, val stamp: Any, val agendaScope: String? = null)
 
     /**
      * Cahier de textes en lecture seule (28 jours) avec la session courante, sous le verrou partagé.
@@ -870,11 +871,18 @@ class PronoteConnectionController(
                 val connection = current.client
                 val wanted = synchronized(guard.vaultLock) { vault.selectedChildId() }
                 fun read(): NotebookSnapshot {
-                    if (wanted != null && connection.children.any { it.id == wanted }) connection.selectChild(wanted)
+                    if (wanted != null) {
+                        if (connection.children.none { it.id == wanted }) {
+                            throw PronoteException("notebook-unavailable", "L’élève sélectionné n’est plus disponible.")
+                        }
+                        connection.selectChild(wanted)
+                    }
                     return connection.notebook(today())
                 }
                 val snapshot = withSession(current) { read() }
-                NotebookRead(snapshot, connection.sessionStamp)
+                if (current.binding.disconnected() || session !== current) throw PronoteException("offline", NOTEBOOK_OFFLINE)
+                NotebookRead(snapshot, connection.sessionStamp, agendaScopeForChild(connection.selectedChildId))
+
             }
         }
     }
@@ -898,7 +906,7 @@ class PronoteConnectionController(
      * de pièces jointes sont liés à la session. Un échec est retenté une fois après reconnexion.
      * @return la nouvelle lecture du cahier de textes si elle a eu lieu, sinon `null`.
      */
-    suspend fun downloadAttachment(stamp: Any, id: String, name: String, target: java.io.File): NotebookRead? {
+    suspend fun downloadAttachment(stamp: Any, id: String, name: String, target: java.io.File, expectedScope: String? = agendaScope()): NotebookRead? {
         val current = session ?: throw PronoteException("offline", NOTEBOOK_OFFLINE)
         if (throttle.isBlocked(now())) throw PronoteException(PronoteThrottle.BLOCKED_CODE, PronoteThrottle.BLOCKED_MESSAGE)
         return try {
@@ -908,13 +916,19 @@ class PronoteConnectionController(
                 withContext(io) {
                     val connection = current.client
                     var reread: NotebookRead? = null
+                    fun requireScope() {
+                        if (current.binding.disconnected() || agendaScope() != expectedScope ||
+                            agendaScopeForChild(connection.selectedChildId) != expectedScope
+                        ) throw PronoteException("offline", NOTEBOOK_OFFLINE)
+                    }
                     fun refreshIds() {
                         val wanted = synchronized(guard.vaultLock) { vault.selectedChildId() }
                         if (wanted != null && connection.children.any { it.id == wanted }) connection.selectChild(wanted)
+                        requireScope()
                         val snapshot = connection.notebook(today())
                         val present = snapshot.sessions.any { s -> s.contents.any { c -> c.attachments.any { it.id == id } } } ||
                             snapshot.homework.any { h -> h.attachments.any { it.id == id } }
-                        reread = NotebookRead(snapshot, connection.sessionStamp)
+                        reread = NotebookRead(snapshot, connection.sessionStamp, expectedScope)
                         if (!present) throw PronoteException("download", PronoteClient.DOWNLOAD_UNAVAILABLE)
                     }
                     if (connection.isIdle(now())) {
@@ -924,19 +938,27 @@ class PronoteConnectionController(
                         refreshIds()
                     }
                     try {
+                        requireScope()
                         connection.download(id, name, files, target)
                     } catch (error: PronoteException) {
                         // Statut inattendu : la session a pu expirer. Une reconnexion, une relecture, un essai.
                         if (error.code != "download") throw error
                         reloginByToken(current)
                         refreshIds()
+                        requireScope()
                         connection.download(id, name, files, target)
                     }
+                    requireScope()
                     reread
                 }
             }
-        } catch (error: PronoteException) {
-            noteThrottle(error)
+        } catch (error: Exception) {
+            try {
+                Files.deleteIfExists(target.toPath())
+            } catch (cleanupError: IOException) {
+                error.addSuppressed(cleanupError)
+            }
+            if (error is PronoteException) noteThrottle(error)
             throw error
         }
     }
@@ -950,6 +972,25 @@ class PronoteConnectionController(
         error is PronoteException && error.code == "url" -> error.message
         error is IOException -> "Pronote est injoignable. Vérifie ta connexion internet, puis réessaie."
         else -> fallback
+    }
+
+    /** Portée locale opaque : ni mot de passe, ni identifiant de devoir. */
+    fun agendaScope(): String? {
+        val wanted = synchronized(guard.vaultLock) { vault.selectedChildId() }
+        return agendaScopeForChild(wanted ?: state.value.account?.selectedChildId)
+    }
+
+    private fun agendaScopeForChild(child: String?): String? {
+        val current = state.value
+        if (current.access != AccessPhase.CONNECTED && current.access != AccessPhase.OFFLINE) return null
+        val token = synchronized(guard.vaultLock) { vault.load() }
+        val local = loginStore?.load()
+        val username = token?.username?.takeIf { it.isNotBlank() } ?: local?.username?.takeIf { it.isNotBlank() } ?: return null
+        val address = token?.url ?: local?.let { runCatching { PronotePolicy.schoolAddress(it.school, it.accountType) }.getOrNull() } ?: return null
+        val uri = runCatching { java.net.URI(address) }.getOrNull() ?: return null
+        val host = uri.host?.lowercase() ?: return null
+        if (uri.path.endsWith("parent.html", true) && child.isNullOrBlank()) return null
+        return fr.jmethod.app.model.agendaFingerprint(listOf(host, uri.port.toString(), uri.path.replace("/mobile.", "/"), username, child.orEmpty()))
     }
 
     // endregion

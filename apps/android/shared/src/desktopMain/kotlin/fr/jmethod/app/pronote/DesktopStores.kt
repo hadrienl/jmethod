@@ -81,6 +81,7 @@ class SecretLoginStore(private val secrets: SecretStore) : LoginStore {
 class MemoryVault(private val secrets: SecretStore = NoSecretStore) : SessionVault {
     @Volatile private var credentials: Credentials? = null
     @Volatile private var relogin = false
+    private var sessionChildId: String? = null
 
     @Synchronized override fun load(): Credentials? = credentials
 
@@ -90,10 +91,15 @@ class MemoryVault(private val secrets: SecretStore = NoSecretStore) : SessionVau
         relogin = false
     }
 
-    @Synchronized override fun selectedChildId(): String? = runCatching { secrets.read(CHILD) }.getOrNull()
+    @Synchronized override fun selectedChildId(): String? =
+        if (secrets.available) runCatching { secrets.read(CHILD) }.getOrNull() else sessionChildId
 
     @Synchronized
     override fun saveSelectedChildId(childId: String?) {
+        if (!secrets.available) {
+            sessionChildId = childId
+            return
+        }
         runCatching { if (childId == null) secrets.delete(CHILD) else secrets.write(CHILD, childId) }
     }
 
@@ -108,7 +114,7 @@ class MemoryVault(private val secrets: SecretStore = NoSecretStore) : SessionVau
     override fun clear() {
         credentials = null
         relogin = false
-        runCatching { secrets.delete(CHILD) }
+        saveSelectedChildId(null)
     }
 
     private companion object {

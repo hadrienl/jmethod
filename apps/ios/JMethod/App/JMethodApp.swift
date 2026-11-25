@@ -18,6 +18,7 @@ struct JMethodApp: App {
         _pronote = State(initialValue: session)
         let notebook = NotebookModel(pronote: session)
         let importer = NotebookCourseImporter(app: model, pronote: session)
+        notebook.onAgendaRead = { [weak model] snapshot, scope, at in model?.cacheAgenda(snapshot, scope: scope, at: at) }
         notebook.onRead = { [weak importer] read in importer?.afterNotebookRead(read) }
         _notebook = State(initialValue: notebook)
         _importer = State(initialValue: importer)

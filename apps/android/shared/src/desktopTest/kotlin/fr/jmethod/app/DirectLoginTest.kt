@@ -221,6 +221,16 @@ class DirectLoginTest {
     }
 
     @Test
+    fun selectedChildStaysInMemoryWhenThereIsNoSecretStore() {
+        val vault = MemoryVault()
+        vault.saveSelectedChildId("second-child")
+        assertEquals("second-child", vault.selectedChildId())
+        assertNull(MemoryVault().selectedChildId())
+        vault.clear()
+        assertNull(vault.selectedChildId())
+    }
+
+    @Test
     fun disconnectForgetsTheSessionAndKeepsIdentifiersForPrefill() {
         val server = server()
         val secrets = MapSecrets()
