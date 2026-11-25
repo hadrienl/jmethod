@@ -20,6 +20,7 @@ data class NotebookSnapshot(
     val attachmentCount: Int,
     /** Onglet 88 indisponible pour ce compte : contenus seuls. */
     val homeworkAvailable: Boolean = true,
+    val homeworkComplete: Boolean = homeworkAvailable && skippedEntries == 0,
 )
 
 /**
@@ -450,6 +451,8 @@ object NotebookRules {
             val id = entry.opt("N")?.takeIf { it != JSONObject.NULL }?.toString()?.takeIf { it.isNotEmpty() } ?: "cours:$lessonId@$date"
             sessions += SessionEntry(id, lessonId, date, subject, items)
         }
+        val homeworkList = homework?.v("ListeTravauxAFaire") as? JSONArray
+        val skippedContents = skipped
         val tasks = mutableListOf<HomeworkItem>()
         for (item in homework?.listV("ListeTravauxAFaire").orEmpty()) {
             val due = parseDate(item.text("PourLe"))
@@ -473,7 +476,12 @@ object NotebookRules {
         val sortedSessions = withOrdinals(sessions).sortedByDescending { it.date }
         val sortedTasks = tasks.sortedBy { it.dueDate }
         val count = sortedSessions.sumOf { s -> s.contents.sumOf { it.attachments.size } } + sortedTasks.sumOf { it.attachments.size }
-        return NotebookSnapshot(window.from, window.to, sortedSessions, sortedTasks, skipped, count, homeworkAvailable = homework != null)
+        return NotebookSnapshot(
+            window.from, window.to, sortedSessions, sortedTasks, skipped, count,
+            homeworkAvailable = homework != null,
+            homeworkComplete = homeworkList != null && skipped == skippedContents &&
+                (0 until homeworkList.length()).all { homeworkList.optJSONObject(it) != null },
+        )
     }
 
     // endregion

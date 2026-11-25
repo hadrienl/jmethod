@@ -166,6 +166,28 @@ struct NotebookView: View {
                         .pickerStyle(.segmented)
                     }
                     if model.tab == .homework {
+                        DisclosureGroup("Périodes Pronote chargées") {
+                            let coverage = (followUp.coverage ?? [:]).values.sorted { $0.from < $1.from }
+                            if coverage.isEmpty { Text("Aucune période complète enregistrée.") }
+                            ForEach(coverage, id: \.from) { range in
+                                Text("Du \(FrenchDate.format(range.from, "dd/MM/yyyy")) au \(FrenchDate.format(range.to, "dd/MM/yyyy")) · lu le \(FrenchDate.format(String(range.observedAt.prefix(10)), "dd/MM/yyyy"))")
+                            }
+                            if coverage.contains(where: { $0.from <= app.today && app.today <= $0.to }) {
+                                Button("Charger la période précédente") {
+                                    model.loadAgendaPeriod(previous: true, today: app.today, coverage: coverage)
+                                }
+                                .disabled(model.loading || agendaScope == nil)
+                                Button("Charger la période suivante") {
+                                    model.loadAgendaPeriod(previous: false, today: app.today, coverage: coverage)
+                                }
+                                .disabled(model.loading || agendaScope == nil)
+                            } else {
+                                Button("Charger la période courante") { model.refresh() }
+                                    .disabled(model.loading || agendaScope == nil)
+                            }
+                        }
+                    }
+                    if model.tab == .homework {
                         Button("Ajouter un devoir personnel") {
                             editor = PersonalHomework(id: UUID().uuidString, subjectId: subjects.first?.id ?? "",
                                                       description: "", due: app.today)
@@ -230,7 +252,7 @@ struct NotebookView: View {
                                             onShow: { app.presented = .course(courseId: $0) })
                             }
                         } else {
-                            if homework.isEmpty && personal.isEmpty && cached.isEmpty && snapshot.homeworkAvailable && !model.loading && model.error == nil {
+                            if homework.isEmpty && personal.isEmpty && cached.isEmpty && snapshot.homeworkComplete && !model.loading && model.error == nil {
                                 empty("Aucun devoir ne correspond aux filtres de la période chargée.")
                             }
                             ForEach(homeworkGroups, id: \.date) { group in
@@ -328,6 +350,9 @@ struct NotebookView: View {
             }
             if !snapshot.homeworkAvailable {
                 Text("Le travail à faire n’est pas disponible pour ce compte.").font(.footnote).foregroundStyle(Theme.textSecondary)
+            } else if !snapshot.homeworkComplete {
+                Text("La liste des devoirs est incomplète. Les devoirs déjà connus sont conservés.")
+                    .font(.footnote).foregroundStyle(Theme.textSecondary)
             }
         }
         .surface()

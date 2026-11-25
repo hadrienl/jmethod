@@ -3,6 +3,32 @@ import XCTest
 
 /// Rejoue intégralement `native/shared/notebook-vectors.json` (jalon 5, cahier de textes en lecture seule).
 final class NotebookVectorTests: XCTestCase {
+    func testAgendaLoadsTheFirstAdjacentPeriodWithoutSkippingGaps() {
+        let ranges = [
+            AgendaCoverage(from: "2026-08-31", to: "2026-09-27", observedAt: ""),
+            AgendaCoverage(from: "2026-10-14", to: "2026-11-10", observedAt: ""),
+            AgendaCoverage(from: "2026-11-10", to: "2026-12-07", observedAt: ""),
+            AgendaCoverage(from: "2026-12-08", to: "2026-12-08", observedAt: ""),
+            AgendaCoverage(from: "2026-12-09", to: "2027-01-05", observedAt: ""),
+        ]
+        XCTAssertEqual(AgendaCoverage.adjacentAnchor(today: "2026-11-25", coverage: ranges, previous: true), "2026-09-30")
+        XCTAssertEqual(AgendaCoverage.adjacentAnchor(today: "2026-11-25", coverage: ranges, previous: false), "2027-01-20")
+        XCTAssertEqual(AgendaCoverage.adjacentAnchor(today: "2026-11-25", coverage: ranges.filter { $0.from != "2026-12-08" }, previous: false), "2026-12-22")
+        XCTAssertNil(AgendaCoverage.adjacentAnchor(today: "2026-11-25", coverage: [], previous: false))
+    }
+
+    func testAgendaDistinguishesAnEmptyListFromAnIncompleteResponse() throws {
+        let window = try XCTUnwrap(NotebookRules.window(today: "2026-11-25", firstMonday: "2026-08-31"))
+        let missingList = NotebookRules.parse(window: window, contents: nil, homework: [:])
+        let complete = NotebookRules.parse(window: window, contents: nil, homework: ["ListeTravauxAFaire": [[String: Any]]()])
+        let partial: [Any] = [["PourLe": "25/11/2026", "N": "test-id"], NSNull()]
+        let incomplete = NotebookRules.parse(window: window, contents: nil, homework: ["ListeTravauxAFaire": partial])
+        XCTAssertFalse(missingList.homeworkComplete)
+        XCTAssertTrue(complete.homeworkComplete)
+        XCTAssertFalse(incomplete.homeworkComplete)
+        XCTAssertEqual(incomplete.homework.map(\.id), ["test-id"])
+    }
+
     private var vectors: [String: Any] = [:]
     private var problems: [String] = []
 

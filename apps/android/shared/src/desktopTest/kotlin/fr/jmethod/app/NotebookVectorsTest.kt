@@ -1,5 +1,6 @@
 package fr.jmethod.app
 
+import fr.jmethod.app.model.AgendaCoverage
 import fr.jmethod.app.pronote.Credentials
 import fr.jmethod.app.pronote.FileTransport
 import fr.jmethod.app.pronote.HomeworkItem
@@ -25,6 +26,37 @@ import java.time.LocalDate
 
 /** Rejoue `native/shared/notebook-vectors.json` (jalon 5, cahier de textes en lecture seule). */
 class NotebookVectorsTest {
+    @Test
+    fun agendaLoadsTheFirstAdjacentPeriodWithoutSkippingGaps() {
+        val today = LocalDate.parse("2026-11-25")
+        val ranges = listOf(
+            AgendaCoverage("2026-08-31", "2026-09-27", ""),
+            AgendaCoverage("2026-10-14", "2026-11-10", ""),
+            AgendaCoverage("2026-11-10", "2026-12-07", ""),
+            AgendaCoverage("2026-12-08", "2026-12-08", ""),
+            AgendaCoverage("2026-12-09", "2027-01-05", ""),
+        )
+        assertEquals(LocalDate.parse("2026-09-30"), AgendaCoverage.adjacentAnchor(today, ranges, previous = true))
+        assertEquals(LocalDate.parse("2027-01-20"), AgendaCoverage.adjacentAnchor(today, ranges, previous = false))
+        assertEquals(LocalDate.parse("2026-12-22"), AgendaCoverage.adjacentAnchor(today, ranges.filterNot { it.from == "2026-12-08" }, previous = false))
+        assertNull(AgendaCoverage.adjacentAnchor(today, emptyList(), previous = false))
+    }
+
+    @Test
+    fun agendaDistinguishesAnEmptyListFromAnIncompleteResponse() {
+        val day = LocalDate.parse("2026-11-25")
+        val window = NotebookRules.window(day, LocalDate.parse("2026-08-31"))
+        val missingList = NotebookRules.parse(window, null, JSONObject())
+        val complete = NotebookRules.parse(window, null, JSONObject().put("ListeTravauxAFaire", JSONArray()))
+        val valid = JSONObject().put("PourLe", "25/11/2026").put("N", "test-id")
+        val partial = JSONArray().put(valid).put(JSONObject.NULL)
+        val incomplete = NotebookRules.parse(window, null, JSONObject().put("ListeTravauxAFaire", partial))
+        assertFalse(missingList.homeworkComplete)
+        assertTrue(complete.homeworkComplete)
+        assertFalse(incomplete.homeworkComplete)
+        assertEquals(listOf("test-id"), incomplete.homework.map { it.id })
+    }
+
     private val vectors: JSONObject by lazy {
         val stream = javaClass.classLoader!!.getResourceAsStream("notebook-vectors.json") ?: error("Vecteurs absents")
         JSONObject(stream.bufferedReader().use { it.readText() })

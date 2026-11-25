@@ -13,6 +13,7 @@ import fr.jmethod.app.pronote.agendaKey
 import fr.jmethod.app.pronote.agendaSourceTag
 import fr.jmethod.app.model.PersonalHomework
 import fr.jmethod.app.model.AgendaFollowUp
+import fr.jmethod.app.model.AgendaCoverage
 import fr.jmethod.app.model.CachedHomework
 import fr.jmethod.app.pronote.PronoteConnectionController
 import fr.jmethod.app.pronote.PronoteException
@@ -252,14 +253,17 @@ class NotebookViewModel(
             val from = snapshot.from.toString()
             val to = snapshot.to.toString()
             val history = old.cached.mapValues { (_, item) ->
-                if (snapshot.skippedEntries == 0 && item.due in from..to && item.key !in groups) item.copy(unavailable = true) else item
+                if (snapshot.homeworkComplete && item.due in from..to && item.key !in groups) item.copy(unavailable = true) else item
             }.filterKeys { (groups[it]?.size ?: 0) <= 1 }
             val checks = old.localChecks.filterKeys { key ->
                 val known = history[key]
                 val fresh = incoming[key]
                 known?.sourceTag != null && !known.unavailable && (fresh == null || fresh.sourceTag == known.sourceTag)
             }
-            doc.copy(agendaFollowUp = doc.agendaFollowUp + (scope to old.copy(cached = history + incoming, localChecks = checks)))
+            val coverage = if (snapshot.homeworkComplete) {
+                old.coverage + (from to AgendaCoverage(from, to, stamp.toString()))
+            } else old.coverage
+            doc.copy(agendaFollowUp = doc.agendaFollowUp + (scope to old.copy(cached = history + incoming, localChecks = checks, coverage = coverage)))
         }
     }
 
@@ -312,7 +316,15 @@ class NotebookViewModel(
         }
     }
 
-    fun refresh() {
+    fun loadAgendaPeriod(previous: Boolean) {
+        val scope = controller.agendaScope() ?: return
+        val coverage = repository.document.value?.agendaFollowUp?.get(scope)?.coverage?.values.orEmpty()
+        readAgenda(AgendaCoverage.adjacentAnchor(clock.today(), coverage, previous))
+    }
+
+    fun refresh() = readAgenda(null)
+
+    private fun readAgenda(anchor: LocalDate?) {
         if (state.value.loading) return
         state.update { it.copy(loading = true, error = null) }
         val expectedScope = controller.agendaScope()
@@ -320,25 +332,31 @@ class NotebookViewModel(
         val request = ++readGeneration
         readJob = viewModelScope.launch {
             try {
-                val read = controller.readNotebook()
+                val read = controller.readNotebook(anchor)
                 if (generation != resetCount || request != readGeneration) return@launch
-                // Nouvelle lecture : les fichiers d’une session précédente ne servent plus.
-                withContext(Dispatchers.IO) { clearFiles() }
+                if (anchor == null) withContext(Dispatchers.IO) { clearFiles() }
                 if (generation != resetCount || request != readGeneration) return@launch
                 val scope = controller.agendaScope()
                 if (scope != expectedScope || scope != read.agendaScope) {
                     state.update { it.copy(loading = false) }
                     return@launch
                 }
-                stamp = read.stamp
                 val at = clock.now()
-                state.update { it.copy(loading = false, snapshot = read.snapshot, error = null, refreshedAt = at, snapshotScope = scope) }
+                if (anchor == null) {
+                    stamp = read.stamp
+                    state.update { it.copy(snapshot = read.snapshot, refreshedAt = at, snapshotScope = scope) }
+                }
                 if (scope != null) {
                     try { storeAgendaCache(read.snapshot, scope, at, generation, request) }
                     catch (error: CancellationException) { throw error }
                     catch (_: Exception) { events.send(NotebookEvent.Message("Le cache de l’Agenda n’a pas pu être enregistré.")) }
                 }
-                if (generation == resetCount && request == readGeneration) autoImport(read.snapshot, scope, generation)
+                if (generation != resetCount || request != readGeneration) return@launch
+                state.update { it.copy(loading = false) }
+                if (anchor == null) autoImport(read.snapshot, scope, generation)
+                else if (!read.snapshot.homeworkComplete) {
+                    events.send(NotebookEvent.Message("Pronote n’a pas fourni une liste complète pour cette période."))
+                }
             } catch (error: CancellationException) {
                 if (generation == resetCount && request == readGeneration) state.update { it.copy(loading = false) }
                 throw error
