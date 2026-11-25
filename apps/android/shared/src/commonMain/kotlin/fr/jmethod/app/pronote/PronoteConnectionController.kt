@@ -16,6 +16,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.IOException
 import java.net.URI
+import java.nio.file.Files
 import java.security.SecureRandom
 import java.time.Duration
 import java.time.Instant
@@ -908,9 +909,8 @@ class PronoteConnectionController(
     suspend fun downloadAttachment(stamp: Any, id: String, name: String, target: java.io.File, expectedScope: String? = agendaScope()): NotebookRead? {
         val current = session ?: throw PronoteException("offline", NOTEBOOK_OFFLINE)
         if (throttle.isBlocked(now())) throw PronoteException(PronoteThrottle.BLOCKED_CODE, PronoteThrottle.BLOCKED_MESSAGE)
-        var completed = false
-        try {
-            val result = guard.mutex.withLock {
+        return try {
+            guard.mutex.withLock {
                 // Contrôlé sous le verrou, juste avant le GET : rien ne part après une déconnexion.
                 if (session !== current || current.binding.disconnected()) throw PronoteException("offline", NOTEBOOK_OFFLINE)
                 withContext(io) {
@@ -952,13 +952,14 @@ class PronoteConnectionController(
                     reread
                 }
             }
-            completed = true
-            return result
-        } catch (error: PronoteException) {
-            noteThrottle(error)
+        } catch (error: Exception) {
+            try {
+                Files.deleteIfExists(target.toPath())
+            } catch (cleanupError: IOException) {
+                error.addSuppressed(cleanupError)
+            }
+            if (error is PronoteException) noteThrottle(error)
             throw error
-        } finally {
-            if (!completed) target.delete()
         }
     }
 
