@@ -1,16 +1,11 @@
-# App ordinateur (apps/android/desktopApp) : tests JVM et installeur Windows (MSI) non signé en artefact ;
-# pour une étiquette desktop-vX.Y.Z, aussi l’installeur macOS (DMG) et une Release GitHub.
+# Installeurs Windows et macOS en artefacts après intégration à main ;
+# une étiquette desktop-vX.Y.Z publie également une Release GitHub.
 name: Desktop
 
 on:
   push:
     branches: [main]
     tags: ["desktop-v*"]
-    paths:
-      - "apps/android/**"
-      - ".github/desktop-version.sh"
-      - "native/shared/**"
-      - ".github/workflows/desktop.yml"
   pull_request:
     paths:
       - "apps/android/**"
@@ -23,7 +18,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: desktop-${{ github.ref }}
+  # Chaque commit intégré à main garde ses artefacts, indépendamment des lancements manuels.
+  group: desktop-${{ github.event_name }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || 'validation' }}
   cancel-in-progress: true
 
 defaults:
@@ -99,11 +95,9 @@ jobs:
           $publisher = if ($env:MSIX_PUBLISHER) { $env:MSIX_PUBLISHER } else { "CN=J-Method Test" }
           ./desktopApp/msix/smoke-test.ps1 -Msix "desktopApp/build/msix/J-Method-$env:DESKTOP_VERSION.msix" -Publisher $publisher
 
-  # Les machines macOS de GitHub manquent souvent : le DMG n'est construit que pour une Release,
-  # et son absence ne bloque pas la publication du MSI.
   macos:
     name: Installeur macOS
-    if: startsWith(github.ref, 'refs/tags/desktop-v')
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/desktop-v') || github.event_name == 'workflow_dispatch'
     needs: test
     runs-on: macos-latest
     steps:
