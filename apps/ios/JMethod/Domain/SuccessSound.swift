@@ -12,7 +12,7 @@ enum SuccessSound: String, Sendable {
         let completed = Set(after.revisions.filter { $0.status == .completed }.map(\.id))
         guard completed.contains(id) else { return nil }
         let programmeDone = revision.programmeId.map { programmeId in
-            before.revisions.filter { $0.programmeId == programmeId }.allSatisfy { completed.contains($0.id) }
+            !after.revisions.contains { $0.programmeId == programmeId && $0.status != .completed }
         } ?? false
         let old = RevisionStreak.summary(before.streakState, date: day)
         let new = RevisionStreak.summary(after.streakState, date: day)

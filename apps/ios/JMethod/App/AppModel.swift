@@ -25,9 +25,15 @@ final class AppModel {
     private(set) var today: String
     /// Faux pendant un réveil en arrière-plan : la journée de révision n'est figée qu'à une ouverture réelle.
     var sceneVisible = true {
-        didSet { if !sceneVisible { successAudio.stop() } }
+        didSet {
+            if !sceneVisible {
+                soundGeneration += 1
+                successAudio.stop()
+            }
+        }
     }
     private let successAudio = SuccessAudio()
+    @ObservationIgnored private var soundGeneration = 0
 
     func previewSuccessSound() {
         if sceneVisible { successAudio.play(.evening) }
@@ -602,7 +608,10 @@ final class AppModel {
                                                sensitivity: sensitivity, emergencyThreshold: emergencyThreshold, intervals: intervals)
         if let soundEnabled {
             document.settings.soundEnabled = soundEnabled
-            if !soundEnabled { successAudio.stop() }
+            if !soundEnabled {
+                soundGeneration += 1
+                successAudio.stop()
+            }
         }
         persist()
         toast = .init(title: "Réglages enregistrés", message: "Ils s’appliquent aux prochaines validations et aux nouveaux cours.", kind: .success)
@@ -649,6 +658,8 @@ final class AppModel {
 
     /// Restauration confirmée : cours et séances remplacés, matières et réglages s'ils sont fournis, créneaux Pronote conservés.
     func restore(_ accepted: Backup.Accepted) {
+        soundGeneration += 1
+        successAudio.stop()
         // Une sauvegarde ancienne peut porter des clés du cahier au format périmé.
         do { document = try RevisionStreak.reconcile(NotebookCourses.migratingKeys(accepted.apply(to: document)), now: now(), openCurrent: true) }
         catch { showToast("Restauration impossible", error.localizedDescription, warning: true); return }
@@ -715,11 +726,13 @@ final class AppModel {
         }
         let snapshot = next.document
         let currentVersion = next.version
+        let generation = soundGeneration
         guard let store else { return }
         Task { [weak self] in
             do {
                 try await store.save(snapshot, version: currentVersion)
-                if let self, let successSound, self.sceneVisible, self.document.settings.soundEnabled {
+                if let self, let successSound, self.sceneVisible, self.document.settings.soundEnabled,
+                   self.soundGeneration == generation {
                     self.successAudio.play(successSound)
                 }
             } catch where announcesFailure {

@@ -8,5 +8,6 @@
   {"case":"reprise et flamme","flame":true,"resume":true,"expected":"resume"},
   {"case":"record et soirée","prior":true,"flame":true,"evening":true,"expected":"record"},
   {"case":"dernier J et record","programme":true,"prior":true,"flame":true,"evening":true,"expected":"programme"},
+  {"case":"dernier J suivi d’un rattrapage","programme":true,"recovery":true,"expected":"revision"},
   {"case":"dernière séance de reprise","resume":true,"expected":"resume"}
 ]

@@ -29,6 +29,12 @@ final class SuccessSoundTests: XCTestCase {
             }
             var after = before
             if !flag("unchanged") { after.revisions[0].status = .completed }
+            if flag("recovery") {
+                var recovery = revision
+                recovery.id = "recovery"
+                recovery.isEmergencySession = true
+                after.revisions.append(recovery)
+            }
             after.streakState?.days = prior + [entry(day, earned: flag("flame"))]
             let actual = SuccessSound.afterRevision(before: before, after: after, id: revision.id, day: day, eveningDone: flag("evening"))
             XCTAssertEqual(actual?.rawValue, item["expected"] as? String, item["case"] as? String ?? "")

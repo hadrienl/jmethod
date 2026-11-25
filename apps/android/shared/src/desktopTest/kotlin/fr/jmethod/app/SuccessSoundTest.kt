@@ -30,7 +30,8 @@ class SuccessSoundTest {
                 todayWidgetVisit = TodayWidgetVisit(day, selection = listOf("r")).takeIf { flag("resume") },
             )
             val updated = initial.copy(
-                revisions = listOf(if (flag("unchanged")) revision else revision.copy(status = RevisionStatus.COMPLETED)),
+                revisions = listOf(if (flag("unchanged")) revision else revision.copy(status = RevisionStatus.COMPLETED)) +
+                    if (flag("recovery")) listOf(revision.copy(id = "recovery", isEmergencySession = true)) else emptyList(),
                 streakState = initial.streakState?.copy(days = prior + entry(day, flag("flame"))),
             )
             val actual = SuccessSound.afterRevision(initial, updated, revision.id, day, flag("evening"))

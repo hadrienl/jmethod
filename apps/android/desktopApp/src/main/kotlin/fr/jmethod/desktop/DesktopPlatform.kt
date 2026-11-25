@@ -2,6 +2,7 @@ package fr.jmethod.desktop
 
 import fr.jmethod.app.domain.SuccessSound
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicLong
 import javax.sound.sampled.AudioSystem
 import javax.sound.sampled.Clip
 import javax.sound.sampled.LineEvent
@@ -30,11 +31,14 @@ class DesktopPlatform(private val window: () -> Frame?, private val cacheDir: Fi
     private val audioExecutor = Executors.newSingleThreadExecutor { work ->
         Thread(work, "J-Method audio").apply { isDaemon = true }
     }
+    private val audioGeneration = AtomicLong()
     private var successAudio: Clip? = null
 
     override fun playSuccessSound(sound: SuccessSound) {
         if (window()?.isActive != true) return
+        val request = audioGeneration.incrementAndGet()
         audioExecutor.execute {
+            if (audioGeneration.get() != request) return@execute
             closeClip()
             val asset = javaClass.getResource("/raw/${sound.asset}.wav") ?: return@execute
             runCatching {
@@ -46,12 +50,13 @@ class DesktopPlatform(private val window: () -> Frame?, private val cacheDir: Fi
                         if (successAudio == clip) closeClip()
                     }
                 }
-                clip.start()
+                if (audioGeneration.get() == request) clip.start() else closeClip()
             }.onFailure { closeClip() }
         }
     }
 
     override fun stopSuccessSound() {
+        audioGeneration.incrementAndGet()
         audioExecutor.execute { closeClip() }
     }
 

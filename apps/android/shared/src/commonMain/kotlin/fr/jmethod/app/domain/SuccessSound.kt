@@ -16,7 +16,7 @@ enum class SuccessSound {
             val completedIds = after.revisions.filter { it.status == RevisionStatus.COMPLETED }.mapTo(mutableSetOf()) { it.id }
             if (revisionId !in completedIds) return null
             val programmeDone = revision.programmeId?.let { programmeId ->
-                before.revisions.filter { it.programmeId == programmeId }.all { it.id in completedIds }
+                after.revisions.none { it.programmeId == programmeId && it.status != RevisionStatus.COMPLETED }
             } == true
             val old = RevisionStreak.summary(before.streakState, day)
             val new = RevisionStreak.summary(after.streakState, day)
