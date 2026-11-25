@@ -53,7 +53,9 @@ final class NotebookModel {
         let live = snapshotScope == scope ? snapshot?.homework ?? [] : []
         let groups = Dictionary(grouping: live, by: \.agendaKey)
         let liveCount = live.filter { item in
-            let local = groups[item.agendaKey]?.count == 1 ? data.localChecks[item.agendaKey] : nil
+            let tag = item.agendaSourceTag
+            let canTrack = groups[item.agendaKey]?.count == 1 && tag != nil && data.cached[item.agendaKey]?.sourceTag == tag
+            let local = canTrack ? data.localChecks[item.agendaKey] : nil
             return item.dueDate <= limit && !(local ?? (item.remoteDone == true))
         }.count
         let cached = data.cached.values.filter {

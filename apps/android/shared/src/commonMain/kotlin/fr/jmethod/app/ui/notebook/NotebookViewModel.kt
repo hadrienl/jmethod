@@ -10,6 +10,7 @@ import fr.jmethod.app.pronote.NotebookRules
 import fr.jmethod.app.pronote.NotebookSnapshot
 import fr.jmethod.app.pronote.HomeworkItem
 import fr.jmethod.app.pronote.agendaKey
+import fr.jmethod.app.pronote.agendaSourceTag
 import fr.jmethod.app.model.PersonalHomework
 import fr.jmethod.app.model.AgendaFollowUp
 import fr.jmethod.app.model.CachedHomework
@@ -119,7 +120,9 @@ class NotebookViewModel(
     private var readJob: Job? = null
     private var downloadJob: Job? = null
     /** Incrémenté à chaque réinitialisation : un résultat tardif d’une session précédente est ignoré. */
+    @Volatile
     private var resetCount = 0
+    private var readGeneration = 0
     private val events = Channel<NotebookEvent>(Channel.BUFFERED)
     val eventFlow: Flow<NotebookEvent> = events.receiveAsFlow()
 
@@ -127,19 +130,22 @@ class NotebookViewModel(
         val scope = controller.agendaScope()
         val data = scope?.let(document.agendaFollowUp::get) ?: AgendaFollowUp()
         val limit = clock.today().plusDays(1).toString()
-        val live = current.snapshot?.homework.orEmpty().takeIf { current.snapshotScope == scope }.orEmpty()
+        val snapshot = current.snapshot?.takeIf { current.snapshotScope == scope }
+        val live = snapshot?.homework.orEmpty()
         val groups = live.groupBy { it.agendaKey() }
         val urgent = live.count { item ->
-            val local = data.localChecks[item.agendaKey()].takeIf { groups[item.agendaKey()]?.size == 1 }
+            val key = item.agendaKey()
+            val tag = item.agendaSourceTag()
+            val local = data.localChecks[key].takeIf { groups[key]?.size == 1 && tag != null && data.cached[key]?.sourceTag == tag }
             item.dueDate.toString() <= limit && !(local ?: (item.remoteDone == true))
         } + data.cached.values.count { row ->
             row.key !in groups && row.due <= limit && !(data.localChecks[row.key] ?: (row.remoteDone == true))
         } + data.personal.count { !it.done && it.due <= limit }
         NotebookUiState(
-            state = current,
+            state = current.copy(snapshot = snapshot),
             subjects = document.subjects,
             subjectName = current.subjectId?.let { id -> document.subjects.firstOrNull { it.id == id }?.name },
-            importStates = current.snapshot?.sessions.orEmpty().associate {
+            importStates = snapshot?.sessions.orEmpty().associate {
                 it.key to NotebookCourses.importState(it, document.notebookImports, document.courses)
             },
             autoCreate = document.settings.notebookAutoCreate == true,
@@ -158,10 +164,9 @@ class NotebookViewModel(
             controller.uiState.map { Triple(it.access, controller.agendaScope(), it.account?.selectedChildId) }
                 .distinctUntilChanged().collect { (access, scope, child) ->
                 if (scope != previous || child != previousChild || access == fr.jmethod.app.pronote.AccessPhase.SIGNED_OUT) reset()
-                if (access == fr.jmethod.app.pronote.AccessPhase.SIGNED_OUT) previous?.let { old ->
+                if (access == fr.jmethod.app.pronote.AccessPhase.SIGNED_OUT) {
                     runCatching { repository.update { doc ->
-                        val data = doc.agendaFollowUp[old] ?: return@update doc
-                        doc.copy(agendaFollowUp = doc.agendaFollowUp + (old to AgendaFollowUp(personal = data.personal)))
+                        doc.copy(agendaFollowUp = doc.agendaFollowUp.mapValues { (_, value) -> AgendaFollowUp(personal = value.personal) })
                     } }
                 }
                 previous = scope
@@ -187,6 +192,7 @@ class NotebookViewModel(
 
     private fun reset() {
         resetCount++
+        readGeneration++
         readJob?.cancel()
         downloadJob?.cancel()
         downloadJob = null
@@ -214,7 +220,9 @@ class NotebookViewModel(
         updateFollowUp(expected) { followUp ->
             val current = state.value
             val snapshot = current.snapshot?.takeIf { current.snapshotScope == expected } ?: return@updateFollowUp followUp
-            if (snapshot.homework.none { it == item } || snapshot.homework.count { it.agendaKey() == key } != 1) return@updateFollowUp followUp
+            val tag = item.agendaSourceTag()
+            if (tag == null || followUp.cached[key]?.sourceTag != tag || snapshot.homework.none { it == item } ||
+                snapshot.homework.count { it.agendaKey() == key } != 1) return@updateFollowUp followUp
             val wasDone = followUp.localChecks[key] ?: (item.remoteDone == true)
             if (wasDone == done) followUp else followUp.copy(localChecks = followUp.localChecks + (key to done))
         }
@@ -224,28 +232,34 @@ class NotebookViewModel(
         val expected = controller.agendaScope() ?: return
         updateFollowUp(expected) { followUp ->
             val row = followUp.cached[key] ?: return@updateFollowUp followUp
+            if (row.unavailable || row.sourceTag == null) return@updateFollowUp followUp
             val wasDone = followUp.localChecks[key] ?: (row.remoteDone == true)
             if (wasDone == done) followUp else followUp.copy(localChecks = followUp.localChecks + (key to done))
         }
     }
 
-    private suspend fun storeAgendaCache(snapshot: NotebookSnapshot, scope: String, stamp: Instant, generation: Int) {
+    private suspend fun storeAgendaCache(snapshot: NotebookSnapshot, scope: String, stamp: Instant, generation: Int, request: Int) {
         if (!snapshot.homeworkAvailable) return
         val groups = snapshot.homework.groupBy { it.agendaKey() }
         val incoming = groups.mapNotNull { (key, items) ->
             val item = items.singleOrNull() ?: return@mapNotNull null
             key to CachedHomework(key, item.dueDate.toString(), item.subject, item.description, item.remoteDone,
-                stamp.toString(), item.attachments.map { it.name })
+                stamp.toString(), item.attachments.map { it.name }, sourceTag = item.agendaSourceTag())
         }.toMap()
         repository.update { doc ->
-            if (generation != resetCount || controller.agendaScope() != scope) return@update doc
+            if (generation != resetCount || request != readGeneration || controller.agendaScope() != scope) return@update doc
             val old = doc.agendaFollowUp[scope] ?: AgendaFollowUp()
             val from = snapshot.from.toString()
             val to = snapshot.to.toString()
             val history = old.cached.mapValues { (_, item) ->
-                if (item.due in from..to && item.key !in groups) item.copy(unavailable = true) else item
+                if (snapshot.skippedEntries == 0 && item.due in from..to && item.key !in groups) item.copy(unavailable = true) else item
             }.filterKeys { (groups[it]?.size ?: 0) <= 1 }
-            doc.copy(agendaFollowUp = doc.agendaFollowUp + (scope to old.copy(cached = history + incoming)))
+            val checks = old.localChecks.filterKeys { key ->
+                val known = history[key]
+                val fresh = incoming[key]
+                known?.sourceTag != null && !known.unavailable && (fresh == null || fresh.sourceTag == known.sourceTag)
+            }
+            doc.copy(agendaFollowUp = doc.agendaFollowUp + (scope to old.copy(cached = history + incoming, localChecks = checks)))
         }
     }
 
@@ -302,31 +316,34 @@ class NotebookViewModel(
         if (state.value.loading) return
         state.update { it.copy(loading = true, error = null) }
         val expectedScope = controller.agendaScope()
+        val generation = resetCount
+        val request = ++readGeneration
         readJob = viewModelScope.launch {
             try {
-                val generation = resetCount
                 val read = controller.readNotebook()
-                if (generation != resetCount) return@launch
-                stamp = read.stamp
+                if (generation != resetCount || request != readGeneration) return@launch
                 // Nouvelle lecture : les fichiers d’une session précédente ne servent plus.
                 withContext(Dispatchers.IO) { clearFiles() }
-                if (generation != resetCount) return@launch
+                if (generation != resetCount || request != readGeneration) return@launch
                 val scope = controller.agendaScope()
-                if (scope != expectedScope) {
+                if (scope != expectedScope || scope != read.agendaScope) {
                     state.update { it.copy(loading = false) }
                     return@launch
                 }
+                stamp = read.stamp
                 val at = clock.now()
                 state.update { it.copy(loading = false, snapshot = read.snapshot, error = null, refreshedAt = at, snapshotScope = scope) }
                 if (scope != null) {
-                    try { storeAgendaCache(read.snapshot, scope, at, generation) }
+                    try { storeAgendaCache(read.snapshot, scope, at, generation, request) }
                     catch (error: CancellationException) { throw error }
                     catch (_: Exception) { events.send(NotebookEvent.Message("Le cache de l’Agenda n’a pas pu être enregistré.")) }
                 }
-                if (generation == resetCount) autoImport(read.snapshot)
-            } catch (_: CancellationException) {
-                state.update { it.copy(loading = false) }
+                if (generation == resetCount && request == readGeneration) autoImport(read.snapshot, scope, generation)
+            } catch (error: CancellationException) {
+                if (generation == resetCount && request == readGeneration) state.update { it.copy(loading = false) }
+                throw error
             } catch (error: Exception) {
+                if (generation != resetCount || request != readGeneration) return@launch
                 state.update { it.copy(loading = false, error = message(error, "Lecture du cahier de textes impossible. Réessaie plus tard.")) }
             }
         }
@@ -349,6 +366,8 @@ class NotebookViewModel(
     fun download(attachment: NotebookAttachment, inApp: Boolean = false) {
         if (attachment.kind != NotebookAttachment.Kind.FILE || state.value.downloadingId != null) return
         val session = stamp ?: return
+        val expectedScope = state.value.snapshotScope
+        if (expectedScope != controller.agendaScope()) return
         val generation = resetCount
         state.update { it.copy(downloadingId = attachment.id) }
         downloadJob = viewModelScope.launch {
@@ -357,13 +376,13 @@ class NotebookViewModel(
                     File(notebookDir(), UUID.randomUUID().toString()).apply { mkdirs() }.let { File(it, NotebookRules.saveAsName(attachment.rawName)) }
                 }
                 // Nom brut `L` (même vide) pour l’adresse FichiersExternes, comme pronotepy.
-                val reread = controller.downloadAttachment(session, attachment.id, attachment.rawName, target)
+                val reread = controller.downloadAttachment(session, attachment.id, attachment.rawName, target, expectedScope)
                 if (reread != null && generation == resetCount) {
                     // Session renouvelée avant le téléchargement : l’aperçu reprend les identifiants à jour.
                     stamp = reread.stamp
-                    state.update { it.copy(snapshot = reread.snapshot) }
+                    state.update { it.copy(snapshot = reread.snapshot, snapshotScope = reread.agendaScope) }
                 }
-                if (generation != resetCount) {
+                if (generation != resetCount || controller.agendaScope() != expectedScope) {
                     withContext(Dispatchers.IO) { target.parentFile?.deleteRecursively() }
                     return@launch
                 }
@@ -390,11 +409,13 @@ class NotebookViewModel(
     /** Lecture du cahier pour la création de cours (hors écran), avec mise à jour de l’aperçu. */
     private suspend fun readForCourses(): NotebookSnapshot {
         val generation = resetCount
+        val expectedScope = controller.agendaScope()
         val read = controller.readNotebook()
-        if (generation == resetCount) {
-            stamp = read.stamp
-            state.update { it.copy(snapshot = read.snapshot, error = null) }
+        if (generation != resetCount || expectedScope != controller.agendaScope() || expectedScope != read.agendaScope) {
+            throw CancellationException("Le compte Pronote a changé.")
         }
+        stamp = read.stamp
+        state.update { it.copy(snapshot = read.snapshot, error = null, snapshotScope = read.agendaScope) }
         return read.snapshot
     }
 
@@ -402,7 +423,12 @@ class NotebookViewModel(
      * Télécharge les fichiers de la séance dans l’ordre (contenus puis pièces jointes) : au plus 10
      * enregistrés, les échecs ne comptent pas (README des documents, règle 4). Chaque fichier est analysé.
      */
-    private suspend fun prepareDocuments(session: SessionEntry, subjects: List<Subject>): Pair<List<PendingDocument>, Int> {
+    private suspend fun prepareDocuments(
+        session: SessionEntry,
+        subjects: List<Subject>,
+        expectedScope: String?,
+        generation: Int,
+    ): Pair<List<PendingDocument>, Int> {
         val attachments = session.contents.flatMap { it.attachments }.filter { it.kind == NotebookAttachment.Kind.FILE }.distinctBy { it.id }
         val names = NotebookCourses.subjectNames(session, subjects)
         val documents = mutableListOf<PendingDocument>()
@@ -414,10 +440,14 @@ class NotebookViewModel(
                 val target = withContext(Dispatchers.IO) {
                     File(preparedDir(), UUID.randomUUID().toString()).apply { mkdirs() }.let { File(it, NotebookRules.saveAsName(attachment.rawName)) }
                 }
-                val reread = controller.downloadAttachment(current, attachment.id, attachment.rawName, target)
+                val reread = controller.downloadAttachment(current, attachment.id, attachment.rawName, target, expectedScope)
                 if (reread != null) {
                     stamp = reread.stamp
-                    state.update { it.copy(snapshot = reread.snapshot) }
+                    state.update { it.copy(snapshot = reread.snapshot, snapshotScope = reread.agendaScope) }
+                }
+                if (generation != resetCount || controller.agendaScope() != expectedScope) {
+                    withContext(Dispatchers.IO) { target.parentFile?.deleteRecursively() }
+                    throw CancellationException("Le compte Pronote a changé.")
                 }
                 val analysis = withContext(Dispatchers.Default) { DocumentAnalyzer.analyze(target, attachment.name) }
                 analyses[target] = analysis
@@ -472,14 +502,19 @@ class NotebookViewModel(
     fun prepareCourse(session: SessionEntry) {
         if (state.value.preparingSessionId != null) return
         val generation = resetCount
+        val expectedScope = state.value.snapshotScope
+        if (expectedScope != controller.agendaScope()) return
         state.update { it.copy(preparingSessionId = session.id) }
         viewModelScope.launch {
             try {
                 // État vu au clic : si la séance est créée ou supprimée pendant la préparation, rien ne sera écrit.
                 val seen = repository.current().notebookImports[session.key]
                 val subjects = repository.current().subjects
-                val (documents, failed) = prepareDocuments(session, subjects)
-                if (generation != resetCount) return@launch
+                val (documents, failed) = prepareDocuments(session, subjects, expectedScope, generation)
+                if (generation != resetCount || expectedScope != controller.agendaScope()) {
+                    withContext(Dispatchers.IO) { documents.forEach { it.file.parentFile?.deleteRecursively() } }
+                    return@launch
+                }
                 events.send(NotebookEvent.CreateCourse(draftFor(session, documents, failed, subjects).copy(seenImport = seen)))
             } catch (_: CancellationException) {
             } catch (error: Exception) {
@@ -498,16 +533,19 @@ class NotebookViewModel(
      * Création automatique (section 4) : séances éligibles du [snapshot], une passe à la fois.
      * @param since date de départ imposée (import des 14 derniers jours à l’activation).
      */
-    private suspend fun autoImport(snapshot: NotebookSnapshot) {
+    private suspend fun autoImport(snapshot: NotebookSnapshot, expectedScope: String?, generation: Int) {
+        fun stillCurrent() = generation == resetCount && expectedScope == controller.agendaScope()
         val document = repository.current()
         if (document.settings.notebookAutoCreate != true) return
         importMutex.withLock {
+            if (!stillCurrent()) return
             val current = repository.current()
             val sessions = NotebookCourses.eligible(snapshot, current.settings, current.notebookImports, current.subjects, clock.today(), current.courses)
             var created = 0
             for (session in sessions) {
+                if (!stillCurrent()) return
                 val (documents, failed) = try {
-                    prepareDocuments(session, current.subjects)
+                    prepareDocuments(session, current.subjects, expectedScope, generation)
                 } catch (error: CancellationException) {
                     throw error
                 } catch (_: Exception) {
@@ -516,7 +554,7 @@ class NotebookViewModel(
                 val draft = draftFor(session, documents, failed, repository.current().subjects)
                 val subjectId = draft.subjectId ?: continue
                 val form = CourseEditing.Form(subjectId, draft.chapter, draft.title, draft.date, draft.description)
-                val result = withContext(Dispatchers.IO) { creator.create(form, draft.source, documents, CourseCreator.Expectation.Automatic) }
+                val result = withContext(Dispatchers.IO) { creator.create(form, draft.source, documents, CourseCreator.Expectation.Automatic, stillCurrent = ::stillCurrent) }
                 withContext(Dispatchers.IO) { documents.forEach { it.file.parentFile?.deleteRecursively() } }
                 if (result != null) created++
             }
@@ -531,7 +569,9 @@ class NotebookViewModel(
         val last = lastAutoRead
         if (last != null && Duration.between(last, now) < AUTO_READ_INTERVAL) return
         lastAutoRead = now
-        runCatching { autoImport(readForCourses()) }
+        val generation = resetCount
+        val expectedScope = controller.agendaScope()
+        runCatching { autoImport(readForCourses(), expectedScope, generation) }
     }
 
     /** Réglage « Créer les cours automatiquement ». */
@@ -547,10 +587,13 @@ class NotebookViewModel(
             }
             try {
                 lastAutoRead = clock.now()
+                val generation = resetCount
+                val expectedScope = controller.agendaScope()
                 val snapshot = readForCourses()
                 val document = repository.current()
+                if (generation != resetCount || expectedScope != controller.agendaScope()) return@launch
                 val offer = NotebookCourses.backfill(snapshot, document.notebookImports, document.subjects, today, document.courses)
-                if (offer.count > 0) state.update { it.copy(importOffer = offer.count) } else autoImport(snapshot)
+                if (offer.count > 0) state.update { it.copy(importOffer = offer.count) } else autoImport(snapshot, expectedScope, generation)
             } catch (_: CancellationException) {
             } catch (error: Exception) {
                 events.send(NotebookEvent.Message(message(error, "Lecture du cahier de textes impossible. Les cours seront créés à la prochaine lecture.")))
@@ -566,7 +609,8 @@ class NotebookViewModel(
             if (importPast) {
                 repository.update { it.copy(settings = it.settings.copy(notebookAutoCreateSince = today.minusDays(NotebookCourses.BACKFILL_DAYS).toString())) }
             }
-            state.value.snapshot?.let { runCatching { autoImport(it) } }
+            val current = state.value
+            current.snapshot?.let { runCatching { autoImport(it, current.snapshotScope, resetCount) } }
         }
     }
 
@@ -577,6 +621,8 @@ class NotebookViewModel(
     fun attachToCourse(courseId: String, sessionKey: String, attachment: NotebookAttachment) {
         if (attachment.kind != NotebookAttachment.Kind.FILE || state.value.downloadingId != null) return
         val current = stamp ?: return
+        val expectedScope = state.value.snapshotScope
+        if (expectedScope != controller.agendaScope()) return
         val generation = resetCount
         state.update { it.copy(downloadingId = attachment.id) }
         viewModelScope.launch {
@@ -586,13 +632,13 @@ class NotebookViewModel(
                     File(preparedDir(), UUID.randomUUID().toString()).apply { mkdirs() }.let { File(it, NotebookRules.saveAsName(attachment.rawName)) }
                 }
                 target = file
-                controller.downloadAttachment(current, attachment.id, attachment.rawName, file)?.let { reread ->
+                controller.downloadAttachment(current, attachment.id, attachment.rawName, file, expectedScope)?.let { reread ->
                     if (generation == resetCount) {
                         stamp = reread.stamp
-                        state.update { it.copy(snapshot = reread.snapshot) }
+                        state.update { it.copy(snapshot = reread.snapshot, snapshotScope = reread.agendaScope) }
                     }
                 }
-                if (generation != resetCount) return@launch
+                if (generation != resetCount || controller.agendaScope() != expectedScope) return@launch
                 val subjects = repository.current().subjects
                 val session = state.value.snapshot?.sessions?.firstOrNull { it.key == sessionKey }
                 val names = session?.let { NotebookCourses.subjectNames(it, subjects) } ?: emptyList()
@@ -617,6 +663,7 @@ class NotebookViewModel(
         viewModelScope.launch {
             try {
                 val snapshot = readForCourses()
+                val expectedScope = state.value.snapshotScope
                 val attachment = fr.jmethod.app.domain.RevisionSession.notebookDocumentCandidates(course, document, snapshot).singleOrNull()
                 if (attachment == null) {
                     events.send(NotebookEvent.Message("Ce document n’a pas été retrouvé de façon unique dans ses séances Pronote. Ouvre le cahier de textes pour le récupérer."))
@@ -626,7 +673,7 @@ class NotebookViewModel(
                     File(preparedDir(), UUID.randomUUID().toString()).apply { mkdirs() }.let { File(it, NotebookRules.saveAsName(attachment.rawName)) }
                 }
                 val session2 = stamp ?: return@launch
-                controller.downloadAttachment(session2, attachment.id, attachment.rawName, target)?.let { stamp = it.stamp }
+                controller.downloadAttachment(session2, attachment.id, attachment.rawName, target, expectedScope)?.let { stamp = it.stamp }
                 withContext(Dispatchers.IO) {
                     val updated = files.replace(document, target)
                     target.parentFile?.deleteRecursively()

@@ -201,15 +201,32 @@ final class JMethodUITests: XCTestCase {
 
     private func assertTabsExist(_ app: XCUIApplication) {
         XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 15), "barre d'onglets absente")
-        for label in ["Aujourd’hui", "Planning", "Mes cours", "Mes progrès", "Réglages"] {
+        for label in ["Aujourd’hui", "Agenda", "Planning", "Mes cours"] {
             XCTAssertTrue(app.tabBars.buttons[label].exists, "onglet \(label) absent")
         }
+        XCTAssertTrue(moreTab(app).exists, "onglet Plus absent")
+    }
+
+    private func moreTab(_ app: XCUIApplication) -> XCUIElement {
+        app.tabBars.buttons.matching(NSPredicate(format: "label IN %@", ["Plus", "More"])).firstMatch
     }
 
     private func tapTab(_ app: XCUIApplication, _ label: String) {
         let button = app.tabBars.buttons[label]
-        XCTAssertTrue(button.waitForExistence(timeout: 5), "onglet \(label) absent")
-        button.tap()
+        if button.exists {
+            button.tap()
+            return
+        }
+        let more = moreTab(app)
+        XCTAssertTrue(more.waitForExistence(timeout: 5), "onglet Plus absent")
+        more.tap()
+        if app.navigationBars.buttons.firstMatch.exists && !app.cells.firstMatch.exists {
+            app.navigationBars.buttons.firstMatch.tap()
+        }
+        let titles = label == "Mes progrès" ? [label, "Progrès"] : [label]
+        let row = app.staticTexts.matching(NSPredicate(format: "label IN %@", titles)).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "onglet \(label) absent")
+        row.tap()
     }
 
     private func scrollTo(_ element: XCUIElement, in app: XCUIApplication) {

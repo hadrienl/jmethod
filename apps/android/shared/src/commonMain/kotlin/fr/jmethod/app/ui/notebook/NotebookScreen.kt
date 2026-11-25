@@ -6,6 +6,7 @@ import androidx.compose.runtime.key
 import fr.jmethod.app.model.PersonalHomework
 import fr.jmethod.app.model.Subject
 import fr.jmethod.app.pronote.agendaKey
+import fr.jmethod.app.pronote.agendaSourceTag
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -138,9 +139,13 @@ fun NotebookScreen(ui: NotebookUiState, viewModel: NotebookViewModel, modifier: 
                 item.contents.any { it.description.contains(search.trim(), ignoreCase = true) })
         }
         val byKey = snapshot?.homework.orEmpty().groupingBy(HomeworkItem::agendaKey).eachCount()
-        fun local(item: HomeworkItem) = ui.followUp.localChecks[item.agendaKey()].takeIf {
-            ui.agendaScope != null && state.snapshotScope == ui.agendaScope && byKey[item.agendaKey()] == 1
+        fun canTrack(item: HomeworkItem): Boolean {
+            val key = item.agendaKey()
+            val tag = item.agendaSourceTag()
+            return ui.agendaScope != null && state.snapshotScope == ui.agendaScope && byKey[key] == 1 &&
+                tag != null && ui.followUp.cached[key]?.sourceTag == tag
         }
+        fun local(item: HomeworkItem) = ui.followUp.localChecks[item.agendaKey()].takeIf { canTrack(item) }
         fun done(item: HomeworkItem) = local(item) ?: (item.remoteDone == true)
         fun statusMatches(done: Boolean) = filter == HomeworkFilter.ALL || (filter == HomeworkFilter.DONE) == done
         val personal = ui.followUp.personal.mapNotNull { item ->
@@ -273,7 +278,9 @@ LazyColumn(
                                 style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
                             Text("Statut Pronote connu : " + when (item.remoteDone) { true -> "fait"; false -> "à faire"; null -> "inconnu" })
                             if (item.documentNames.isNotEmpty()) Text("Documents à actualiser : " + item.documentNames.joinToString())
-                            LocalHomeworkCheck(done) { viewModel.setCachedLocalDone(item.key, it) }
+                            if (!item.unavailable && item.sourceTag != null) {
+                                LocalHomeworkCheck(done) { viewModel.setCachedLocalDone(item.key, it) }
+                            }
                         }
                     }
                 }
@@ -327,10 +334,8 @@ LazyColumn(
                             .toList().sortedBy { it.first ?: LocalDate.MIN }.forEach { (date, group) ->
                                 item(key = "date-$date") { Text(date?.let(::dayLabel) ?: "En retard", style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() }) }
                                 items(group) { item ->
-                                    val key = item.agendaKey()
-                                    val canTrack = ui.agendaScope != null && state.snapshotScope == ui.agendaScope && byKey[key] == 1
                                     HomeworkCard(item, state.downloadingId, viewModel::download, platform::openLink) {
-                                        if (canTrack) LocalHomeworkCheck(done(item)) { viewModel.setLocalDone(item, it) }
+                                        if (canTrack(item)) LocalHomeworkCheck(done(item)) { viewModel.setLocalDone(item, it) }
                                     }
                                 }
                             }

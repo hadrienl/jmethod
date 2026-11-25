@@ -23,6 +23,7 @@ data class CachedHomework(
     val observedAt: String,
     val documentNames: List<String>,
     val unavailable: Boolean = false,
+    val sourceTag: String? = null,
 )
 
 fun agendaFingerprint(parts: List<String>): String {

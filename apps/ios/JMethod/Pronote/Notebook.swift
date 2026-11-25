@@ -55,8 +55,11 @@ struct NotebookHomework: Equatable, Sendable, Identifiable {
     var attachments: [NotebookAttachment]
     var remoteDone: Bool? = nil
 
+    var agendaSourceTag: String? { id.isEmpty ? nil : agendaFingerprint([id]) }
+
     var agendaKey: String {
-        agendaFingerprint([dueDate, subject, description] + attachments.map(\.name))
+        agendaFingerprint([dueDate, subject, description] + attachments.flatMap { [$0.name, $0.url ?? ""] }
+                          + links.flatMap { [$0.label, $0.url] })
     }
 }
 

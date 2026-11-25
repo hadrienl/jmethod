@@ -185,6 +185,7 @@ struct CachedHomework: Codable, Equatable, Identifiable, Sendable {
     var observedAt: String
     var documentNames: [String]
     var unavailable = false
+    var sourceTag: String? = nil
     var id: String { key }
 }
 

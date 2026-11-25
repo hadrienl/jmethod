@@ -7,7 +7,6 @@ struct RootView: View {
     let importer: NotebookCourseImporter
     @Environment(\.scenePhase) private var scenePhase
     @State private var tab: Tab = .today
-    @State private var lastAgendaScope: String?
 
     enum Tab: Hashable { case today, agenda, planning, courses, stats, settings }
 
@@ -66,19 +65,13 @@ struct RootView: View {
                 break
             }
         }
-        .onChange(of: notebook.agendaScope, initial: true) { _, scope in
-            if let scope { lastAgendaScope = scope }
-        }
         .onChange(of: pronote.access) { old, new in
             // Après une connexion réussie, l'app s'ouvre sur Aujourd'hui.
-            if new == .connected && old != .connected { tab = .today }
+            if new == .connected && (old == .signedOut || old == .resuming) { tab = .today }
             // Retour à l'écran de connexion : aucune feuille ne reste ouverte.
             if new == .signedOut {
                 app.presented = nil
-                if let scope = lastAgendaScope {
-                    app.updateAgenda(scope: scope) { $0 = AgendaFollowUp(personal: $0.personal) }
-                    lastAgendaScope = nil
-                }
+                app.clearAgendaCaches()
             }
         }
         .onChange(of: app.presented) { _, sheet in

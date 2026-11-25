@@ -483,23 +483,26 @@ private fun AppContent(container: AppContainer, createConnection: (CoroutineScop
     LaunchedEffect(settings?.document?.settings?.soundEnabled) {
         if (settings?.document?.settings?.soundEnabled == false) platform.stopSuccessSound()
     }
+    val notebookMessages = rememberCoroutineScope()
     val noApp = "Aucune app de ${platform.device} ne sait ouvrir ce document."
     LaunchedEffect(notebookViewModel) {
         notebookViewModel.eventFlow.collect { event ->
             when (event) {
                 is NotebookEvent.Open -> if (!platform.openFile(event.file)) {
-                    snackbar.showSnackbar(ToastVisuals("Document", noApp, ToastTone.WARNING))
+                    notebookMessages.launch { snackbar.showSnackbar(ToastVisuals("Document", noApp, ToastTone.WARNING)) }
                 }
                 // Pièce jointe demandée depuis une fiche : visionneuse dans la feuille si elle est encore ouverte.
                 is NotebookEvent.Preview -> if (today?.session != null || courses?.detail != null) {
                     val preview = CourseDocument("notebook-preview", event.name, DocType.mimeOf(event.name, null), event.file.length(), "")
                     sheetViewer = SheetDocument(preview, event.file)
                 } else if (!platform.openFile(event.file)) {
-                    snackbar.showSnackbar(ToastVisuals("Document", noApp, ToastTone.WARNING))
+                    notebookMessages.launch { snackbar.showSnackbar(ToastVisuals("Document", noApp, ToastTone.WARNING)) }
                 }
                 is NotebookEvent.Message -> {
-                    snackbar.currentSnackbarData?.dismiss()
-                    snackbar.showSnackbar(ToastVisuals("Cahier de textes", event.text, ToastTone.INFO))
+                    notebookMessages.launch {
+                        snackbar.currentSnackbarData?.dismiss()
+                        snackbar.showSnackbar(ToastVisuals("Agenda", event.text, ToastTone.INFO))
+                    }
                 }
                 NotebookEvent.ShowAgenda -> tab = Tab.AGENDA
                 NotebookEvent.HomeworkChecked -> {
@@ -845,8 +848,8 @@ private fun TabContent(
             }
         }
         Tab.AGENDA -> {
-            LaunchedEffect(notebookViewModel) { notebookViewModel.enterAgenda() }
             val agenda = notebookViewModel.uiState.collectAsStateWithLifecycle().value
+            LaunchedEffect(notebookViewModel, agenda?.agendaScope) { notebookViewModel.enterAgenda() }
             if (agenda == null) Loading()
             else NotebookScreen(agenda, notebookViewModel, modifier = Modifier.padding(padding))
         }

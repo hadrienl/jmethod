@@ -59,8 +59,12 @@ data class HomeworkItem(
 
 /** Clé de suivi personnel, utilisable seulement si elle est unique dans la lecture. */
 fun HomeworkItem.agendaKey(): String = fr.jmethod.app.model.agendaFingerprint(
-    listOf(dueDate.toString(), subject, description) + attachments.map { it.name },
+    listOf(dueDate.toString(), subject, description) + attachments.flatMap { listOf(it.name, it.url.orEmpty()) } +
+        links.flatMap { listOf(it.label, it.url) },
 )
+
+fun HomeworkItem.agendaSourceTag(): String? = id.takeIf { it.isNotBlank() }
+    ?.let { fr.jmethod.app.model.agendaFingerprint(listOf(it)) }
 
 /**
  * Pièce jointe : [name] nettoyé pour l’affichage, [rawName] = `L` brut (éventuellement vide), seul

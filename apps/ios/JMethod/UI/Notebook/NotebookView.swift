@@ -28,7 +28,9 @@ struct NotebookView: View {
         Dictionary(grouping: visibleSnapshot?.homework ?? [], by: \.agendaKey).mapValues(\.count)
     }
     private func canTrack(_ item: NotebookHomework) -> Bool {
-        agendaScope != nil && model.snapshotScope == agendaScope && keys[item.agendaKey] == 1
+        let tag = item.agendaSourceTag
+        return agendaScope != nil && model.snapshotScope == agendaScope && keys[item.agendaKey] == 1 &&
+            tag != nil && followUp.cached[item.agendaKey]?.sourceTag == tag
     }
     private func done(_ item: NotebookHomework) -> Bool {
         (canTrack(item) ? followUp.localChecks[item.agendaKey] : nil) ?? (item.remoteDone == true)
@@ -206,10 +208,12 @@ struct NotebookView: View {
                                 if !item.documentNames.isEmpty {
                                     Text("Documents à actualiser : " + item.documentNames.joined(separator: ", ")).font(.caption)
                                 }
-                                Toggle("Fait sur cet appareil", isOn: Binding(get: { checked }, set: { value in
-                                    guard value != checked else { return }
-                                    updateFollowUp { $0.localChecks[item.key] = value }
-                                }))
+                                if !item.unavailable && item.sourceTag != nil {
+                                    Toggle("Fait sur cet appareil", isOn: Binding(get: { checked }, set: { value in
+                                        guard value != checked else { return }
+                                        updateFollowUp { $0.localChecks[item.key] = value }
+                                    }))
+                                }
                             }
                         }
                     }
@@ -288,7 +292,12 @@ struct NotebookView: View {
             }
             Button("Annuler", role: .cancel) { pendingDelete = nil }
         }
-        .onChange(of: agendaScope) { _, _ in editor = nil; pendingDelete = nil }
+        .onChange(of: agendaScope) { _, _ in
+            editor = nil
+            pendingDelete = nil
+            model.scopeChanged()
+            if visibleSnapshot == nil { model.refresh() }
+        }
         .onAppear { if model.snapshot == nil { model.ensureRead() } }
     }
 
