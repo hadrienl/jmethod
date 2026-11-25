@@ -59,6 +59,7 @@ import androidx.compose.ui.graphics.Color
 import fr.jmethod.app.ui.platform.LocalPlatform
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -170,12 +171,17 @@ fun SettingsScreen(
 
     val draft = ui.draft
     val gutter = LocalScreenGutter.current
-    Box(Modifier.fillMaxSize()) {
+    val direction = LocalLayoutDirection.current
+    val scrollPadding = if (draft.dirty) PaddingValues(
+        start = contentPadding.calculateStartPadding(direction),
+        top = contentPadding.calculateTopPadding(),
+        end = contentPadding.calculateEndPadding(direction),
+    ) else contentPadding
+    Column(Modifier.fillMaxSize()) {
         val scrollState = rememberScrollState()
-        ScrollbarBox(scrollState, Modifier.fillMaxSize(), barPadding = contentPadding) {
-        Column(
-                Modifier.fillMaxSize().verticalScroll(scrollState)
-                    .padding(screenPadding(contentPadding, if (draft.dirty) 120.dp else JSpacing.xl)),
+        ScrollbarBox(scrollState, Modifier.weight(1f).fillMaxWidth(), barPadding = scrollPadding) {
+            Column(
+                Modifier.fillMaxSize().verticalScroll(scrollState).padding(screenPadding(scrollPadding)),
                 verticalArrangement = Arrangement.spacedBy(JSpacing.l),
             ) {
                 ScreenHeader("Réglages")
@@ -206,23 +212,45 @@ fun SettingsScreen(
             }
         }
         if (draft.dirty) {
-            val direction = LocalLayoutDirection.current
             Surface(
                 color = Color.White,
                 shadowElevation = 8.dp,
                 shape = JShapes.inner,
                 border = BorderStroke(1.dp, JColors.Slate200),
-                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                modifier = Modifier.fillMaxWidth()
                     .padding(
                         start = contentPadding.calculateStartPadding(direction) + JSpacing.m + gutter,
                         end = contentPadding.calculateEndPadding(direction) + JSpacing.m + gutter,
                         bottom = contentPadding.calculateBottomPadding() + JSpacing.m,
-                    ),
+                    )
+                    .testTag("settings-save-bar"),
             ) {
-                Row(Modifier.padding(start = JSpacing.l, end = JSpacing.s, top = JSpacing.s, bottom = JSpacing.s), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Modifications non enregistrées", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                    TextButton(onClick = viewModel::discard, modifier = Modifier.heightIn(min = 48.dp)) { Text("Annuler") }
-                    Button(onClick = viewModel::save, shape = JShapes.control, modifier = Modifier.heightIn(min = 48.dp)) { Text("Enregistrer") }
+                BoxWithConstraints(Modifier.padding(JSpacing.s)) {
+                    val stackMessage = maxWidth / LocalDensity.current.fontScale < 250.dp
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalArrangement = Arrangement.spacedBy(JSpacing.s),
+                    ) {
+                        Text(
+                            "Modifications non enregistrées",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = (if (stackMessage) Modifier.fillMaxWidth() else Modifier.weight(1f))
+                                .align(Alignment.CenterVertically)
+                                .padding(horizontal = JSpacing.s),
+                        )
+                        TextButton(
+                            onClick = viewModel::discard,
+                            modifier = Modifier.heightIn(min = 48.dp).align(Alignment.CenterVertically),
+                            contentPadding = PaddingValues(horizontal = JSpacing.s, vertical = JSpacing.s),
+                        ) { Text("Annuler") }
+                        Button(
+                            onClick = viewModel::save,
+                            shape = JShapes.control,
+                            modifier = Modifier.heightIn(min = 48.dp).align(Alignment.CenterVertically),
+                            contentPadding = PaddingValues(horizontal = JSpacing.m, vertical = JSpacing.s),
+                        ) { Text("Enregistrer") }
+                    }
                 }
             }
         }
