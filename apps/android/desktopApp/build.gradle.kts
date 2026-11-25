@@ -61,6 +61,9 @@ compose.desktop {
         // Essais locaux seulement : dossier de données et service du coffre séparés (`-Pjmethod.dataDir=…`).
         providers.gradleProperty("jmethod.dataDir").orNull?.let { jvmArgs += "-Djmethod.dataDir=$it" }
         providers.gradleProperty("jmethod.secretService").orNull?.let { jvmArgs += "-Djmethod.secretService=$it" }
+        if (providers.gradleProperty("jmethod.noSecretStore").orNull == "true") {
+            jvmArgs += "-Djmethod.noSecretStore=true"
+        }
         nativeDistributions {
             targetFormats(TargetFormat.Msi, TargetFormat.Dmg)
             packageName = "J-Method"

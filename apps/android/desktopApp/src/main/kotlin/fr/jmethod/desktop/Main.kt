@@ -18,6 +18,7 @@ import androidx.compose.ui.window.rememberWindowState
 import fr.jmethod.app.AppContainer
 import fr.jmethod.app.pronote.FileThrottle
 import fr.jmethod.app.pronote.MemoryVault
+import fr.jmethod.app.pronote.NoSecretStore
 import fr.jmethod.app.pronote.SecretLoginStore
 import fr.jmethod.app.ui.JMethodApp
 import fr.jmethod.app.ui.platform.DesktopBack
@@ -30,7 +31,12 @@ import javax.imageio.ImageIO
 fun main() {
     val dirs = DesktopDirs.resolve()
     // Nom du service dans le coffre du système ; remplaçable pour les essais (`-Djmethod.secretService`).
-    val secrets = systemSecretStore(dirs.data, System.getProperty("jmethod.secretService") ?: DesktopDirs.APP)
+    val service = System.getProperty("jmethod.secretService") ?: DesktopDirs.APP
+    val secrets = if (java.lang.Boolean.getBoolean("jmethod.noSecretStore")) {
+        NoSecretStore
+    } else {
+        systemSecretStore(dirs.data, service)
+    }
     val container = AppContainer(
         filesDir = dirs.data,
         cacheDir = dirs.cache,
