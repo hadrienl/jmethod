@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 // Schéma identique à `src/types/index.ts` : les clés JSON et les champs optionnels
@@ -161,6 +162,37 @@ struct AppSettings: Codable, Hashable, Sendable {
 
 /// Document unique de l'app. Un export JSON du web (`exportAllData`) se décode aussi :
 /// ses clés `version` et `exportDate` sont ignorées, les clés absentes reprennent les valeurs du web.
+struct PersonalHomework: Codable, Equatable, Identifiable, Sendable {
+    var id: String
+    var subjectId: String
+    var description: String
+    var due: String
+    var done = false
+}
+
+struct AgendaFollowUp: Codable, Equatable, Sendable {
+    var personal: [PersonalHomework] = []
+    var localChecks: [String: Bool] = [:]
+    var cached: [String: CachedHomework] = [:]
+}
+
+struct CachedHomework: Codable, Equatable, Identifiable, Sendable {
+    var key: String
+    var due: String
+    var subject: String
+    var description: String
+    var remoteDone: Bool?
+    var observedAt: String
+    var documentNames: [String]
+    var unavailable = false
+    var id: String { key }
+}
+
+func agendaFingerprint(_ parts: [String]) -> String {
+    let input = parts.map { "\($0.utf16.count):\($0)" }.joined()
+    return SHA256.hash(data: Data(input.utf8)).map { String(format: "%02x", $0) }.joined()
+}
+
 struct AppDocument: Codable, Equatable, Sendable {
     var settings: AppSettings
     var subjects: [Subject]
@@ -174,9 +206,10 @@ struct AppDocument: Codable, Equatable, Sendable {
     var schemaVersion: Int = 1
     var streakState: StreakState? = nil
     var todayWidgetVisit: TodayWidgetVisit? = nil
+    var agendaFollowUp: [String: AgendaFollowUp] = [:]
 
     private enum CodingKeys: String, CodingKey {
-        case settings, subjects, courses, revisions, pronoteEvents, initialized, notebookImports, programmes, schemaVersion, streakState, todayWidgetVisit
+        case settings, subjects, courses, revisions, pronoteEvents, initialized, notebookImports, programmes, schemaVersion, streakState, todayWidgetVisit, agendaFollowUp
     }
 
     init(settings: AppSettings, subjects: [Subject], courses: [Course], revisions: [Revision], pronoteEvents: [PronoteEvent], initialized: Bool,
@@ -205,6 +238,7 @@ struct AppDocument: Codable, Equatable, Sendable {
         streakState = (try? container.decodeIfPresent(StreakState.self, forKey: .streakState)) ?? nil
         if let streakState, (try? RevisionStreak.validate(streakState)) == nil { self.streakState = nil }
         todayWidgetVisit = try? container.decodeIfPresent(TodayWidgetVisit.self, forKey: .todayWidgetVisit)
+        agendaFollowUp = (try? container.decodeIfPresent([String: AgendaFollowUp].self, forKey: .agendaFollowUp)) ?? [:]
         schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
         guard (1...3).contains(schemaVersion) else { throw DecodingError.dataCorruptedError(forKey: .schemaVersion, in: container, debugDescription: "Cette sauvegarde nécessite une version plus récente de J-Method.") }
     }
@@ -223,5 +257,6 @@ struct AppDocument: Codable, Equatable, Sendable {
         if schemaVersion > 1 { try container.encode(schemaVersion, forKey: .schemaVersion) }
         try container.encodeIfPresent(streakState, forKey: .streakState)
         try container.encodeIfPresent(todayWidgetVisit, forKey: .todayWidgetVisit)
+        if !agendaFollowUp.isEmpty { try container.encode(agendaFollowUp, forKey: .agendaFollowUp) }
     }
 }

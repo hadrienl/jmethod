@@ -148,6 +148,9 @@ class DesktopTour {
                         container.repository.update { it.copy(todayWidgetVisit = TodayWidgetVisit(day.toString())) }
                     }
                 }
+                tab("Agenda", substring = true)
+                waitForText("Devoirs")
+                shot(dir, "wide-$wideW-agenda")
                 tab("Planning"); shot(dir, "wide-$wideW-planning")
                 tab("Mes cours"); shot(dir, "wide-$wideW-courses")
                 onAllNodesWithText("Additionner des fractions").onFirst().performClick()

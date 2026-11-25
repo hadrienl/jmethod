@@ -108,6 +108,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -115,6 +116,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
@@ -171,18 +173,22 @@ import fr.jmethod.app.ui.today.TodayEvent
 import fr.jmethod.app.ui.today.TodayScreen
 import fr.jmethod.app.ui.today.TodayViewModel
 
-private enum class Tab { TODAY, PLANNING, COURSES, STATS, SETTINGS }
+private enum class Tab { TODAY, AGENDA, PLANNING, COURSES, STATS, SETTINGS, MORE }
 
 /** Destinations de la navigation principale (barre en portrait, rail en paysage). */
 private data class Destination(val tab: Tab, val label: String, val icon: ImageVector, val spoken: String)
 
 private val Destinations = listOf(
     Destination(Tab.TODAY, "Aujourd’hui", Icons.Filled.Home, "Aujourd’hui"),
+    Destination(Tab.AGENDA, "Agenda", JIcons.Notebook, "Agenda"),
     Destination(Tab.PLANNING, "Planning", Icons.Filled.DateRange, "Planning"),
     Destination(Tab.COURSES, "Cours", JIcons.Book, "Mes cours"),
     Destination(Tab.STATS, "Progrès", JIcons.Stats, "Mes progrès"),
     Destination(Tab.SETTINGS, "Réglages", Icons.Filled.Settings, "Réglages"),
 )
+
+private val compactDestinations = Destinations.take(4) +
+    Destination(Tab.MORE, "Plus", Icons.Filled.MoreVert, "Plus")
 
 private enum class ToastTone { SUCCESS, WARNING, INFO }
 
@@ -212,22 +218,33 @@ private fun NavLabel(text: String) {
     )
 }
 
+private fun destinationCount(destination: Destination, badge: Int, agendaBadge: Int): Int = when (destination.tab) {
+    Tab.TODAY -> badge
+    Tab.AGENDA -> agendaBadge
+    else -> 0
+}
+
 @Composable
-private fun NavIcon(destination: Destination, badge: Int) {
-    if (destination.tab == Tab.TODAY && badge > 0) {
+private fun NavIcon(destination: Destination, badge: Int, agendaBadge: Int) {
+    val count = destinationCount(destination, badge, agendaBadge)
+    if (count > 0) {
         BadgedBox(badge = {
-            Badge(containerColor = JColors.Violet700, contentColor = Color.White) { Text("$badge") }
+            Badge(containerColor = JColors.Violet700, contentColor = Color.White) { Text("$count") }
         }) { Icon(destination.icon, contentDescription = null) }
     } else {
         Icon(destination.icon, contentDescription = null)
     }
 }
 
-private fun spokenLabel(destination: Destination, badge: Int): String =
-    if (destination.tab == Tab.TODAY && badge > 0) "Aujourd’hui, $badge séance${if (badge > 1) "s" else ""} à faire" else destination.spoken
+private fun spokenLabel(destination: Destination, badge: Int, agendaBadge: Int): String {
+    val count = destinationCount(destination, badge, agendaBadge)
+    if (count == 0) return destination.spoken
+    val unit = if (destination.tab == Tab.AGENDA) "devoir" else "séance"
+    return "${destination.spoken}, $count $unit${if (count > 1) "s" else ""} à faire"
+}
 
 @Composable
-private fun AppNavigationBar(current: Tab, badge: Int, onSelect: (Tab) -> Unit) {
+private fun AppNavigationBar(current: Tab, badge: Int, agendaBadge: Int, onSelect: (Tab) -> Unit) {
     val colors = NavigationBarItemDefaults.colors(
         selectedIconColor = JColors.Violet800,
         selectedTextColor = JColors.Violet800,
@@ -238,14 +255,14 @@ private fun AppNavigationBar(current: Tab, badge: Int, onSelect: (Tab) -> Unit) 
     Column {
         HorizontalDivider(color = JColors.Slate200)
         NavigationBar(containerColor = Color.White, tonalElevation = 0.dp) {
-            Destinations.forEach { destination ->
+            compactDestinations.forEach { destination ->
                 NavigationBarItem(
-                    selected = current == destination.tab,
+                    selected = current == destination.tab || (destination.tab == Tab.MORE && current in listOf(Tab.STATS, Tab.SETTINGS)),
                     onClick = { onSelect(destination.tab) },
-                    icon = { NavIcon(destination, badge) },
+                    icon = { NavIcon(destination, badge, agendaBadge) },
                     label = { NavLabel(destination.label) },
                     colors = colors,
-                    modifier = Modifier.semantics { contentDescription = spokenLabel(destination, badge) },
+                    modifier = Modifier.semantics { contentDescription = spokenLabel(destination, badge, agendaBadge) },
                 )
             }
         }
@@ -254,7 +271,7 @@ private fun AppNavigationBar(current: Tab, badge: Int, onSelect: (Tab) -> Unit) 
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AppNavigationRail(current: Tab, badge: Int, showBrand: Boolean = false, onSelect: (Tab) -> Unit) {
+private fun AppNavigationRail(current: Tab, badge: Int, agendaBadge: Int, showBrand: Boolean = false, onSelect: (Tab) -> Unit) {
     val colors = NavigationRailItemDefaults.colors(
         selectedIconColor = JColors.Violet800,
         selectedTextColor = JColors.Violet800,
@@ -277,16 +294,16 @@ private fun AppNavigationRail(current: Tab, badge: Int, showBrand: Boolean = fal
                 Destinations.forEach { destination ->
                     TooltipBox(
                         positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.End),
-                        tooltip = { PlainTooltip { Text(spokenLabel(destination, badge)) } },
+                        tooltip = { PlainTooltip { Text(spokenLabel(destination, badge, agendaBadge)) } },
                         state = rememberTooltipState(),
                     ) {
                         NavigationRailItem(
                             selected = current == destination.tab,
                             onClick = { onSelect(destination.tab) },
-                            icon = { NavIcon(destination, badge) },
+                            icon = { NavIcon(destination, badge, agendaBadge) },
                             label = { NavLabel(destination.label) },
                             colors = colors,
-                            modifier = Modifier.semantics { contentDescription = spokenLabel(destination, badge) },
+                            modifier = Modifier.semantics { contentDescription = spokenLabel(destination, badge, agendaBadge) },
                         )
                     }
                 }
@@ -297,7 +314,7 @@ private fun AppNavigationRail(current: Tab, badge: Int, showBrand: Boolean = fal
 }
 
 @Composable
-private fun AppNavigationSidebar(current: Tab, badge: Int, onSelect: (Tab) -> Unit) {
+private fun AppNavigationSidebar(current: Tab, badge: Int, agendaBadge: Int, onSelect: (Tab) -> Unit) {
     Row(Modifier.width(NavigationMode.SIDEBAR.width).fillMaxHeight().background(Color.White)) {
         val scroll = rememberScrollState()
         ScrollbarBox(scroll, Modifier.weight(1f).fillMaxHeight()) {
@@ -323,7 +340,7 @@ private fun AppNavigationSidebar(current: Tab, badge: Int, onSelect: (Tab) -> Un
                             .border(2.dp, if (focused) JColors.Violet700 else Color.Transparent, JShapes.control)
                             .onFocusChanged { focused = it.isFocused }
                             .selectable(selected, role = Role.Tab, onClick = { onSelect(destination.tab) })
-                            .semantics { contentDescription = spokenLabel(destination, badge) }
+                            .semantics { contentDescription = spokenLabel(destination, badge, agendaBadge) }
                             .padding(horizontal = JSpacing.m, vertical = JSpacing.s),
                         horizontalArrangement = Arrangement.spacedBy(JSpacing.m),
                         verticalAlignment = Alignment.CenterVertically,
@@ -331,8 +348,9 @@ private fun AppNavigationSidebar(current: Tab, badge: Int, onSelect: (Tab) -> Un
                         Icon(destination.icon, contentDescription = null, tint = color)
                         Text(destination.spoken, Modifier.weight(1f).clearAndSetSemantics {}, color = color,
                             style = MaterialTheme.typography.labelLarge)
-                        if (destination.tab == Tab.TODAY && badge > 0) {
-                            Badge(Modifier.clearAndSetSemantics {}, containerColor = JColors.Violet700) { Text("$badge") }
+                        val count = destinationCount(destination, badge, agendaBadge)
+                        if (count > 0) {
+                            Badge(Modifier.clearAndSetSemantics {}, containerColor = JColors.Violet700) { Text("$count") }
                         }
                     }
                 }
@@ -483,9 +501,15 @@ private fun AppContent(container: AppContainer, createConnection: (CoroutineScop
                     snackbar.currentSnackbarData?.dismiss()
                     snackbar.showSnackbar(ToastVisuals("Cahier de textes", event.text, ToastTone.INFO))
                 }
+                NotebookEvent.ShowAgenda -> tab = Tab.AGENDA
+                NotebookEvent.HomeworkChecked -> {
+                    if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) &&
+                        container.repository.document.value?.settings?.soundEnabled == true) {
+                        platform.playSuccessSound(fr.jmethod.app.domain.SuccessSound.HOMEWORK)
+                    }
+                }
                 is NotebookEvent.CreateCourse -> coursesViewModel.openFromNotebook(event.draft)
                 is NotebookEvent.ViewCourse -> {
-                    notebookViewModel.close()
                     tab = Tab.COURSES
                     coursesViewModel.openDetail(event.courseId)
                 }
@@ -644,6 +668,7 @@ private fun AppContent(container: AppContainer, createConnection: (CoroutineScop
                 val available = layout.listWidth(docked)
                 val tabs = rememberSaveableStateHolder()
                 val badge = today?.model?.badgeCount ?: 0
+                val agendaBadge = notebook?.urgentCount ?: 0
                 val tall = layout.height >= 560.dp
                 // Changer d’onglet ferme la fiche ancrée qui n’y a plus sa place (comme une feuille sur téléphone,
                 // qui masque la barre d’onglets tant qu’elle est ouverte).
@@ -662,8 +687,8 @@ private fun AppContent(container: AppContainer, createConnection: (CoroutineScop
                     // Marque en tête du rail seulement si la hauteur le permet (téléphone en paysage : non).
                     when (navigation) {
                         NavigationMode.BOTTOM -> Unit
-                        NavigationMode.RAIL -> AppNavigationRail(tab, badge, showBrand = tall, onSelect = selectTab)
-                        NavigationMode.SIDEBAR -> AppNavigationSidebar(tab, badge, onSelect = selectTab)
+                        NavigationMode.RAIL -> AppNavigationRail(tab, badge, agendaBadge, showBrand = tall, onSelect = selectTab)
+                        NavigationMode.SIDEBAR -> AppNavigationSidebar(tab, badge, agendaBadge, onSelect = selectTab)
                     }
                     CompositionLocalProvider(LocalContentWidth provides available) {
                         Scaffold(
@@ -678,7 +703,7 @@ private fun AppContent(container: AppContainer, createConnection: (CoroutineScop
                                 if (pronote.access == AccessPhase.OFFLINE || pronote.reconnecting) OfflineBanner(pronote, pronoteViewModel.controller::retry)
                             },
                             snackbarHost = { SnackbarHost(snackbar) { data -> ToastSnackbar(data) } },
-                            bottomBar = { if (!sideNavigation) AppNavigationBar(tab, badge, onSelect = selectTab) },
+                            bottomBar = { if (!sideNavigation) AppNavigationBar(tab, badge, agendaBadge, onSelect = selectTab) },
                             floatingActionButton = {
                                 AnimatedVisibility(
                                     visible = tab == Tab.COURSES && courses?.hasCourses == true,
@@ -709,7 +734,8 @@ private fun AppContent(container: AppContainer, createConnection: (CoroutineScop
                                 ) { current ->
                                     val multiColumn = available >= TwoColumnWidth && LocalDensity.current.fontScale <= 1.3f
                                     val capacity = when (current) {
-                                        Tab.PLANNING -> 1440.dp
+                                        Tab.PLANNING, Tab.AGENDA -> 1440.dp
+                                        Tab.MORE -> ReadingWidth
                                         Tab.COURSES -> if (multiColumn) 1320.dp else ReadingWidth
                                         Tab.TODAY, Tab.STATS, Tab.SETTINGS -> if (multiColumn) 1480.dp else ReadingWidth
                                     }
@@ -774,15 +800,6 @@ private fun AppContent(container: AppContainer, createConnection: (CoroutineScop
         ) {
             courses?.let { CourseFormScreen(it, coursesViewModel) }
         }
-        // Cahier de textes : plein écran, lecture seule ; glisse depuis la droite comme une page.
-        AnimatedVisibility(
-            visible = notebook?.state?.open == true && signedIn && !formOpen,
-            enter = slideInHorizontally(motion(260)) { it / 5 } + fadeIn(motion(200)),
-            exit = slideOutHorizontally(motion(200)) { it / 5 } + fadeOut(motion(160)),
-            modifier = Modifier.zIndex(1f),
-        ) {
-            notebook?.let { NotebookScreen(it, notebookViewModel, snackbar) }
-        }
         CelebrationOverlay(celebration, Modifier.zIndex(3f))
     }
 }
@@ -825,6 +842,25 @@ private fun TabContent(
                     offline = pronote.access == AccessPhase.OFFLINE,
                     refreshing = pronote.busy || pronote.reconnecting,
                 )
+            }
+        }
+        Tab.AGENDA -> {
+            LaunchedEffect(notebookViewModel) { notebookViewModel.enterAgenda() }
+            val agenda = notebookViewModel.uiState.collectAsStateWithLifecycle().value
+            if (agenda == null) Loading()
+            else NotebookScreen(agenda, notebookViewModel, modifier = Modifier.padding(padding))
+        }
+        Tab.MORE -> Column(
+            Modifier.fillMaxSize().padding(fr.jmethod.app.ui.components.screenPadding(padding)),
+            verticalArrangement = Arrangement.spacedBy(JSpacing.m),
+        ) {
+            fr.jmethod.app.ui.components.ScreenHeader("Plus")
+            Destinations.filter { it.tab == Tab.STATS || it.tab == Tab.SETTINGS }.forEach { destination ->
+                OutlinedButton(onClick = { onSelectTab(destination.tab) }, modifier = Modifier.fillMaxWidth()) {
+                    Icon(destination.icon, contentDescription = null)
+                    Spacer(Modifier.width(JSpacing.m))
+                    Text(destination.spoken, Modifier.weight(1f))
+                }
             }
         }
         Tab.PLANNING -> {

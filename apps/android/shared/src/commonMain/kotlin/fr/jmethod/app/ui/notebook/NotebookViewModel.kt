@@ -8,6 +8,11 @@ import fr.jmethod.app.model.Subject
 import fr.jmethod.app.pronote.NotebookAttachment
 import fr.jmethod.app.pronote.NotebookRules
 import fr.jmethod.app.pronote.NotebookSnapshot
+import fr.jmethod.app.pronote.HomeworkItem
+import fr.jmethod.app.pronote.agendaKey
+import fr.jmethod.app.model.PersonalHomework
+import fr.jmethod.app.model.AgendaFollowUp
+import fr.jmethod.app.model.CachedHomework
 import fr.jmethod.app.pronote.PronoteConnectionController
 import fr.jmethod.app.pronote.PronoteException
 import kotlinx.coroutines.CancellationException
@@ -55,11 +60,12 @@ enum class NotebookTab { CONTENTS, HOMEWORK }
 
 /** État de l’aperçu. Rien n’est persisté : les identifiants de pièces jointes restent en mémoire. */
 data class NotebookState(
-    val open: Boolean = false,
     val loading: Boolean = false,
     val snapshot: NotebookSnapshot? = null,
     val error: String? = null,
-    val tab: NotebookTab = NotebookTab.CONTENTS,
+    val refreshedAt: Instant? = null,
+    val snapshotScope: String? = null,
+    val tab: NotebookTab = NotebookTab.HOMEWORK,
     /** Matière J-Method choisie (depuis la fiche d’un cours) : seuls ses contenus sont affichés. */
     val subjectId: String? = null,
     val downloadingId: String? = null,
@@ -76,9 +82,14 @@ data class NotebookUiState(
     /** État d’import de chaque séance affichée, par identifiant (`sessionKey`). */
     val importStates: Map<String, NotebookCourses.ImportState>,
     val autoCreate: Boolean,
+    val agendaScope: String?,
+    val followUp: AgendaFollowUp,
+    val urgentCount: Int,
 )
 
 sealed interface NotebookEvent {
+    data object ShowAgenda : NotebookEvent
+    data object HomeworkChecked : NotebookEvent
     data class Open(val file: File) : NotebookEvent
     /** Pièce jointe téléchargée depuis une fiche : visionneuse dans la feuille. */
     data class Preview(val file: File, val name: String) : NotebookEvent
@@ -112,7 +123,18 @@ class NotebookViewModel(
     private val events = Channel<NotebookEvent>(Channel.BUFFERED)
     val eventFlow: Flow<NotebookEvent> = events.receiveAsFlow()
 
-    val uiState: StateFlow<NotebookUiState?> = combine(repository.document.filterNotNull(), state) { document, current ->
+    val uiState: StateFlow<NotebookUiState?> = combine(repository.document.filterNotNull(), state, controller.uiState) { document, current, _ ->
+        val scope = controller.agendaScope()
+        val data = scope?.let(document.agendaFollowUp::get) ?: AgendaFollowUp()
+        val limit = clock.today().plusDays(1).toString()
+        val live = current.snapshot?.homework.orEmpty().takeIf { current.snapshotScope == scope }.orEmpty()
+        val groups = live.groupBy { it.agendaKey() }
+        val urgent = live.count { item ->
+            val local = data.localChecks[item.agendaKey()].takeIf { groups[item.agendaKey()]?.size == 1 }
+            item.dueDate.toString() <= limit && !(local ?: (item.remoteDone == true))
+        } + data.cached.values.count { row ->
+            row.key !in groups && row.due <= limit && !(data.localChecks[row.key] ?: (row.remoteDone == true))
+        } + data.personal.count { !it.done && it.due <= limit }
         NotebookUiState(
             state = current,
             subjects = document.subjects,
@@ -121,6 +143,9 @@ class NotebookViewModel(
                 it.key to NotebookCourses.importState(it, document.notebookImports, document.courses)
             },
             autoCreate = document.settings.notebookAutoCreate == true,
+            agendaScope = scope,
+            followUp = data,
+            urgentCount = urgent,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
@@ -128,7 +153,20 @@ class NotebookViewModel(
         clearFiles()
         // Déconnexion ou changement d’enfant : l’aperçu et les fichiers sont effacés.
         viewModelScope.launch {
-            controller.uiState.map { it.account?.selectedChildId to (it.account != null) }.distinctUntilChanged().collect { reset() }
+            var previous: String? = null
+            var previousChild: String? = null
+            controller.uiState.map { Triple(it.access, controller.agendaScope(), it.account?.selectedChildId) }
+                .distinctUntilChanged().collect { (access, scope, child) ->
+                if (scope != previous || child != previousChild || access == fr.jmethod.app.pronote.AccessPhase.SIGNED_OUT) reset()
+                if (access == fr.jmethod.app.pronote.AccessPhase.SIGNED_OUT) previous?.let { old ->
+                    runCatching { repository.update { doc ->
+                        val data = doc.agendaFollowUp[old] ?: return@update doc
+                        doc.copy(agendaFollowUp = doc.agendaFollowUp + (old to AgendaFollowUp(personal = data.personal)))
+                    } }
+                }
+                previous = scope
+                previousChild = child
+            }
         }
         // Après chaque synchronisation réussie au premier plan : création automatique éventuelle.
         viewModelScope.launch {
@@ -154,21 +192,116 @@ class NotebookViewModel(
         downloadJob = null
         stamp = null
         clearFiles()
-        state.update { NotebookState(open = it.open, tab = it.tab, subjectId = it.subjectId) }
+        state.update { NotebookState(tab = it.tab) }
     }
 
     fun open(subjectId: String? = null) {
-        state.update { it.copy(open = true, subjectId = subjectId, tab = NotebookTab.CONTENTS) }
+        state.update { it.copy(subjectId = subjectId, tab = NotebookTab.CONTENTS) }
+        enterAgenda()
+        events.trySend(NotebookEvent.ShowAgenda)
+    }
+
+    fun enterAgenda() {
         if (state.value.snapshot == null && !state.value.loading) refresh()
     }
 
-    fun close() = state.update { it.copy(open = false) }
     fun setTab(tab: NotebookTab) = state.update { it.copy(tab = tab) }
     fun setSubject(subjectId: String?) = state.update { it.copy(subjectId = subjectId) }
+
+    fun setLocalDone(item: HomeworkItem, done: Boolean) {
+        val expected = controller.agendaScope() ?: return
+        val key = item.agendaKey()
+        updateFollowUp(expected) { followUp ->
+            val current = state.value
+            val snapshot = current.snapshot?.takeIf { current.snapshotScope == expected } ?: return@updateFollowUp followUp
+            if (snapshot.homework.none { it == item } || snapshot.homework.count { it.agendaKey() == key } != 1) return@updateFollowUp followUp
+            val wasDone = followUp.localChecks[key] ?: (item.remoteDone == true)
+            if (wasDone == done) followUp else followUp.copy(localChecks = followUp.localChecks + (key to done))
+        }
+    }
+
+    fun setCachedLocalDone(key: String, done: Boolean) {
+        val expected = controller.agendaScope() ?: return
+        updateFollowUp(expected) { followUp ->
+            val row = followUp.cached[key] ?: return@updateFollowUp followUp
+            val wasDone = followUp.localChecks[key] ?: (row.remoteDone == true)
+            if (wasDone == done) followUp else followUp.copy(localChecks = followUp.localChecks + (key to done))
+        }
+    }
+
+    private suspend fun storeAgendaCache(snapshot: NotebookSnapshot, scope: String, stamp: Instant, generation: Int) {
+        if (!snapshot.homeworkAvailable) return
+        val groups = snapshot.homework.groupBy { it.agendaKey() }
+        val incoming = groups.mapNotNull { (key, items) ->
+            val item = items.singleOrNull() ?: return@mapNotNull null
+            key to CachedHomework(key, item.dueDate.toString(), item.subject, item.description, item.remoteDone,
+                stamp.toString(), item.attachments.map { it.name })
+        }.toMap()
+        repository.update { doc ->
+            if (generation != resetCount || controller.agendaScope() != scope) return@update doc
+            val old = doc.agendaFollowUp[scope] ?: AgendaFollowUp()
+            val from = snapshot.from.toString()
+            val to = snapshot.to.toString()
+            val history = old.cached.mapValues { (_, item) ->
+                if (item.due in from..to && item.key !in groups) item.copy(unavailable = true) else item
+            }.filterKeys { (groups[it]?.size ?: 0) <= 1 }
+            doc.copy(agendaFollowUp = doc.agendaFollowUp + (scope to old.copy(cached = history + incoming)))
+        }
+    }
+
+    fun savePersonal(id: String?, subjectId: String, description: String, date: String) {
+        val expected = controller.agendaScope() ?: return
+        val text = description.trim()
+        val due = runCatching { LocalDate.parse(date) }.getOrNull() ?: return
+        if (text.isBlank() || text.length > 4000) return
+        updateFollowUp(expected) { followUp ->
+            if (id == null) followUp.copy(personal = followUp.personal + PersonalHomework(UUID.randomUUID().toString(), subjectId, text, due.toString()))
+            else followUp.copy(personal = followUp.personal.map {
+                if (it.id == id) it.copy(subjectId = subjectId, description = text, due = due.toString()) else it
+            })
+        }
+    }
+
+    fun deletePersonal(id: String) {
+        val expected = controller.agendaScope() ?: return
+        updateFollowUp(expected) { it.copy(personal = it.personal.filterNot { item -> item.id == id }) }
+    }
+
+    fun setPersonalDone(id: String, done: Boolean) {
+        val expected = controller.agendaScope() ?: return
+        updateFollowUp(expected) { followUp ->
+            followUp.copy(personal = followUp.personal.map { if (it.id == id) it.copy(done = done) else it })
+        }
+    }
+
+    private fun updateFollowUp(expected: String, change: (AgendaFollowUp) -> AgendaFollowUp) {
+        val generation = resetCount
+        viewModelScope.launch {
+            var confirmed = false
+            try {
+                repository.update { document ->
+                    if (generation != resetCount || controller.agendaScope() != expected) return@update document
+                    val old = document.agendaFollowUp[expected] ?: AgendaFollowUp()
+                    val updated = change(old)
+                    confirmed = updated.localChecks.any { (key, value) -> value && old.localChecks[key] != true } ||
+                        updated.personal.any { item -> item.done && old.personal.any { it.id == item.id && !it.done } }
+                    document.copy(agendaFollowUp = document.agendaFollowUp + (expected to updated))
+                }
+                if (confirmed && generation == resetCount && controller.agendaScope() == expected) {
+                    events.send(NotebookEvent.HomeworkChecked)
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                events.send(NotebookEvent.Message("Le suivi du devoir n’a pas pu être enregistré."))
+            }
+        }
+    }
 
     fun refresh() {
         if (state.value.loading) return
         state.update { it.copy(loading = true, error = null) }
+        val expectedScope = controller.agendaScope()
         readJob = viewModelScope.launch {
             try {
                 val generation = resetCount
@@ -177,8 +310,20 @@ class NotebookViewModel(
                 stamp = read.stamp
                 // Nouvelle lecture : les fichiers d’une session précédente ne servent plus.
                 withContext(Dispatchers.IO) { clearFiles() }
-                state.update { it.copy(loading = false, snapshot = read.snapshot, error = null) }
-                autoImport(read.snapshot)
+                if (generation != resetCount) return@launch
+                val scope = controller.agendaScope()
+                if (scope != expectedScope) {
+                    state.update { it.copy(loading = false) }
+                    return@launch
+                }
+                val at = clock.now()
+                state.update { it.copy(loading = false, snapshot = read.snapshot, error = null, refreshedAt = at, snapshotScope = scope) }
+                if (scope != null) {
+                    try { storeAgendaCache(read.snapshot, scope, at, generation) }
+                    catch (error: CancellationException) { throw error }
+                    catch (_: Exception) { events.send(NotebookEvent.Message("Le cache de l’Agenda n’a pas pu être enregistré.")) }
+                }
+                if (generation == resetCount) autoImport(read.snapshot)
             } catch (_: CancellationException) {
                 state.update { it.copy(loading = false) }
             } catch (error: Exception) {

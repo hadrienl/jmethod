@@ -54,6 +54,12 @@ data class HomeworkItem(
     val links: List<NotebookLink>,
     val done: Boolean,
     val attachments: List<NotebookAttachment>,
+    val remoteDone: Boolean? = done,
+)
+
+/** Clé de suivi personnel, utilisable seulement si elle est unique dans la lecture. */
+fun HomeworkItem.agendaKey(): String = fr.jmethod.app.model.agendaFingerprint(
+    listOf(dueDate.toString(), subject, description) + attachments.map { it.name },
 )
 
 /**
@@ -457,6 +463,7 @@ object NotebookRules {
                 links = description.links,
                 done = item.optBoolean("TAFFait", false),
                 attachments = attachments(item),
+                remoteDone = item.opt("TAFFait") as? Boolean,
             )
         }
         val sortedSessions = withOrdinals(sessions).sortedByDescending { it.date }

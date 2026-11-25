@@ -7,8 +7,9 @@ struct RootView: View {
     let importer: NotebookCourseImporter
     @Environment(\.scenePhase) private var scenePhase
     @State private var tab: Tab = .today
+    @State private var lastAgendaScope: String?
 
-    enum Tab: Hashable { case today, planning, courses, stats, settings }
+    enum Tab: Hashable { case today, agenda, planning, courses, stats, settings }
 
     private var route: AppRoute { AppRoute.resolve(load: app.loadState, access: pronote.access) }
 
@@ -65,11 +66,27 @@ struct RootView: View {
                 break
             }
         }
+        .onChange(of: notebook.agendaScope, initial: true) { _, scope in
+            if let scope { lastAgendaScope = scope }
+        }
         .onChange(of: pronote.access) { old, new in
             // Après une connexion réussie, l'app s'ouvre sur Aujourd'hui.
             if new == .connected && old != .connected { tab = .today }
             // Retour à l'écran de connexion : aucune feuille ne reste ouverte.
-            if new == .signedOut { app.presented = nil }
+            if new == .signedOut {
+                app.presented = nil
+                if let scope = lastAgendaScope {
+                    app.updateAgenda(scope: scope) { $0 = AgendaFollowUp(personal: $0.personal) }
+                    lastAgendaScope = nil
+                }
+            }
+        }
+        .onChange(of: app.presented) { _, sheet in
+            if case .notebook(let subject) = sheet {
+                app.presented = nil
+                notebook.open(subjectId: subject)
+                tab = .agenda
+            }
         }
         .onChange(of: pronote.notebookScope) { _, _ in notebook.scopeChanged() }
         .onChange(of: app.document.settings.lastPronoteSync) { _, synced in
@@ -133,6 +150,10 @@ struct RootView: View {
                         .tabItem { Label("Aujourd’hui", systemImage: "checklist") }
                         .badge(app.programme.due.count)
                         .tag(Tab.today)
+                    NotebookView(app: app, model: notebook, importer: importer)
+                        .tabItem { Label("Agenda", systemImage: "book.closed") }
+                        .badge(notebook.urgentCount(app.document, today: app.today))
+                        .tag(Tab.agenda)
                     PlanningView(app: app)
                         .tabItem { Label("Planning", systemImage: "calendar") }
                         .tag(Tab.planning)
@@ -146,14 +167,17 @@ struct RootView: View {
                         .tabItem { Label("Réglages", systemImage: "gearshape") }
                         .tag(Tab.settings)
                 }
-                .sheet(item: Binding(get: { app.presented }, set: { app.presented = $0 })) { sheet in
+                .sheet(item: Binding(get: {
+                    if case .notebook = app.presented { return nil }
+                    return app.presented
+                }, set: { app.presented = $0 })) { sheet in
                     switch sheet {
                     case .score(let id): RevisionSessionSheet(app: app, notebook: notebook, importer: importer, revisionId: id, start: .score)
                     case .revision(let id): RevisionSessionSheet(app: app, notebook: notebook, importer: importer, revisionId: id)
                     case .review(let id): RevisionSessionSheet(app: app, notebook: notebook, importer: importer, revisionId: id, start: .review)
                     case .course(let id): CourseDetailSheet(app: app, notebook: notebook, importer: importer, courseId: id)
                     case .addCourse: AddCourseSheet(app: app)
-                    case .notebook(let subjectId): NotebookView(app: app, model: notebook, importer: importer, subjectId: subjectId)
+                    case .notebook: EmptyView()
                     }
                 }
             }

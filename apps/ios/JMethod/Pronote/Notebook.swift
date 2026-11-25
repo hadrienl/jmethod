@@ -1,3 +1,4 @@
+import CoreFoundation
 import Foundation
 
 // Cahier de textes en lecture seule (`native/shared/notebook-reference.md`, vecteurs `notebook-vectors.json`) :
@@ -52,6 +53,11 @@ struct NotebookHomework: Equatable, Sendable, Identifiable {
     /// État Pronote affiché tel quel, jamais modifiable.
     var done: Bool
     var attachments: [NotebookAttachment]
+    var remoteDone: Bool? = nil
+
+    var agendaKey: String {
+        agendaFingerprint([dueDate, subject, description] + attachments.map(\.name))
+    }
 }
 
 struct NotebookSnapshot: Equatable, Sendable {
@@ -509,9 +515,11 @@ enum NotebookRules {
             guard window.contains(due) else { continue }
             let description = safeText(text(item, "descriptif"))
             let subject = plainText(label(item, "Matiere"))
+            let rawDone = item["TAFFait"] as? NSNumber
+            let remoteDone = rawDone.flatMap { CFGetTypeID($0) == CFBooleanGetTypeID() ? $0.boolValue : nil }
             tasks.append(NotebookHomework(
                 id: identifier(item["N"]) ?? "", dueDate: due, subject: subject.isEmpty ? "Cours" : subject,
-                description: description.text, links: description.links, done: ProtocolJSON.bool(item["TAFFait"]), attachments: attachments(item)
+                description: description.text, links: description.links, done: ProtocolJSON.bool(item["TAFFait"]), attachments: attachments(item), remoteDone: remoteDone
             ))
         }
         // Tris stables : séances par date décroissante, devoirs par échéance croissante.

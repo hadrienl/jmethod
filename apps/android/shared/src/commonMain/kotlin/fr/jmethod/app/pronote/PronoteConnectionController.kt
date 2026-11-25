@@ -952,6 +952,21 @@ class PronoteConnectionController(
         else -> fallback
     }
 
+    /** Portée locale opaque : ni mot de passe, ni identifiant de devoir. */
+    fun agendaScope(): String? {
+        val current = state.value
+        if (current.access != AccessPhase.CONNECTED && current.access != AccessPhase.OFFLINE) return null
+        val token = synchronized(guard.vaultLock) { vault.load() }
+        val local = loginStore?.load()
+        val username = token?.username?.takeIf { it.isNotBlank() } ?: local?.username?.takeIf { it.isNotBlank() } ?: return null
+        val address = token?.url ?: local?.let { runCatching { PronotePolicy.schoolAddress(it.school, it.accountType) }.getOrNull() } ?: return null
+        val uri = runCatching { java.net.URI(address) }.getOrNull() ?: return null
+        val host = uri.host?.lowercase() ?: return null
+        val child = current.account?.selectedChildId ?: synchronized(guard.vaultLock) { vault.selectedChildId() }
+        if (uri.path.endsWith("parent.html", true) && child.isNullOrBlank()) return null
+        return fr.jmethod.app.model.agendaFingerprint(listOf(host, uri.port.toString(), uri.path.replace("/mobile.", "/"), username, child.orEmpty()))
+    }
+
     // endregion
 
     /** Invalide la tentative en cours et tous ses résultats tardifs, sans changer l’écran. */

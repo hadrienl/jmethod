@@ -27,8 +27,11 @@ final class NotebookModel {
 
     private(set) var snapshot: NotebookSnapshot?
     private(set) var loading = false
+    private(set) var refreshedAt: Date?
+    private(set) var snapshotScope: String?
+    var agendaScope: String? { pronote.agendaScope }
     private(set) var error: String?
-    var tab: Tab = .contents
+    var tab: Tab = .homework
     /// Matière J-Method choisie depuis la fiche d'un cours : seuls ses contenus sont affichés.
     var subjectId: String?
     private(set) var downloadingId: String?
@@ -41,6 +44,23 @@ final class NotebookModel {
     @ObservationIgnored private var session: UUID?
     /// Lecture réussie au premier plan (création automatique des cours si le réglage est actif).
     @ObservationIgnored var onRead: ((NotebookRead) -> Void)?
+
+    @ObservationIgnored var onAgendaRead: ((NotebookSnapshot, String, Date) -> Void)?
+
+    func urgentCount(_ document: AppDocument, today: String) -> Int {
+        guard let scope = agendaScope, let limit = SchoolDay.adding(1, to: today) else { return 0 }
+        let data = document.agendaFollowUp[scope] ?? AgendaFollowUp()
+        let live = snapshotScope == scope ? snapshot?.homework ?? [] : []
+        let groups = Dictionary(grouping: live, by: \.agendaKey)
+        let liveCount = live.filter { item in
+            let local = groups[item.agendaKey]?.count == 1 ? data.localChecks[item.agendaKey] : nil
+            return item.dueDate <= limit && !(local ?? (item.remoteDone == true))
+        }.count
+        let cached = data.cached.values.filter {
+            groups[$0.key] == nil && $0.due <= limit && !(data.localChecks[$0.key] ?? ($0.remoteDone == true))
+        }.count
+        return liveCount + cached + data.personal.filter { !$0.done && $0.due <= limit }.count
+    }
 
     /// Session Pronote de la lecture affichée (préparation d'un cours depuis une séance).
     var readSession: UUID? { session }
@@ -71,6 +91,8 @@ final class NotebookModel {
         downloading = nil
         loading = false
         snapshot = nil
+        refreshedAt = nil
+        snapshotScope = nil
         session = nil
         error = nil
         preview = nil
@@ -83,15 +105,21 @@ final class NotebookModel {
         loading = true
         error = nil
         let expected = scope
+        let expectedAccount = agendaScope
         reading = Task { [weak self] in
             guard let self else { return }
             do {
                 let read = try await pronote.readNotebook()
                 guard !Task.isCancelled, expected == self.scope, expected == pronote.notebookScope else { return }
+                guard expectedAccount == self.agendaScope else { self.loading = false; return }
                 // Nouvelle lecture : les fichiers d'une session précédente ne servent plus.
                 NotebookCache.clear()
                 self.session = read.session
                 self.snapshot = read.snapshot
+                let at = Date()
+                self.refreshedAt = at
+                self.snapshotScope = self.agendaScope
+                if let account = self.snapshotScope { self.onAgendaRead?(read.snapshot, account, at) }
                 self.loading = false
                 self.onRead?(read)
             } catch {

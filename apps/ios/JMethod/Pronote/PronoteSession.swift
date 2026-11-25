@@ -656,6 +656,15 @@ final class PronoteSession {
     }
 
     /// Connexion réussie : nouveau jeton enregistré, identifiants mémorisés selon « Rester connecté », enfant suivi.
+    /// Identité du suivi local, indépendante du jeton de session et sans donnée de connexion en clair.
+    var agendaScope: String? {
+        guard access == .connected || access == .offline,
+              let token = try? vault.loadCredentials(), !token.username.isEmpty,
+              let url = URLComponents(string: token.url), let host = url.host else { return nil }
+        if url.path.lowercased().hasSuffix("parent.html") && selectedChildId == nil { return nil }
+        return agendaFingerprint([host.lowercased(), String(url.port ?? -1), url.path.replacingOccurrences(of: "/mobile.", with: "/"), token.username, selectedChildId ?? ""])
+    }
+
     private func adopt(client: any PronoteSessionClient, account: PronoteAccount) {
         hasSavedConnection = true
         vault.setNeedsSilentRelogin(false)
