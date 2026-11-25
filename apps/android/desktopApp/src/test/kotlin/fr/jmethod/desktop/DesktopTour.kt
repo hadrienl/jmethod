@@ -5,21 +5,30 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.DesktopComposeUiTest
 import androidx.compose.ui.test.isRoot
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import fr.jmethod.app.ui.platform.DesktopBack
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.pressKey
@@ -214,6 +223,69 @@ class DesktopTour {
         }
     }
 
+    @Test
+    fun rhythmSettingsRemainAccessibleWithSaveBar() {
+        val out = System.getProperty("jmethod.tour")
+        assumeTrue(out != null)
+        val captures = File(requireNotNull(out)).apply { mkdirs() }
+        val dataDir = kotlin.io.path.createTempDirectory("jmethod-rhythm-tour").toFile()
+        try {
+            val secrets = MapSecrets()
+            val container = container(dataDir, secrets)
+            runBlocking { seed(container, dataDir) }
+            SecretLoginStore(secrets).save(SavedLogin("abcd1234", AccountType.STUDENT, "eleve.exemple", "x"))
+            container.throttle.block(Instant.now().plusSeconds(3600))
+
+            for ((width, fontScale) in listOf(1440 to 1f, 390 to 1.6f, 320 to 2f)) {
+                scene(width, 900, container, Owners(), fontScale = fontScale) {
+                    waitUntil(timeoutMillis = 30_000) {
+                        onAllNodesWithContentDescription("Planning").fetchSemanticsNodes().isNotEmpty()
+                    }
+                    if (width < 400) {
+                        tab("Plus")
+                        onNodeWithText("Réglages").performClick()
+                    } else {
+                        tab("Réglages")
+                    }
+                    val title = onNodeWithText("Rythme de révision")
+                    title.performScrollTo().assertIsDisplayed()
+                    val inRhythm = hasAnyAncestor(hasTestTag("revision-rhythm-card"))
+                    val day = onNode(hasText("J0") and inRhythm)
+                    day.performScrollTo().assertIsDisplayed()
+                    val phase = onAllNodes(hasText("Encodage") and inRhythm).onFirst()
+                    val remove = onAllNodes(hasText("Retirer") and inRhythm).onFirst()
+                    fun centerY(node: SemanticsNodeInteraction) = node.getUnclippedBoundsInRoot().let {
+                        (it.top.value + it.bottom.value) / 2
+                    }
+                    assertTrue(kotlin.math.abs(centerY(phase) - centerY(day)) < 2)
+                    assertTrue(kotlin.math.abs(centerY(remove) - centerY(day)) < 2)
+                    shot(captures, "rhythm-$width-card")
+
+                    onAllNodesWithContentDescription("Effets de réussite").onFirst().performScrollTo().performClick()
+                    val save = onNodeWithTag("settings-save-bar")
+                    save.assertIsDisplayed()
+                    val inSaveBar = hasAnyAncestor(hasTestTag("settings-save-bar"))
+                    for (label in listOf("Modifications non enregistrées", "Annuler", "Enregistrer")) {
+                        onNode(hasText(label) and inSaveBar).assertIsDisplayed()
+                    }
+                    val addField = onNode(hasText("Nouveau jour J") and inRhythm)
+                    addField.performScrollTo().assertIsDisplayed()
+                    shot(captures, "rhythm-$width-new-day")
+                    val apply = onNodeWithText("Appliquer aux programmes en cours…")
+                    apply.performScrollTo().assertIsDisplayed()
+                    assertTrue(apply.getUnclippedBoundsInRoot().bottom <= save.getUnclippedBoundsInRoot().top)
+                    shot(captures, "rhythm-$width-save-bar")
+
+                    val last = onNodeWithText("Tes cours, tes séances et tes réglages restent", substring = true)
+                    last.performScrollTo().assertIsDisplayed()
+                    assertTrue(last.getUnclippedBoundsInRoot().bottom <= save.getUnclippedBoundsInRoot().top + 1.dp)
+                }
+            }
+        } finally {
+            dataDir.deleteRecursively()
+        }
+    }
+
     private fun container(dataDir: File, secrets: SecretStore) = AppContainer(
         filesDir = dataDir,
         cacheDir = File(dataDir, "cache"),
@@ -235,11 +307,14 @@ class DesktopTour {
         container: AppContainer,
         owners: Owners,
         viewportWidth: () -> Int = { width },
+        fontScale: Float? = null,
         block: DesktopComposeUiTest.() -> Unit,
     ) =
         runDesktopComposeUiTest(width, height) {
             setContent {
+                val density = LocalDensity.current
                 CompositionLocalProvider(
+                    LocalDensity provides (fontScale?.let { Density(density.density, it) } ?: density),
                     LocalPlatform provides DesktopPlatform({ null }, container.cacheDir),
                     LocalViewModelStoreOwner provides owners,
                     LocalLifecycleOwner provides owners,
