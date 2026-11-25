@@ -16,15 +16,17 @@ struct SettingsView: View {
         var threshold: Double
         var intervals: [Int]
         var newInterval = ""
+        var soundEnabled: Bool
 
         init(_ settings: AppSettings) {
             base = settings
             sensitivity = settings.sensitivity
             threshold = settings.emergencyThreshold
             intervals = settings.intervals
+            soundEnabled = settings.soundEnabled
         }
 
-        var dirty: Bool { sensitivity != base.sensitivity || threshold != base.emergencyThreshold || intervals != base.intervals }
+        var dirty: Bool { sensitivity != base.sensitivity || threshold != base.emergencyThreshold || intervals != base.intervals || soundEnabled != base.soundEnabled }
     }
 
     @State private var draft: Draft?
@@ -38,7 +40,7 @@ struct SettingsView: View {
         // Un brouillon périmé (réglages changés ailleurs, restauration) repart des réglages enregistrés.
         let saved = app.document.settings
         if let draft, draft.base.sensitivity == saved.sensitivity, draft.base.emergencyThreshold == saved.emergencyThreshold,
-           draft.base.intervals == saved.intervals { return draft }
+           draft.base.intervals == saved.intervals, draft.base.soundEnabled == saved.soundEnabled { return draft }
         return Draft(app.document.settings)
     }
 
@@ -54,6 +56,7 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: Spacing.m) {
                     PronoteAccountSection(app: app, pronote: pronote)
                     notebookCourses
+                    sounds
                     algorithm
                     RhythmSettingsCard(app: app).disabled(current.dirty)
                     colors
@@ -104,6 +107,20 @@ struct SettingsView: View {
             Button("Annuler", role: .cancel) { pendingImport = nil }
         } message: {
             Text(importMessage)
+        }
+    }
+
+    private var sounds: some View {
+        VStack(alignment: .leading, spacing: Spacing.s) {
+            SectionHeader(title: "Sons")
+            VStack(alignment: .leading, spacing: Spacing.s) {
+                Toggle("Effets de réussite", isOn: Binding(
+                    get: { current.soundEnabled }, set: { value in edit { $0.soundEnabled = value } }
+                ))
+                Button("Écouter Impulsion précise", action: app.previewSuccessSound)
+                    .disabled(!current.soundEnabled)
+            }
+            .surface()
         }
     }
 
@@ -305,7 +322,7 @@ struct SettingsView: View {
                 .frame(minHeight: 44)
             Button("Enregistrer") {
                 let value = current
-                app.saveSettings(sensitivity: value.sensitivity, emergencyThreshold: value.threshold, intervals: value.intervals)
+                app.saveSettings(sensitivity: value.sensitivity, emergencyThreshold: value.threshold, intervals: value.intervals, soundEnabled: value.soundEnabled)
                 draft = nil
             }
             .font(.subheadline.weight(.semibold))

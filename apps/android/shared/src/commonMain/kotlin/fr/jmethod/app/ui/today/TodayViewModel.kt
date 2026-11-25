@@ -1,5 +1,9 @@
 package fr.jmethod.app.ui.today
 
+import fr.jmethod.app.domain.SuccessSound
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.channels.BufferOverflow
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import fr.jmethod.app.data.AppClock
@@ -94,6 +98,8 @@ class TodayViewModel(
     private val sheet = MutableStateFlow<SessionSheetState?>(null)
     private val events = Channel<TodayEvent>(Channel.BUFFERED)
     val eventFlow: Flow<TodayEvent> = events.receiveAsFlow()
+    private val soundEvents = MutableSharedFlow<SuccessSound>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+    val successSounds = soundEvents.asSharedFlow()
 
     val uiState: StateFlow<TodayUiState?> = combine(repository.document.filterNotNull(), todayFlow, sheet) { document, today, open ->
         TodayUiState(
@@ -129,24 +135,39 @@ class TodayViewModel(
         viewModelScope.launch {
             var outcome: ScoreSubmission.Outcome? = null
             var next: String? = null
-            repository.update { original ->
-                val document = fr.jmethod.app.domain.RevisionStreak.reconcile(original, clock.now(), openCurrent = true)
-                val result = ScoreSubmission.submit(
-                    document.courses, document.revisions, document.settings, revisionId, score, clock.now(), AppClock.ZONE, document.programmes,
-                )
-                outcome = result
-                if (!result.ignored) {
-                    val selection = document.todayWidgetVisit?.selection.orEmpty()
-                    next = if (revisionId in selection) {
-                        val due = fr.jmethod.app.domain.EveningProgramme.of(result.revisions, document.courses, result.today).due
-                        fr.jmethod.app.domain.TodayWidgetState.orderedSelection(selection, due).firstOrNull()?.id
-                    } else {
-                        RevisionSession.nextInDisplayOrder(result.revisions, document.courses, document.subjects, result.today, revisionId)?.id
+            var sound: SuccessSound? = null
+            try {
+                repository.update { original ->
+                    val document = fr.jmethod.app.domain.RevisionStreak.reconcile(original, clock.now(), openCurrent = true)
+                    val result = ScoreSubmission.submit(
+                        document.courses, document.revisions, document.settings, revisionId, score, clock.now(), AppClock.ZONE, document.programmes,
+                    )
+                    outcome = result
+                    if (!result.ignored) {
+                        val selection = document.todayWidgetVisit?.selection.orEmpty()
+                        next = if (revisionId in selection) {
+                            val due = fr.jmethod.app.domain.EveningProgramme.of(result.revisions, document.courses, result.today).due
+                            fr.jmethod.app.domain.TodayWidgetState.orderedSelection(selection, due).firstOrNull()?.id
+                        } else {
+                            RevisionSession.nextInDisplayOrder(result.revisions, document.courses, document.subjects, result.today, revisionId)?.id
+                        }
+                    }
+                    if (result.ignored) document else {
+                        val streak = fr.jmethod.app.domain.RevisionStreak
+                        val after = streak.releaseMovedByApp(document,
+                            streak.completed(document.copy(revisions = result.revisions), revisionId, clock.now()), clock.now())
+                        sound = SuccessSound.afterRevision(document, after, revisionId, result.today, result.celebrate)
+                        after
                     }
                 }
-                if (result.ignored) document else fr.jmethod.app.domain.RevisionStreak.releaseMovedByApp(document,
-                    fr.jmethod.app.domain.RevisionStreak.completed(document.copy(revisions = result.revisions), revisionId, clock.now()), clock.now())
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                sheet.update { active -> active?.takeIf { it.revisionId == revisionId }?.copy(submitting = false) ?: active }
+                events.send(TodayEvent.Toast("Séance non enregistrée", error.localizedMessage ?: "Réessaie dans un instant.", true))
+                return@launch
             }
+            sound?.let(soundEvents::tryEmit)
             val done = outcome
             val toast = done?.toast
             val stillOpen = sheet.value?.revisionId == revisionId

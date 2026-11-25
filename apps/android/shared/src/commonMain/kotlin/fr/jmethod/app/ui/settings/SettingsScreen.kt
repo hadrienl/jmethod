@@ -1,5 +1,7 @@
 package fr.jmethod.app.ui.settings
 
+import fr.jmethod.app.domain.SuccessSound
+import androidx.compose.material3.Switch
 import fr.jmethod.app.ui.components.LocalContentWidth
 import fr.jmethod.app.ui.components.TwoColumnWidth
 import fr.jmethod.app.ui.components.ScrollbarBox
@@ -188,6 +190,7 @@ fun SettingsScreen(
                         Column(Modifier.width(sectionWidth), verticalArrangement = Arrangement.spacedBy(JSpacing.l)) {
                             PronoteAccountSection(pronoteViewModel, pronote, syncInfo)
                             NotebookSection(autoCreate, onAutoCreateChange)
+                            SuccessSoundSettings(draft.soundEnabled, viewModel::setSoundEnabled)
                         }
                         Column(Modifier.width(sectionWidth), verticalArrangement = Arrangement.spacedBy(JSpacing.l)) {
                             Algorithm(draft, viewModel)
@@ -442,6 +445,21 @@ private fun About() {
 }
 
 /** Cahier de textes : création automatique des cours (désactivée par défaut). */
+@Composable
+private fun SuccessSoundSettings(enabled: Boolean, onChange: (Boolean) -> Unit) {
+    val platform = LocalPlatform.current
+    Section("Sons") {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Effets de réussite", Modifier.weight(1f))
+            Switch(checked = enabled, onCheckedChange = onChange,
+                modifier = Modifier.semantics { contentDescription = "Effets de réussite" })
+        }
+        TextButton(enabled = enabled, onClick = { platform.playSuccessSound(SuccessSound.EVENING) }) {
+            Text("Écouter Impulsion précise")
+        }
+    }
+}
+
 @Composable
 private fun NotebookSection(autoCreate: Boolean, onChange: (Boolean) -> Unit) {
     Section(

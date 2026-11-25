@@ -452,6 +452,19 @@ private fun AppContent(container: AppContainer, createConnection: (CoroutineScop
         }
     }
     val platform = LocalPlatform.current
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(todayViewModel, platform, lifecycle) {
+        todayViewModel.successSounds.collect { sound ->
+            if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) &&
+                container.repository.document.value?.settings?.soundEnabled == true) {
+                platform.playSuccessSound(sound)
+            }
+        }
+    }
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { platform.stopSuccessSound() }
+    LaunchedEffect(settings?.document?.settings?.soundEnabled) {
+        if (settings?.document?.settings?.soundEnabled == false) platform.stopSuccessSound()
+    }
     val noApp = "Aucune app de ${platform.device} ne sait ouvrir ce document."
     LaunchedEffect(notebookViewModel) {
         notebookViewModel.eventFlow.collect { event ->

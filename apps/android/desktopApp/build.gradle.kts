@@ -27,6 +27,10 @@ java {
     targetCompatibility = JavaVersion.VERSION_17
 }
 
+sourceSets.main {
+    resources.srcDir(rootProject.layout.projectDirectory.dir("../../native/shared/sound-assets"))
+}
+
 dependencies {
     implementation(project(":shared"))
     implementation(compose.desktop.currentOs)

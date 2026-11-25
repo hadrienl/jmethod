@@ -24,7 +24,20 @@ final class AppModel {
     /// Jour réel au fuseau Europe/Paris, rafraîchi au changement de jour.
     private(set) var today: String
     /// Faux pendant un réveil en arrière-plan : la journée de révision n'est figée qu'à une ouverture réelle.
-    var sceneVisible = true
+    var sceneVisible = true {
+        didSet {
+            if !sceneVisible {
+                soundGeneration += 1
+                successAudio.stop()
+            }
+        }
+    }
+    private let successAudio = SuccessAudio()
+    @ObservationIgnored private var soundGeneration = 0
+
+    func previewSuccessSound() {
+        if sceneVisible { successAudio.play(.evening) }
+    }
     /// Incrémenté quand la dernière séance du programme est validée (feu d'artifice).
     private(set) var celebration = 0
     /// Incrémenté pour une séance validée avec au moins 75/100 (petite gerbe, comme le web).
@@ -280,10 +293,12 @@ final class AppModel {
         }
         today = outcome.today
         guard !outcome.ignored, let explanation = outcome.explanation else { return nil }
+        let beforeRevision = document
         var completed = document; completed.revisions = outcome.revisions
         do { document = try RevisionStreak.releaseMovedByApp(before: document, after: RevisionStreak.completed(completed, revisionId: revisionId, now: now()), now: now()) }
         catch { showToast("Séance non enregistrée", error.localizedDescription, warning: true); return nil }
-        persist()
+        let sound = SuccessSound.afterRevision(before: beforeRevision, after: document, id: revisionId, day: today, eveningDone: outcome.celebrate)
+        persist(successSound: sound)
         let selection = document.todayWidgetVisit?.selection ?? []
         let due = programme.due
         let inSelection = selection.contains(revisionId)
@@ -588,9 +603,16 @@ final class AppModel {
     // MARK: Réglages et sauvegarde
 
     /// « Enregistrer » des réglages : appliqués aux prochaines validations et aux nouveaux cours.
-    func saveSettings(sensitivity: Double, emergencyThreshold: Double, intervals: [Int]) {
+    func saveSettings(sensitivity: Double, emergencyThreshold: Double, intervals: [Int], soundEnabled: Bool? = nil) {
         document.settings = SettingsLogic.save(document.settings, icalUrl: document.settings.pronoteIcalUrl,
                                                sensitivity: sensitivity, emergencyThreshold: emergencyThreshold, intervals: intervals)
+        if let soundEnabled {
+            document.settings.soundEnabled = soundEnabled
+            if !soundEnabled {
+                soundGeneration += 1
+                successAudio.stop()
+            }
+        }
         persist()
         toast = .init(title: "Réglages enregistrés", message: "Ils s’appliquent aux prochaines validations et aux nouveaux cours.", kind: .success)
     }
@@ -636,6 +658,8 @@ final class AppModel {
 
     /// Restauration confirmée : cours et séances remplacés, matières et réglages s'ils sont fournis, créneaux Pronote conservés.
     func restore(_ accepted: Backup.Accepted) {
+        soundGeneration += 1
+        successAudio.stop()
         // Une sauvegarde ancienne peut porter des clés du cahier au format périmé.
         do { document = try RevisionStreak.reconcile(NotebookCourses.migratingKeys(accepted.apply(to: document)), now: now(), openCurrent: true) }
         catch { showToast("Restauration impossible", error.localizedDescription, warning: true); return }
@@ -693,7 +717,7 @@ final class AppModel {
         try await store.save(next.document, version: next.version)
     }
 
-    private func persist(announcesFailure: Bool = true) {
+    private func persist(announcesFailure: Bool = true, successSound: SuccessSound? = nil) {
         let next: (document: AppDocument, version: Int)
         do { next = try nextSnapshot() }
         catch {
@@ -702,10 +726,15 @@ final class AppModel {
         }
         let snapshot = next.document
         let currentVersion = next.version
+        let generation = soundGeneration
         guard let store else { return }
         Task { [weak self] in
             do {
                 try await store.save(snapshot, version: currentVersion)
+                if let self, let successSound, self.sceneVisible, self.document.settings.soundEnabled,
+                   self.soundGeneration == generation {
+                    self.successAudio.play(successSound)
+                }
             } catch where announcesFailure {
                 self?.toast = .init(title: "Enregistrement impossible", message: "Tes dernières modifications n’ont pas pu être enregistrées sur l’iPhone.", kind: .warning)
             } catch {}

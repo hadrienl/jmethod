@@ -18,6 +18,9 @@ targets:
     sources:
       - JMethod
       # Script d'automatisation partagé avec Android : source unique, non copiée.
+      - path: ../../native/shared/sound-assets/raw
+        type: folder
+        buildPhase: resources
       - path: ../../native/shared/PronoteAutomation.js
         buildPhase: resources
     info:
@@ -56,6 +59,8 @@ targets:
       - path: ../../native/shared/notebook-vectors.json
         buildPhase: resources
       - path: ../../native/shared/domain/domain-vectors.json
+        buildPhase: resources
+      - path: ../../native/shared/domain/success-sound-vectors.json
         buildPhase: resources
       - path: ../../native/shared/domain/today-widget-vectors.json
         buildPhase: resources
