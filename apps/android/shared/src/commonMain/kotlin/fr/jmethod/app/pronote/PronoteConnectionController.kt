@@ -853,18 +853,18 @@ class PronoteConnectionController(
      * Cahier de textes en lecture seule (28 jours) avec la session courante, sous le verrou partagé.
      * Une session expirée est reconnectée une fois par jeton, comme la synchronisation.
      */
-    suspend fun readNotebook(): NotebookRead {
+    suspend fun readNotebook(anchor: LocalDate? = null): NotebookRead {
         val current = session ?: throw PronoteException("offline", NOTEBOOK_OFFLINE)
         if (throttle.isBlocked(now())) throw PronoteException(PronoteThrottle.BLOCKED_CODE, PronoteThrottle.BLOCKED_MESSAGE)
         return try {
-            readNotebookLocked(current)
+            readNotebookLocked(current, anchor)
         } catch (error: PronoteException) {
             noteThrottle(error)
             throw error
         }
     }
 
-    private suspend fun readNotebookLocked(current: Session): NotebookRead {
+    private suspend fun readNotebookLocked(current: Session, anchor: LocalDate?): NotebookRead {
         return guard.mutex.withLock {
             if (session !== current || current.binding.disconnected()) throw PronoteException("offline", NOTEBOOK_OFFLINE)
             withContext(io) {
@@ -877,7 +877,7 @@ class PronoteConnectionController(
                         }
                         connection.selectChild(wanted)
                     }
-                    return connection.notebook(today())
+                    return connection.notebook(anchor ?: today())
                 }
                 val snapshot = withSession(current) { read() }
                 if (current.binding.disconnected() || session !== current) throw PronoteException("offline", NOTEBOOK_OFFLINE)

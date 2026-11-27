@@ -102,7 +102,14 @@ final class NotebookModel {
         NotebookCache.clear()
     }
 
-    func refresh() {
+    func loadAgendaPeriod(previous: Bool, today: String, coverage: [AgendaCoverage]) {
+        let anchor = AgendaCoverage.adjacentAnchor(today: today, coverage: coverage, previous: previous)
+        refresh(anchor: anchor)
+    }
+
+    func refresh() { refresh(anchor: nil) }
+
+    private func refresh(anchor: String?) {
         guard !loading else { return }
         loading = true
         error = nil
@@ -111,9 +118,17 @@ final class NotebookModel {
         reading = Task { [weak self] in
             guard let self else { return }
             do {
-                let read = try await pronote.readNotebook()
+                let read = try await pronote.readNotebook(anchor: anchor)
                 guard !Task.isCancelled, expected == self.scope, expected == pronote.notebookScope else { return }
                 guard expectedAccount == self.agendaScope else { self.loading = false; return }
+                if anchor != nil {
+                    if let account = expectedAccount { self.onAgendaRead?(read.snapshot, account, Date()) }
+                    self.loading = false
+                    if !read.snapshot.homeworkComplete {
+                        self.message = "Pronote n’a pas fourni une liste complète pour cette période."
+                    }
+                    return
+                }
                 // Nouvelle lecture : les fichiers d'une session précédente ne servent plus.
                 NotebookCache.clear()
                 self.session = read.session

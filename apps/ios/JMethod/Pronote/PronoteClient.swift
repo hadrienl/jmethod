@@ -253,9 +253,13 @@ actor PronoteClient: PronoteSessionClient {
         await acquire()
         defer { release() }
         try select(childId: childId)
-        guard let window = NotebookRules.window(today: today, firstMonday: firstMonday) else {
+        guard var window = NotebookRules.window(today: today, firstMonday: firstMonday) else {
             throw PronoteFailure.invalid("date", "Le calendrier scolaire de Pronote est illisible.")
         }
+        guard window.to >= firstMonday else {
+            throw PronoteFailure.invalid("notebook-period", "Cette période est hors du calendrier scolaire de Pronote.")
+        }
+        window.from = max(window.from, firstMonday)
         if let tabs = authorizedTabs, !tabs.contains(NotebookRules.contentsTab) {
             throw PronoteFailure.invalid("notebook-unavailable", NotebookRules.unavailable)
         }

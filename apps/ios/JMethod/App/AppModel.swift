@@ -623,9 +623,14 @@ final class AppModel {
         let groups = Dictionary(grouping: snapshot.homework, by: \.agendaKey)
         let stamp = Self.isoString(at)
         updateAgenda(scope: scope) { data in
+            if snapshot.homeworkComplete {
+                var coverage = data.coverage ?? [:]
+                coverage[snapshot.from] = AgendaCoverage(from: snapshot.from, to: snapshot.to, observedAt: stamp)
+                data.coverage = coverage
+            }
             data.cached = data.cached.filter { (groups[$0.key]?.count ?? 0) <= 1 }
             for key in Array(data.cached.keys) {
-                guard snapshot.skippedEntries == 0, var item = data.cached[key], groups[key] == nil,
+                guard snapshot.homeworkComplete, var item = data.cached[key], groups[key] == nil,
                       (snapshot.from...snapshot.to).contains(item.due) else { continue }
                 item.unavailable = true
                 data.cached[key] = item

@@ -442,13 +442,13 @@ final class PronoteSession {
     // MARK: Cahier de textes
 
     /// Lit le cahier de textes (28 jours) sur la session établie (reconnexion par jeton si elle est perdue ou inactive).
-    func readNotebook(now: Date = Date()) async throws -> NotebookRead {
+    func readNotebook(now: Date = Date(), anchor: String? = nil) async throws -> NotebookRead {
         guard client != nil else {
             throw PronoteFailure.invalid("offline", "Pronote n’est pas connecté. Réessaie la connexion, puis rouvre le cahier de textes.")
         }
         let child = selectedChildId
-        let today = SchoolDay.today(now: now)
-        return try await withSession { try await $0.notebook(today: today, childId: child) }
+        let day = anchor ?? SchoolDay.today(now: now)
+        return try await withSession { try await $0.notebook(today: day, childId: child) }
     }
 
     /// Contrôlé juste avant le GET (client actif, aucune déconnexion), puis au retour : un résultat arrivé après une

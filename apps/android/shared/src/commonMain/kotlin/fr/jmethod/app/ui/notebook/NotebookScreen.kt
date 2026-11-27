@@ -247,6 +247,33 @@ LazyColumn(
                     }
                 }
                 if (state.tab == NotebookTab.HOMEWORK) {
+                    item(key = "agenda-periods") {
+                        var expanded by remember { mutableStateOf(false) }
+                        Column {
+                            TextButton(onClick = { expanded = !expanded }) { Text("Périodes Pronote chargées") }
+                            if (expanded) {
+                                val ranges = ui.followUp.coverage.values.sortedBy { it.from }
+                                if (ranges.isEmpty()) Text("Aucune période complète enregistrée.")
+                                ranges.forEach {
+                                    val from = runCatching { FrenchDates.numeric(LocalDate.parse(it.from)) }.getOrDefault(it.from)
+                                    val to = runCatching { FrenchDates.numeric(LocalDate.parse(it.to)) }.getOrDefault(it.to)
+                                    val read = runCatching { FrenchDates.numeric(LocalDate.parse(it.observedAt.take(10))) }.getOrDefault(it.observedAt.take(10))
+                                    Text("Du $from au $to · lu le $read")
+                                }
+                                val canRead = !state.loading && ui.agendaScope != null
+                                if (ranges.any { today.toString() in it.from..it.to }) {
+                                    TextButton(onClick = { viewModel.loadAgendaPeriod(previous = true) }, enabled = canRead) {
+                                        Text("Charger la période précédente")
+                                    }
+                                    TextButton(onClick = { viewModel.loadAgendaPeriod(previous = false) }, enabled = canRead) {
+                                        Text("Charger la période suivante")
+                                    }
+                                } else {
+                                    TextButton(onClick = viewModel::refresh, enabled = canRead) { Text("Charger la période courante") }
+                                }
+                            }
+                        }
+                    }
                     item(key = "new-personal") {
                         Button(onClick = { editing = "" }, enabled = ui.agendaScope != null && ui.subjects.isNotEmpty()) {
                             Text("Ajouter un devoir personnel")
@@ -315,6 +342,8 @@ LazyColumn(
                             }
                             if (!snapshot.homeworkAvailable) {
                                 Text("Le travail à faire n’est pas disponible pour ce compte.", style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
+                            } else if (!snapshot.homeworkComplete) {
+                                Text("La liste des devoirs est incomplète. Les devoirs déjà connus sont conservés.", style = MaterialTheme.typography.bodySmall, color = JColors.Slate600)
                             }
                         }
                     }
@@ -327,7 +356,7 @@ LazyColumn(
                             }
                         }
                     } else {
-                        if (homework.isEmpty() && personal.isEmpty() && cached.isEmpty() && snapshot.homeworkAvailable && !state.loading && state.error == null) {
+                        if (homework.isEmpty() && personal.isEmpty() && cached.isEmpty() && snapshot.homeworkComplete && !state.loading && state.error == null) {
                             item(key = "no-homework") { Empty("Aucun devoir ne correspond aux filtres de la période chargée.") }
                         }
                         homework.groupBy { if (it.dueDate < today && !done(it)) null else it.dueDate }

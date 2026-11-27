@@ -72,6 +72,7 @@ struct NotebookSnapshot: Equatable, Sendable {
     var attachmentCount: Int
     /// Onglet 88 indisponible pour ce compte : contenus seuls.
     var homeworkAvailable = true
+    var homeworkComplete = true
 }
 
 enum NotebookRules {
@@ -509,8 +510,11 @@ enum NotebookRules {
             guard !items.isEmpty else { continue }
             sessions.append(NotebookSession(id: identifier(entry["N"]) ?? "cours:\(lessonId)@\(date)", lessonId: lessonId, date: date, subject: subject, contents: items))
         }
+        let homeworkList = value(homework ?? [:], "ListeTravauxAFaire") as? [Any]
+        let homeworkObjects = homeworkList?.compactMap { $0 as? [String: Any] } ?? []
+        let skippedContents = skipped
         var tasks: [NotebookHomework] = []
-        for item in list(homework ?? [:], "ListeTravauxAFaire") {
+        for item in homeworkObjects {
             guard let due = parseDate(text(item, "PourLe")) else {
                 skipped += 1
                 continue
@@ -532,7 +536,8 @@ enum NotebookRules {
         let sortedTasks = tasks.enumerated().sorted { $0.element.dueDate != $1.element.dueDate ? $0.element.dueDate < $1.element.dueDate : $0.offset < $1.offset }.map(\.element)
         let count = sortedSessions.reduce(0) { $0 + $1.contents.reduce(0) { $0 + $1.attachments.count } } + sortedTasks.reduce(0) { $0 + $1.attachments.count }
         return NotebookSnapshot(from: window.from, to: window.to, sessions: sortedSessions, homework: sortedTasks,
-                                skippedEntries: skipped, attachmentCount: count, homeworkAvailable: homework != nil)
+                                skippedEntries: skipped, attachmentCount: count, homeworkAvailable: homework != nil,
+                                homeworkComplete: homeworkList?.count == homeworkObjects.count && skipped == skippedContents)
     }
 
     // MARK: Téléchargement

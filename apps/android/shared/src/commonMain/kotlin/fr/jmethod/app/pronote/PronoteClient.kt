@@ -384,7 +384,11 @@ class PronoteClient(
      */
     fun notebook(today: LocalDate): NotebookSnapshot {
         val monday = LocalDate.parse(PronotePolicy.date(parameters.getJSONObject("General").get("PremierLundi")).take(10))
-        val window = NotebookRules.window(today, monday)
+        val requested = NotebookRules.window(today, monday)
+        if (requested.to < monday) {
+            throw PronoteException("notebook-period", "Cette période est hors du calendrier scolaire de Pronote.")
+        }
+        val window = requested.copy(from = maxOf(requested.from, monday))
         fun page(tab: Int) = call("PageCahierDeTexte", JSONObject().put("domaine", JSONObject().put("_T", 8).put("V", window.domaine)), tab)
         val tabs = authorizedTabs
         if (tabs != null && NotebookRules.CONTENTS_TAB !in tabs) {

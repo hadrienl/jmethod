@@ -174,6 +174,31 @@ struct AgendaFollowUp: Codable, Equatable, Sendable {
     var personal: [PersonalHomework] = []
     var localChecks: [String: Bool] = [:]
     var cached: [String: CachedHomework] = [:]
+    var coverage: [String: AgendaCoverage]?
+}
+
+struct AgendaCoverage: Codable, Equatable, Sendable {
+    var from: String
+    var to: String
+    var observedAt: String
+
+    /// Cherche la première période manquante autour de la fenêtre habituelle de 28 jours.
+    static func adjacentAnchor(today: String, coverage: [Self], previous: Bool) -> String? {
+        let ranges = coverage.filter { SchoolDay.isValid($0.from) && SchoolDay.isValid($0.to) }
+        guard ranges.contains(where: { $0.from <= today && today <= $0.to }) else { return nil }
+        var start = today
+        var end = today
+        if previous {
+            for range in ranges.sorted(by: { $0.to > $1.to }) {
+                if let adjacent = SchoolDay.adding(-1, to: start), range.from < start && range.to >= adjacent { start = range.from }
+            }
+            return SchoolDay.adding(-14, to: start)
+        }
+        for range in ranges.sorted(by: { $0.from < $1.from }) {
+            if let adjacent = SchoolDay.adding(1, to: end), range.to > end && range.from <= adjacent { end = range.to }
+        }
+        return SchoolDay.adding(15, to: end)
+    }
 }
 
 struct CachedHomework: Codable, Equatable, Identifiable, Sendable {
